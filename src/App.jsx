@@ -322,7 +322,7 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev,
           {currentUser ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
               <span style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>⚔ {currentUser.username}</span>
-              <button onClick={onLogout} style={{ background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer', padding: '2px 4px' }}>Log out</button>
+              <button onClick={onLogout} style={{ background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer', padding: '8px 10px' }}>Log out</button>
             </div>
           ) : (
             <button onClick={onLogin} style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}>Log in / Register</button>
@@ -979,7 +979,7 @@ function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
                 return (
                   <div onClick={e => e.stopPropagation()} style={{ padding: '6px 12px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', display: 'flex', gap: 6 }}>
                     {[['heart','❤️',heart],['angry','😡',angry],['cry','😂',cry]].map(([key,icon,count]) => (
-                      <button key={key} onClick={() => castReaction(c.id, key)} style={{ background: myReaction === key ? 'var(--color-background-info)' : 'var(--color-background-tertiary)', border: myReaction === key ? '1px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 99, padding: '3px 9px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button key={key} onClick={() => castReaction(c.id, key)} style={{ background: myReaction === key ? 'var(--color-background-info)' : 'var(--color-background-tertiary)', border: myReaction === key ? '1px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 99, padding: '7px 12px', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         {icon}{count > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{count}</span>}
                       </button>
                     ))}
@@ -1382,37 +1382,48 @@ function PlayerStatsBlurb({ stats, favoriteName }) {
   )
 }
 
-// ─── Avatar with hover card ───────────────────────────────────────────────────
+// ─── Avatar with tap/click stats card ────────────────────────────────────────
+// Tapping/clicking toggles the stats card — works on desktop and mobile.
+// Outside click/tap dismisses it.
 function AvatarWithHover({ player, onViewProfile }) {
-  const [hovered, setHovered] = useState(false)
+  const [open, setOpen]       = useState(false)
   const [stats, setStats]     = useState(null)
   const [profile, setProfile] = useState(null)
-  const timerRef = useRef(null)
+  const wrapRef = useRef(null)
 
-  function handleEnter() {
-    timerRef.current = setTimeout(() => {
-      setHovered(true)
+  // Close on outside click/tap
+  useEffect(() => {
+    if (!open) return
+    function outside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', outside)
+    document.addEventListener('touchstart', outside)
+    return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('touchstart', outside) }
+  }, [open])
+
+  function toggle(e) {
+    e.stopPropagation()
+    if (player.isBot) return
+    if (!open) {
       if (!stats) getPlayerRoomStats(player.id).then(setStats)
       if (!profile) getUserProfile(player.id).then(setProfile)
-    }, 400)
-  }
-  function handleLeave() {
-    clearTimeout(timerRef.current)
-    setHovered(false)
+    }
+    setOpen(o => !o)
   }
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', background: player.color + '33', border: '0.5px solid ' + player.color + '66', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, color: player.color, cursor: onViewProfile ? 'pointer' : 'default' }}
-        onClick={() => onViewProfile && !player.isBot && onViewProfile(player.id)}>
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <div
+        style={{ width: 36, height: 36, borderRadius: '50%', background: player.color + '33', border: '0.5px solid ' + player.color + '66', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, color: player.color, cursor: player.isBot ? 'default' : 'pointer', userSelect: 'none' }}
+        onClick={toggle}
+      >
         {initials(player.name)}
       </div>
-      {hovered && !player.isBot && (
-        <div style={{ position: 'absolute', top: 38, left: 0, zIndex: 500, minWidth: 180, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 6 }}>{player.name}</div>
+      {open && !player.isBot && (
+        <div style={{ position: 'absolute', top: 42, left: 0, zIndex: 500, minWidth: 190, maxWidth: 'min(260px, calc(100vw - 32px))', background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', boxShadow: '0 6px 24px rgba(0,0,0,0.22)' }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 6 }}>{player.name}</div>
           <PlayerStatsBlurb stats={stats} favoriteName={profile?.favorite_combatant_name} />
           {onViewProfile && (
-            <button onClick={() => onViewProfile(player.id)} style={{ marginTop: 8, background: 'transparent', border: 'none', fontSize: 11, color: 'var(--color-text-info)', cursor: 'pointer', padding: 0 }}>View profile →</button>
+            <button onClick={() => { onViewProfile(player.id); setOpen(false) }} style={{ marginTop: 10, background: 'transparent', border: 'none', fontSize: 13, color: 'var(--color-text-info)', cursor: 'pointer', padding: 0 }}>View profile →</button>
           )}
         </div>
       )}
@@ -1421,33 +1432,41 @@ function AvatarWithHover({ player, onViewProfile }) {
 }
 
 // ─── Loaded-combatant stats pill (DraftScreen) ───────────────────────────────
+// Tap/click the 📊 button to open a stats card. Works on desktop and mobile.
 function CombatantStatsPill({ globalId, label, pillStyle }) {
-  const [hovered, setHovered] = useState(false)
-  const [stats, setStats]     = useState(null)
-  const timerRef = useRef(null)
+  const [open, setOpen]   = useState(false)
+  const [stats, setStats] = useState(null)
+  const wrapRef = useRef(null)
 
-  function handleEnter() {
-    timerRef.current = setTimeout(() => {
-      setHovered(true)
-      if (!stats && globalId) getCombatant(globalId).then(setStats)
-    }, 300)
+  // Close on outside click/tap
+  useEffect(() => {
+    if (!open) return
+    function outside(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', outside)
+    document.addEventListener('touchstart', outside)
+    return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('touchstart', outside) }
+  }, [open])
+
+  function toggle() {
+    if (!open && !stats && globalId) getCombatant(globalId).then(setStats)
+    setOpen(o => !o)
   }
-  function handleLeave() { clearTimeout(timerRef.current); setHovered(false) }
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-      <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 99, whiteSpace: 'nowrap', cursor: 'default', ...pillStyle }}>{label}</span>
-      {hovered && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 400, minWidth: 170, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
-          {!stats && <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Loading…</span>}
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 99, whiteSpace: 'nowrap', ...pillStyle }}>{label}</span>
+      <button onClick={toggle} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, padding: '4px', color: 'var(--color-text-secondary)', lineHeight: 1, flexShrink: 0 }} title="View stats">📊</button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 400, minWidth: 180, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', boxShadow: '0 6px 24px rgba(0,0,0,0.22)' }}>
+          {!stats && <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>Loading…</span>}
           {stats && <>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 5 }}>{stats.name}</div>
-            <div style={{ display: 'flex', gap: 10, fontSize: 12, marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 6 }}>{stats.name}</div>
+            <div style={{ display: 'flex', gap: 12, fontSize: 13, marginBottom: 5 }}>
               <span style={{ color: 'var(--color-text-success)' }}>{stats.wins || 0}W</span>
               <span style={{ color: 'var(--color-text-danger)' }}>{stats.losses || 0}L</span>
             </div>
             {(stats.reactions_heart > 0 || stats.reactions_angry > 0 || stats.reactions_cry > 0) && (
-              <div style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 5 }}>
                 {stats.reactions_heart > 0 && <span>❤️ {stats.reactions_heart}</span>}
                 {stats.reactions_angry > 0 && <span>😡 {stats.reactions_angry}</span>}
                 {stats.reactions_cry   > 0 && <span>😂 {stats.reactions_cry}</span>}
@@ -1902,7 +1921,7 @@ function DevBanner() {
 // ─── Style helpers ────────────────────────────────────────────────────────────
 function inp(extra) {
   return {
-    display: 'block', width: '100%', padding: '10px 12px', fontSize: 15,
+    display: 'block', width: '100%', padding: '10px 12px', fontSize: 16,
     background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)',
     border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)',
     outline: 'none', boxSizing: 'border-box', margin: '4px 0 12px',

@@ -67,9 +67,15 @@ body {
   color: var(--color-text-primary);
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  /* Prevent elastic overscroll bounce bleeding into content areas */
+  overscroll-behavior: none;
 }
 
-button { font-family: var(--font-sans); }
+button {
+  font-family: var(--font-sans);
+  /* Eliminate 300ms tap delay on mobile; prevents accidental double-tap zoom */
+  touch-action: manipulation;
+}
 input, textarea, select { font-family: var(--font-sans); }
 
 input, textarea {
@@ -78,8 +84,17 @@ input, textarea {
   border: 0.5px solid var(--color-border-secondary);
   border-radius: var(--border-radius-md);
   outline: none;
+  /* 16px minimum prevents iOS Safari from auto-zooming on focus */
+  font-size: 16px;
 }
 input:focus, textarea:focus {
   border-color: var(--color-border-primary);
   box-shadow: 0 0 0 3px rgba(55,138,221,0.15);
+}
+
+/* Ensure tap targets are comfortably large on mobile */
+@media (pointer: coarse) {
+  button:not([style]) {
+    min-height: 44px;
+  }
 }
