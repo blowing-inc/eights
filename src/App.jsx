@@ -1133,8 +1133,11 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
   const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const [roundIdx, setRoundIdx] = useState(0)
+  const [rosterPlayer, setRosterPlayer] = useState(null) // null = all, otherwise playerId
 
   const rd = allRounds[roundIdx]
+  // Players who actually have combatants recorded
+  const rosterPlayers = (room.players || []).filter(p => !p.isBot && (room.combatants?.[p.id] || []).length > 0)
 
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
@@ -1253,20 +1256,63 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
 
       {/* Roster */}
       {allCombatants.length > 0 && <>
-        <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>Combatant roster</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {allCombatants.sort((a, b) => b.wins - a.wins).map(c => {
-            const owner = (room.players || []).find(p => p.id === c.ownerId)
-            return (
-              <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
+        <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>Combatant roster</h3>
+
+        {/* Player selector tabs */}
+        {rosterPlayers.length > 1 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            <button onClick={() => setRosterPlayer(null)}
+              style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: rosterPlayer === null ? 'var(--color-background-info)' : 'transparent', color: rosterPlayer === null ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: rosterPlayer === null ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
+              All
+            </button>
+            {rosterPlayers.map(p => (
+              <button key={p.id} onClick={() => setRosterPlayer(p.id)}
+                style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: rosterPlayer === p.id ? 'var(--color-background-info)' : 'transparent', color: rosterPlayer === p.id ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: rosterPlayer === p.id ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
+                {p.name}
               </button>
-            )
-          })}
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rosterPlayer === null
+            // All players — sorted by wins
+            ? allCombatants.sort((a, b) => b.wins - a.wins).map(c => {
+                const owner = (room.players || []).find(p => p.id === c.ownerId)
+                return (
+                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
+                  </button>
+                )
+              })
+            // Single player — in round order
+            : (room.combatants?.[rosterPlayer] || []).map((c, i) => {
+                const roundNum = i + 1
+                const battle   = (c.battles || [])[0]
+                const isWin    = c.wins > 0
+                const isLoss   = c.losses > 0
+                const played   = isWin || isLoss
+                return (
+                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: played ? (isWin ? 'var(--color-background-success)' : 'var(--color-background-danger)') : 'var(--color-background-secondary)', border: `0.5px solid ${played ? (isWin ? 'var(--color-border-success)' : 'var(--color-border-danger)') : 'var(--color-border-tertiary)'}`, borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {roundNum}</span>
+                        <span style={{ fontSize: 15, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-primary)' }}>
+                          {isWin ? '🏆 ' : ''}{c.name}
+                        </span>
+                      </div>
+                      {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : 'var(--color-text-danger)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : 'L'}</span>}
+                    </div>
+                    {battle?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {battle.opponent}</div>}
+                    {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 60 }}>{c.bio}</div>}
+                  </button>
+                )
+              })
+          }
         </div>
       </>}
     </div>
