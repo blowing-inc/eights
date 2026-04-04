@@ -29,6 +29,11 @@ create policy "public update"
   on rooms for update
   using (true);
 
+-- Explicit grants required on PostgreSQL 15+ (Supabase newer projects no longer
+-- auto-grant these to anon — RLS policies alone are not sufficient)
+grant usage  on schema public to anon, authenticated;
+grant select, insert, update on table rooms to anon, authenticated;
+
 -- Optional: auto-clean rooms older than 7 days
 -- (Uncomment if you want automatic cleanup via a cron job in Supabase)
 -- create or replace function delete_old_rooms() returns void language sql as $$
@@ -56,6 +61,8 @@ alter table users enable row level security;
 create policy "public read users"   on users for select using (true);
 create policy "public insert users" on users for insert with check (true);
 create policy "public update users" on users for update using (true);
+
+grant select, insert, update on table users to anon, authenticated;
 
 -- ─── Global combatants (bestiary) ────────────────────────────────────────────
 -- Run this block separately if you're adding it to an existing deployment.
@@ -90,6 +97,8 @@ create policy "public insert combatants"
 
 create policy "public update combatants"
   on combatants for update using (true);
+
+grant select, insert, update on table combatants to anon, authenticated;
 
 -- Atomic stat increment used by confirmWinner and undoLastRound.
 -- Pass negative values to decrement (undo).
