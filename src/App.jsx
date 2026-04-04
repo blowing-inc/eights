@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
+import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -61,6 +61,33 @@ export default function App() {
   // Effective display name — username for logged-in users, typed name for guests
   const effectiveName = currentUser?.username || playerName
 
+  // ── Persistent lobby tracking ──────────────────────────────────────────────
+  // Stores room codes the player has joined; survives browser restarts
+  function loadLobbyCodes() {
+    try { return JSON.parse(localStorage.getItem('eights_lobbies') || '[]') } catch { return [] }
+  }
+  function saveLobbyCodes(codes) {
+    localStorage.setItem('eights_lobbies', JSON.stringify([...new Set(codes)]))
+  }
+  function addLobbyCode(code) { saveLobbyCodes([...loadLobbyCodes(), code]) }
+  function removeLobbyCode(code) { saveLobbyCodes(loadLobbyCodes().filter(c => c !== code)) }
+
+  const [openLobbies, setOpenLobbies] = useState([]) // array of room objects
+  const [viewLobbies, setViewLobbies] = useState(false)
+
+  async function refreshLobbies() {
+    const codes = loadLobbyCodes()
+    if (!codes.length) { setOpenLobbies([]); return }
+    const rooms = await getRoomsByIds(codes)
+    // Keep only rooms still in lobby or draft phase; prune anything past that
+    const active = rooms.filter(r => r && (r.phase === 'lobby' || r.phase === 'draft'))
+    const activeCodes = active.map(r => r.id)
+    saveLobbyCodes(activeCodes)
+    setOpenLobbies(active)
+  }
+
+  useEffect(() => { refreshLobbies() }, [])
+
   const [room, setRoom] = useState(null)
   const [viewCombatant, setViewCombatant] = useState(null)
   const [viewHistory, setViewHistory] = useState(false)
@@ -107,21 +134,24 @@ export default function App() {
     </div>
   )
 
+  function goHome() { setRoom(null); refreshLobbies(); nav('home') }
+
   let content = null
-  if (viewPlayers && viewPlayerProfile) content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => { setViewGlobalCombatant(c) }} />
+  if (viewLobbies)          content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : 'draft') }} />
+  else if (viewPlayers && viewPlayerProfile) content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => { setViewGlobalCombatant(c) }} />
   else if (viewPlayers)     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant) content = <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
   else if (viewBestiary)    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
-  else if (viewHistory)     content = <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
+  else if (viewHistory)     content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   else if (viewCombatant)   content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
   else if (screen === 'auth')   content = <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
   else if (screen === 'admin')  content = <AdminScreen onBack={() => nav('home')} />
-  else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
-  else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} onViewPlayer={setViewPlayerProfile} />
-  else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} isGuest={isGuest} />
-  else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={() => { setRoom(null); nav('home') }} />
+  else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
+  else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
+  else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} />
+  else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} />
   else if (screen === 'vote')   content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} />
 
   return <>{userPill}{content}</>
@@ -244,7 +274,7 @@ function HomeTicker() {
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev, currentUser, onLogin, onLogout, onAdmin }) {
+function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -254,6 +284,12 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev,
         <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 16 }}>The game of improbable battles</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 280 }}>
+        {openLobbies.length > 0 && (
+          <button onClick={onLobbies} style={{ ...btn('primary'), background: 'var(--color-text-success)', position: 'relative' }}>
+            My open lobbies
+            <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 99, background: 'var(--color-text-danger)', color: '#fff', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{openLobbies.length}</span>
+          </button>
+        )}
         <button onClick={onCreate} style={btn('primary')}>Create a room</button>
         <button onClick={onJoin}   style={btn()}>Join a room</button>
         <button onClick={onHistory} style={btn('ghost')}>Battle history ↗</button>
@@ -273,6 +309,61 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev,
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── My open lobbies ──────────────────────────────────────────────────────────
+function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) {
+  return (
+    <Screen title="My open lobbies" onBack={onBack}>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '-0.5rem 0 1.25rem' }}>
+        These games are still in progress. Rejoin anytime.
+      </p>
+      {lobbies.map(r => {
+        const host = r.players.find(p => p.id === r.host)
+        const realPlayers = r.players.filter(p => !p.isBot)
+        const submitted = realPlayers.filter(p => (r.combatants[p.id] || []).length === 8)
+        const isMyTurn  = r.phase === 'draft' && (r.combatants[playerId] || []).length < 8
+        const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : 'Drafting combatants'
+
+        return (
+          <div key={r.id} style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', border: isMyTurn ? '1.5px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 12 }}>
+            {/* Header row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <div>
+                <span style={{ fontSize: 18, fontWeight: 500, letterSpacing: 2, color: 'var(--color-text-primary)' }}>{r.code}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 10 }}>{phaseLabel}</span>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Host: {host?.name || '?'}</span>
+            </div>
+
+            {/* Player list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
+              {realPlayers.map(p => {
+                const ready = (r.combatants[p.id] || []).length === 8
+                const isMe  = p.id === playerId
+                return (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: ready ? 'var(--color-text-success)' : 'var(--color-text-tertiary)', flexShrink: 0 }} />
+                    <span style={{ color: isMe ? 'var(--color-text-info)' : 'var(--color-text-primary)' }}>
+                      {p.name}{isMe ? ' (you)' : ''}{p.id === r.host ? ' · host' : ''}
+                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: ready ? 'var(--color-text-success)' : 'var(--color-text-tertiary)' }}>
+                      {r.phase === 'lobby' ? 'waiting' : ready ? 'ready ✓' : 'working…'}
+                    </span>
+                  </div>
+                )
+              })}
+              {r.phase === 'draft' && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{submitted.length} / {realPlayers.length} ready</div>}
+            </div>
+
+            <button onClick={() => onEnter(r)} style={{ ...btn(isMyTurn ? 'primary' : 'ghost' ), padding: '8px 14px', fontSize: 13 }}>
+              {isMyTurn ? 'Rejoin — your turn ⚔️' : 'Rejoin'}
+            </button>
+          </div>
+        )
+      })}
+    </Screen>
   )
 }
 
@@ -393,6 +484,8 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
   // globalIds[i]: existing global combatant id if loaded from bestiary, null if new
   const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || null))
   const [submitted, setSubmitted] = useState(existing.length === 8)
+  const [forceStarting, setForceStarting] = useState(false)
+  const isHost = room.host === playerId
 
   useEffect(() => {
     const iv = setInterval(async () => {
@@ -423,25 +516,51 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
     if (draftDone) onDone()
   }
 
-  if (submitted) return (
-    <Screen title="Draft submitted!">
-      {room.devMode && <DevBanner />}
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 2rem' }}>Your combatants are locked in. Waiting for others…</p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {room.players.map(p => {
-          const done = p.isBot || (room.combatants[p.id] || []).length === 8
-          return (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
-              <AvatarWithHover player={p} onViewProfile={null} />
-              <span style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>{p.name}</span>
-              {p.isBot && <Pill>bot</Pill>}
-              <span style={{ marginLeft: 'auto', fontSize: 13 }}>{done ? '✓' : '…'}</span>
-            </div>
-          )
-        })}
-      </div>
-    </Screen>
-  )
+  async function forceStart() {
+    setForceStarting(true)
+    const r = await sget('room:' + room.id)
+    if (!r) { setForceStarting(false); return }
+    // Players without a full 8 get whatever they submitted so far (even 0)
+    const updated = { ...r, phase: 'battle' }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated); setForceStarting(false); onDone()
+  }
+
+  if (submitted) {
+    const realPlayers = room.players.filter(p => !p.isBot)
+    const readyCount  = realPlayers.filter(p => (room.combatants[p.id] || []).length === 8).length
+    const canForce    = isHost && readyCount >= 2 && readyCount < realPlayers.length
+
+    return (
+      <Screen title="Draft submitted!">
+        {room.devMode && <DevBanner />}
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 2rem' }}>Your combatants are locked in. Waiting for others…</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: canForce ? '1.5rem' : 0 }}>
+          {room.players.map(p => {
+            const done = p.isBot || (room.combatants[p.id] || []).length === 8
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
+                <AvatarWithHover player={p} onViewProfile={null} />
+                <span style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>{p.name}</span>
+                {p.isBot && <Pill>bot</Pill>}
+                <span style={{ marginLeft: 'auto', fontSize: 13 }}>{done ? '✓' : '…'}</span>
+              </div>
+            )
+          })}
+        </div>
+        {canForce && (
+          <div style={{ padding: '12px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)' }}>
+            <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 10px' }}>
+              {readyCount} of {realPlayers.length} players are ready. You can start now — players who haven't finished won't have their combatants published.
+            </p>
+            <button onClick={forceStart} disabled={forceStarting} style={{ ...btn('primary'), background: 'var(--color-text-warning)', padding: '8px', fontSize: 13 }}>
+              {forceStarting ? 'Starting…' : `Start with ${readyCount} players →`}
+            </button>
+          </div>
+        )}
+      </Screen>
+    )
+  }
 
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
@@ -676,10 +795,12 @@ function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
         const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
         await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
       }
-      // Publish all combatants once the final round is done
+      // Publish only combatants from players who submitted a full roster
       const totalRounds = Math.min(...r.players.map(p => (r.combatants[p.id] || []).length))
       if (r.currentRound >= totalRounds) {
-        const allIds = Object.values(r.combatants).flat().map(c => c.id)
+        const allIds = Object.values(r.combatants)
+          .filter(list => list.length === 8)
+          .flat().map(c => c.id)
         await publishCombatants(allIds)
       }
     })()

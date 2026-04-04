@@ -26,6 +26,16 @@ export async function sset(key, val) {
   } catch (e) { console.error('sset exception', e) }
 }
 
+// Fetch specific rooms by id array (for lobby tracking)
+export async function getRoomsByIds(ids) {
+  if (!ids.length) return []
+  try {
+    const { data, error } = await supabase.from('rooms').select('data').in('id', ids)
+    if (error) { console.error('getRoomsByIds error', error); return [] }
+    return (data || []).map(row => row.data).filter(Boolean)
+  } catch (e) { console.error('getRoomsByIds exception', e); return [] }
+}
+
 // Fetch all rooms ordered by most recently updated
 export async function slist() {
   try {
