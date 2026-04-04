@@ -212,21 +212,32 @@ function buildTickerMessages(rooms) {
   return msgs.sort(() => Math.random() - 0.5)
 }
 
-function HomeTicker() {
-  const [messages, setMessages] = useState(null)
-  useEffect(() => { slist().then(r => setMessages(buildTickerMessages(r))) }, [])
-  if (!messages) return null
+const TICKER_SPEED = 40  // px/s — raise to go faster
+const TICKER_CHAR_PX = 6.5 // estimated px per char at 11px font
+const TICKER_SEP = '     ·     '
 
-  const text = messages.join('   ·   ')
-  const duration = Math.max(20, messages.length * 2)
+function HomeTicker() {
+  const [text, setText] = useState(null)
+
+  useEffect(() => {
+    slist().then(r => {
+      const msgs = buildTickerMessages(r).sort(() => Math.random() - 0.5)
+      setText(msgs.join(TICKER_SEP))
+    })
+  }, [])
+
+  if (!text) return null
+
+  // Duration = how long one full copy takes to scroll past at TICKER_SPEED px/s
+  const textPx = text.length * TICKER_CHAR_PX
+  const duration = (textPx / TICKER_SPEED).toFixed(2)
 
   return (
     <div style={{ width: '100%', maxWidth: 280, overflow: 'hidden', marginBottom: '1.75rem', borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', padding: '7px 0' }}>
-      <style>{`@keyframes eights-ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
-      <div style={{ display: 'flex', whiteSpace: 'nowrap', animation: `eights-ticker ${duration}s linear infinite` }}>
-        {[0, 1].map(i => (
-          <span key={i} style={{ paddingRight: 48, fontSize: 11, color: 'var(--color-text-secondary)', letterSpacing: '0.01em' }}>{text}</span>
-        ))}
+      <style>{`@keyframes eights-ticker { from { transform: translateX(0) } to { transform: translateX(-50%) } }`}</style>
+      <div style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform', animation: `eights-ticker ${duration}s linear infinite` }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', letterSpacing: '0.01em' }}>{text}{TICKER_SEP}</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)', letterSpacing: '0.01em' }}>{text}{TICKER_SEP}</span>
       </div>
     </div>
   )
