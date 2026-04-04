@@ -99,21 +99,28 @@ export default function App() {
     nav('draft')
   }
 
-  if (viewBestiary) return <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
-  if (viewGlobalCombatant) return <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
-  if (viewHistory) return <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
-  if (viewCombatant) return <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
+  const userPill = (
+    <div style={{ position: 'fixed', top: 12, right: 14, zIndex: 999, fontSize: 12, padding: '4px 10px', borderRadius: 99, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', color: isGuest ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)', pointerEvents: 'none', userSelect: 'none' }}>
+      {isGuest ? `${effectiveName || 'guest'} (guest)` : `⚔ ${currentUser.username}`}
+    </div>
+  )
 
-  if (screen === 'auth')   return <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
-  if (screen === 'admin')  return <AdminScreen onBack={() => nav('home')} />
-  if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
-  if (screen === 'create') return <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  if (screen === 'join')   return <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  if (screen === 'lobby')  return <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} />
-  if (screen === 'draft')  return <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} isGuest={isGuest} />
-  if (screen === 'battle') return <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} />
-  if (screen === 'vote')   return <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} />
-  return null
+  let content = null
+  if (viewBestiary)         content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
+  else if (viewGlobalCombatant) content = <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
+  else if (viewHistory)     content = <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
+  else if (viewCombatant)   content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
+  else if (screen === 'auth')   content = <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
+  else if (screen === 'admin')  content = <AdminScreen onBack={() => nav('home')} />
+  else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
+  else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} />
+  else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} isGuest={isGuest} />
+  else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={() => { setRoom(null); nav('home') }} />
+  else if (screen === 'vote')   content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} />
+
+  return <>{userPill}{content}</>
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
@@ -341,7 +348,7 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
 }
 
 // ─── Battle arena ─────────────────────────────────────────────────────────────
-function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory }) {
+function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
 
@@ -452,7 +459,10 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory }) {
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All 8 rounds fought. Check the history for full results.</p>
-            <button style={{ ...btn(), marginTop: 16 }} onClick={onHistory}>View full history</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button style={btn()} onClick={onHistory}>View full history</button>
+              <button style={btn('primary')} onClick={onHome}>Back to home</button>
+            </div>
           </div>
         )}
       </>}

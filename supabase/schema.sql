@@ -119,3 +119,5 @@ create or replace function increment_combatant_stats(
     updated_at      = now()
   where id = p_id;
 $$;
+
+grant execute on function increment_combatant_stats(text, int, int, int, int, int) to anon, authenticated;
