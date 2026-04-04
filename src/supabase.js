@@ -248,6 +248,16 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   } catch (e) { console.error('getPlayerRecentCombatants exception', e); return [] }
 }
 
+// Full combatant table dump for admin export (includes unpublished)
+export async function getAllCombatantsForExport() {
+  try {
+    const { data, error } = await supabase
+      .from('combatants').select('*').order('updated_at', { ascending: false })
+    if (error) { console.error('getAllCombatantsForExport error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getAllCombatantsForExport exception', e); return [] }
+}
+
 // Paginated bestiary list — published only
 export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
   try {

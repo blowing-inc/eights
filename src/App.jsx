@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
+import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats, getAllCombatantsForExport } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -1177,12 +1177,20 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
 
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
         <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>Room {room.code}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>{dateStr} · {players.map(p => p.name).join(', ')}</p>
         </div>
+      </div>
+
+      {/* Export row */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+        <button onClick={() => downloadFile(`eights-${room.code}-${new Date(room.createdAt).toISOString().slice(0,10)}.json`, JSON.stringify(room, null, 2), 'application/json')}
+          style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ JSON</button>
+        <button onClick={() => downloadFile(`eights-${room.code}-${new Date(room.createdAt).toISOString().slice(0,10)}.txt`, formatRoomAsText(room))}
+          style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ Plain text</button>
       </div>
 
       {/* Winners summary */}
@@ -1527,6 +1535,28 @@ function AdminScreen({ onBack }) {
   const [users, setUsers] = useState([])
   const [resetting, setResetting] = useState(null)
   const [msg, setMsg] = useState('')
+  const [exporting, setExporting] = useState(false)
+
+  async function exportAllData() {
+    setExporting(true)
+    const [rooms, combatants, allUsers] = await Promise.all([
+      slist(),
+      getAllCombatantsForExport(),
+      listUsers(),
+    ])
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      rooms,
+      combatants,
+      users: allUsers, // pins excluded by listUsers()
+    }
+    downloadFile(
+      `eights-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(payload, null, 2),
+      'application/json'
+    )
+    setExporting(false)
+  }
 
   useEffect(() => {
     if (pin.length < 5) return
@@ -1569,6 +1599,17 @@ function AdminScreen({ onBack }) {
           </button>
         </div>
       ))}
+
+      <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: '1.5rem', paddingTop: '1.25rem' }}>
+        <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px' }}>Data export</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+          Downloads all rooms, combatants, and users as a single JSON file. PINs are not included.
+        </p>
+        <button onClick={exportAllData} disabled={exporting}
+          style={{ ...btn('ghost'), padding: '8px 16px', fontSize: 13, width: 'auto' }}>
+          {exporting ? 'Exporting…' : '⬇ Export all data (JSON)'}
+        </button>
+      </div>
     </Screen>
   )
 }
@@ -2123,6 +2164,84 @@ function DevBanner() {
       🧪 Dev mode — bot votes don't count toward results
     </div>
   )
+}
+
+// ─── Export helpers ───────────────────────────────────────────────────────────
+function downloadFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click()
+  document.body.removeChild(a); URL.revokeObjectURL(url)
+}
+
+function formatRoomAsText(room) {
+  const players = (room.players || []).filter(p => !p.isBot)
+  const allRounds = room.rounds || []
+  const completedRounds = allRounds.filter(r => r.winner)
+  const date = new Date(room.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const lines = []
+
+  lines.push(`EIGHTS — ROOM ${room.code}`)
+  lines.push(`Date: ${date}`)
+  lines.push(`Players: ${players.map(p => p.name).join(', ')}`)
+  if (room.devMode) lines.push('(Dev mode)')
+  lines.push('')
+
+  if (completedRounds.length > 0) {
+    lines.push('=== WINNERS ===')
+    completedRounds.forEach(r => {
+      const ownerName = (room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'
+      lines.push(`  Round ${r.number}: ${r.winner.name} (by ${ownerName})`)
+    })
+    lines.push('')
+  }
+
+  allRounds.forEach(r => {
+    lines.push(`=== ROUND ${r.number} ===`)
+    lines.push(r.combatants.map(c => c.name).join(' vs '))
+    lines.push(r.winner ? `Winner: ${r.winner.name}` : 'No result recorded')
+    lines.push('')
+
+    // Votes
+    const picks = r.picks || {}
+    const voteLines = Object.entries(picks).map(([pid, cid]) => {
+      const pname = (room.players || []).find(p => p.id === pid)?.name || '?'
+      const cname = (r.combatants || []).find(c => c.id === cid)?.name || '?'
+      return `  ${pname} → ${cname}`
+    })
+    if (voteLines.length) { lines.push('Votes:'); voteLines.forEach(v => lines.push(v)); lines.push('') }
+
+    // Reactions
+    const pr = r.playerReactions || {}
+    const reactionLines = (r.combatants || []).flatMap(c => {
+      const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
+      const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
+      const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+      return heart + angry + cry > 0 ? [`  ${c.name}: ❤️ ${heart}  😡 ${angry}  😂 ${cry}`] : []
+    })
+    if (reactionLines.length) { lines.push('Reactions:'); reactionLines.forEach(l => lines.push(l)); lines.push('') }
+
+    // Chat
+    const chat = r.chat || []
+    if (chat.length) { lines.push('Chat:'); chat.forEach(m => lines.push(`  ${m.playerName}: ${m.text}`)); lines.push('') }
+
+    lines.push('')
+  })
+
+  // Roster
+  const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
+  if (allCombatants.length) {
+    lines.push('=== COMBATANT ROSTER ===')
+    allCombatants.sort((a, b) => b.wins - a.wins).forEach(c => {
+      const owner = (room.players || []).find(p => p.id === c.ownerId)
+      lines.push(`  ${c.name} — ${c.wins}W ${c.losses}L (by ${owner?.name || c.ownerName || '?'})`)
+      if (c.bio) lines.push(`    "${c.bio}"`)
+    })
+  }
+
+  return lines.join('\n')
 }
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
