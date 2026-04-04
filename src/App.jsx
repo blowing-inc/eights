@@ -79,8 +79,14 @@ export default function App() {
     const codes = loadLobbyCodes()
     if (!codes.length) { setOpenLobbies([]); return }
     const rooms = await getRoomsByIds(codes)
-    // Keep only rooms still in lobby or draft phase; prune anything past that
-    const active = rooms.filter(r => r && (r.phase === 'lobby' || r.phase === 'draft'))
+    // Keep only rooms still in lobby/draft phase where this player is actually a member.
+    // The player-membership check prevents "Next Battle" rooms (which copy the previous
+    // game's player list) from appearing for guests or players not in that game.
+    const active = rooms.filter(r =>
+      r &&
+      (r.phase === 'lobby' || r.phase === 'draft') &&
+      (r.players || []).some(p => p.id === playerId)
+    )
     const activeCodes = active.map(r => r.id)
     saveLobbyCodes(activeCodes)
     setOpenLobbies(active)
