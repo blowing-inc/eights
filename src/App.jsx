@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants } from './supabase.js'
+import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -45,23 +45,42 @@ function makeBots(count = 2) {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState('home')
-  const [playerId] = useState(() => {
+  // Guest ID — stable for the browser session
+  const [guestId] = useState(() => {
     const s = sessionStorage.getItem('eights_pid') || uid()
     sessionStorage.setItem('eights_pid', s)
     return s
   })
+  // Logged-in user persists via localStorage until explicit logout
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('eights_user') || 'null') } catch { return null }
+  })
+  const playerId   = currentUser?.id   || guestId
+  const isGuest    = !currentUser
   const [playerName, setPlayerName] = useState(() => sessionStorage.getItem('eights_pname') || '')
+  // Effective display name — username for logged-in users, typed name for guests
+  const effectiveName = currentUser?.username || playerName
+
   const [room, setRoom] = useState(null)
   const [viewCombatant, setViewCombatant] = useState(null)
   const [viewHistory, setViewHistory] = useState(false)
   const [viewBestiary, setViewBestiary] = useState(false)
   const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
 
+  function login(user) {
+    localStorage.setItem('eights_user', JSON.stringify(user))
+    setCurrentUser(user)
+  }
+  function logout() {
+    localStorage.removeItem('eights_user')
+    setCurrentUser(null)
+  }
+
   const nav = s => setScreen(s)
 
   async function startDevMode() {
     const roomCode = 'DEV' + Math.random().toString(36).slice(2, 5).toUpperCase()
-    const myName = playerName || 'You'
+    const myName = effectiveName || 'You'
     const bots = makeBots(2)
     const me = { id: playerId, name: myName, color: playerColor(0), ready: false }
     const allPlayers = [me, ...bots]
@@ -85,18 +104,20 @@ export default function App() {
   if (viewHistory) return <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   if (viewCombatant) return <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
 
-  if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} />
-  if (screen === 'create') return <CreateRoom playerId={playerId} playerName={playerName} setPlayerName={setPlayerName} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  if (screen === 'join')   return <JoinRoom playerId={playerId} playerName={playerName} setPlayerName={setPlayerName} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  if (screen === 'auth')   return <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
+  if (screen === 'admin')  return <AdminScreen onBack={() => nav('home')} />
+  if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
+  if (screen === 'create') return <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  if (screen === 'join')   return <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   if (screen === 'lobby')  return <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} />
-  if (screen === 'draft')  return <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} />
+  if (screen === 'draft')  return <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} isGuest={isGuest} />
   if (screen === 'battle') return <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} />
   if (screen === 'vote')   return <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} />
   return null
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev }) {
+function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev, currentUser, onLogin, onLogout, onAdmin }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -109,8 +130,17 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev }) {
         <button onClick={onJoin}   style={btn()}>Join a room</button>
         <button onClick={onHistory} style={btn('ghost')}>Battle history ↗</button>
         <button onClick={onBestiary} style={btn('ghost')}>Bestiary ↗</button>
-        <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12, marginTop: 4 }}>
+        <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {currentUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+              <span style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>⚔ {currentUser.username}</span>
+              <button onClick={onLogout} style={{ background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer', padding: '2px 4px' }}>Log out</button>
+            </div>
+          ) : (
+            <button onClick={onLogin} style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}>Log in / Register</button>
+          )}
           <button onClick={onDev} style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}>🧪 Dev mode — solo test</button>
+          <button onClick={onAdmin} style={{ background: 'transparent', border: 'none', fontSize: 11, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '4px', alignSelf: 'center' }}>⚙ Admin</button>
         </div>
       </div>
     </div>
@@ -118,7 +148,7 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev }) {
 }
 
 // ─── Create Room ──────────────────────────────────────────────────────────────
-function CreateRoom({ playerId, playerName, setPlayerName, onCreated, onBack }) {
+function CreateRoom({ playerId, playerName, setPlayerName, lockedName, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
 
@@ -141,14 +171,15 @@ function CreateRoom({ playerId, playerName, setPlayerName, onCreated, onBack }) 
   return (
     <Screen title="New room" onBack={onBack}>
       <label style={lbl}>Your name</label>
-      <input style={inp()} value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name" onKeyDown={e => e.key === 'Enter' && create()} autoFocus />
+      <input style={{ ...inp(), opacity: lockedName ? 0.65 : 1 }} value={name} onChange={e => { if (!lockedName) setName(e.target.value) }} placeholder="Enter your name" onKeyDown={e => e.key === 'Enter' && create()} autoFocus={!lockedName} readOnly={lockedName} />
+      {lockedName && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>}
       <button style={{ ...btn('primary'), marginTop: 8 }} onClick={create} disabled={!name.trim() || loading}>{loading ? 'Creating…' : 'Create room'}</button>
     </Screen>
   )
 }
 
 // ─── Join Room ────────────────────────────────────────────────────────────────
-function JoinRoom({ playerId, playerName, setPlayerName, onJoined, onBack }) {
+function JoinRoom({ playerId, playerName, setPlayerName, lockedName, onJoined, onBack }) {
   const [name, setName] = useState(playerName)
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
@@ -173,7 +204,8 @@ function JoinRoom({ playerId, playerName, setPlayerName, onJoined, onBack }) {
   return (
     <Screen title="Join room" onBack={onBack}>
       <label style={lbl}>Your name</label>
-      <input style={inp()} value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name" autoFocus />
+      <input style={{ ...inp(), opacity: lockedName ? 0.65 : 1 }} value={name} onChange={e => { if (!lockedName) setName(e.target.value) }} placeholder="Enter your name" autoFocus={!lockedName} readOnly={lockedName} />
+      {lockedName && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>}
       <label style={{ ...lbl, marginTop: 16 }}>Room code</label>
       <input style={{ ...inp(), textTransform: 'uppercase', letterSpacing: 4, fontSize: 22 }} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="XXXX" maxLength={4} onKeyDown={e => e.key === 'Enter' && join()} />
       {error && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, margin: '8px 0 0' }}>{error}</p>}
@@ -223,7 +255,7 @@ function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack }) {
 }
 
 // ─── Draft ────────────────────────────────────────────────────────────────────
-function DraftScreen({ room: init, playerId, setRoom, onDone }) {
+function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
   const [room, setLocal] = useState(init)
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
@@ -251,7 +283,8 @@ function DraftScreen({ room: init, playerId, setRoom, onDone }) {
       return { id, name: name.trim(), bio: bios[i].trim(), ownerId: playerId, ownerName: myPlayer.name, wins: 0, losses: 0, draws: 0, battles: [] }
     })
     // Register / touch each combatant in the global table (non-blocking)
-    myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName: myPlayer.name }))
+    const ownerName = isGuest ? `${myPlayer.name} (guest)` : myPlayer.name
+    myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName }))
     const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList } }
     const realPlayers = room.players.filter(p => !p.isBot)
     const draftDone = realPlayers.every(p => p.id === playerId || (updated.combatants[p.id] || []).length === 8)
@@ -828,6 +861,159 @@ function CombatantScreen({ room, combatant, playerId, onBack }) {
           ))}
         </div>
       )}
+    </Screen>
+  )
+}
+
+// ─── PIN keypad (shared by AuthScreen and AdminScreen) ───────────────────────
+function PinKeypad({ pin, onChange }) {
+  const rows = [['1','2','3'],['4','5','6'],['7','8','9'],['','0','⌫']]
+  function press(key) {
+    if (key === '⌫') { onChange(pin.slice(0, -1)); return }
+    if (key === '' || pin.length >= 5) return
+    onChange(pin + key)
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 28 }}>
+        {Array(5).fill(0).map((_, i) => (
+          <div key={i} style={{ width: 14, height: 14, borderRadius: '50%', background: i < pin.length ? 'var(--color-text-primary)' : 'transparent', border: '2px solid var(--color-border-secondary)', transition: 'background 0.1s' }} />
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, maxWidth: 240, margin: '0 auto' }}>
+        {rows.flat().map((key, i) => (
+          <button key={i} onClick={() => press(key)} disabled={key === ''}
+            style={{ padding: '18px 0', fontSize: 20, fontWeight: 400, fontFamily: 'var(--font-sans)', background: key === '' ? 'transparent' : 'var(--color-background-secondary)', border: key === '' ? 'none' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: key === '' ? 'default' : 'pointer', color: 'var(--color-text-primary)' }}>
+            {key}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Auth screen ──────────────────────────────────────────────────────────────
+function AuthScreen({ onLogin, onBack }) {
+  const [username, setUsername] = useState('')
+  const [mode, setMode] = useState('lookup') // lookup | login | register | set_pin
+  const [pin, setPin] = useState('')
+  const [userRecord, setUserRecord] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function lookup() {
+    if (!username.trim()) return
+    setLoading(true); setError('')
+    const user = await lookupUser(username.trim())
+    setLoading(false)
+    if (!user) {
+      setMode('register')
+    } else if (user.needs_reset) {
+      setUserRecord(user); setMode('set_pin')
+    } else {
+      setUserRecord(user); setMode('login')
+    }
+  }
+
+  useEffect(() => {
+    if (pin.length < 5) return
+    ;(async () => {
+      setLoading(true); setError('')
+      if (mode === 'register') {
+        const result = await registerUser(username.trim(), pin)
+        if (result.error) { setError(result.error); setPin(''); setLoading(false); return }
+        setLoading(false); onLogin({ id: result.id, username: result.username })
+      } else if (mode === 'login') {
+        const result = await verifyUser(username.trim(), pin)
+        if (!result) { setError('Wrong PIN — try again.'); setPin(''); setLoading(false); return }
+        setLoading(false); onLogin({ id: result.id, username: result.username })
+      } else if (mode === 'set_pin') {
+        await setUserPin(username.trim(), pin)
+        setLoading(false); onLogin({ id: userRecord.id, username: userRecord.username })
+      }
+    })()
+  }, [pin])
+
+  if (mode === 'lookup') {
+    return (
+      <Screen title="Log in / Register" onBack={onBack}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '-0.5rem 0 1.5rem' }}>Enter a username to log in or create an account.</p>
+        <label style={lbl}>Username</label>
+        <input style={inp()} value={username} onChange={e => setUsername(e.target.value)} placeholder="Your username" autoFocus onKeyDown={e => e.key === 'Enter' && lookup()} />
+        {error && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, margin: '-8px 0 8px' }}>{error}</p>}
+        <button style={btn('primary')} onClick={lookup} disabled={!username.trim() || loading}>{loading ? 'Checking…' : 'Continue →'}</button>
+      </Screen>
+    )
+  }
+
+  const headings  = { login: 'Enter your PIN', register: 'Choose a PIN', set_pin: 'Set new PIN' }
+  const subtexts  = {
+    login:    'Enter your 5-digit PIN.',
+    register: `Creating "${username.trim()}". Choose a 5-digit PIN.`,
+    set_pin:  'An admin reset your PIN. Set a new one to continue.',
+  }
+
+  return (
+    <Screen title={headings[mode]} onBack={() => { setMode('lookup'); setPin(''); setError('') }}>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '-0.5rem 0 1.5rem', textAlign: 'center' }}>{subtexts[mode]}</p>
+      {error && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, textAlign: 'center', margin: '-8px 0 16px' }}>{error}</p>}
+      {loading ? <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', marginTop: '2rem' }}>Please wait…</p> : <PinKeypad pin={pin} onChange={setPin} />}
+    </Screen>
+  )
+}
+
+// ─── Admin screen ─────────────────────────────────────────────────────────────
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || '00000'
+
+function AdminScreen({ onBack }) {
+  const [phase, setPhase] = useState('pin') // pin | users
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [users, setUsers] = useState([])
+  const [resetting, setResetting] = useState(null)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    if (pin.length < 5) return
+    if (pin === ADMIN_PIN) {
+      setPhase('users'); listUsers().then(setUsers)
+    } else {
+      setPinError('Wrong admin PIN.'); setPin('')
+    }
+  }, [pin])
+
+  async function doReset(username) {
+    setResetting(username); setMsg('')
+    await adminResetUser(username)
+    setMsg(`PIN reset for ${username} — they'll be prompted to set a new one on next login.`)
+    setResetting(null)
+    listUsers().then(setUsers)
+  }
+
+  if (phase === 'pin') {
+    return (
+      <Screen title="Admin" onBack={onBack}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '-0.5rem 0 1.5rem', textAlign: 'center' }}>Enter the admin PIN to continue.</p>
+        {pinError && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, textAlign: 'center', margin: '-8px 0 16px' }}>{pinError}</p>}
+        <PinKeypad pin={pin} onChange={setPin} />
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen title="Admin — Users" onBack={onBack}>
+      {msg && <div style={{ padding: '8px 12px', background: 'var(--color-background-success)', border: '0.5px solid var(--color-border-success)', borderRadius: 'var(--border-radius-md)', marginBottom: '1rem', fontSize: 13, color: 'var(--color-text-success)' }}>{msg}</div>}
+      {users.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No registered users yet.</p>}
+      {users.map(u => (
+        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8 }}>
+          <span style={{ flex: 1, fontSize: 15, color: 'var(--color-text-primary)' }}>{u.username}</span>
+          {u.needs_reset && <span style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>pending reset</span>}
+          <button onClick={() => doReset(u.username)} disabled={!!resetting || u.needs_reset}
+            style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12 }}>
+            {resetting === u.username ? '…' : 'Reset PIN'}
+          </button>
+        </div>
+      ))}
     </Screen>
   )
 }

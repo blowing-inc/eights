@@ -35,6 +35,28 @@ create policy "public update"
 --   delete from rooms where updated_at < now() - interval '7 days';
 -- $$;
 
+-- ─── Users (persistent accounts) ────────────────────────────────────────────
+-- PIN is stored in plain text — low-stakes party game, no auth library.
+-- To reset a user's PIN: set needs_reset = true. Next login forces a new PIN.
+
+create table if not exists users (
+  id           text        primary key,
+  username     text        not null,
+  pin          text        not null,
+  needs_reset  boolean     not null default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+-- Case-insensitive unique usernames
+create unique index if not exists users_username_lower_idx on users (lower(username));
+
+alter table users enable row level security;
+
+create policy "public read users"   on users for select using (true);
+create policy "public insert users" on users for insert with check (true);
+create policy "public update users" on users for update using (true);
+
 -- ─── Global combatants (bestiary) ────────────────────────────────────────────
 -- Run this block separately if you're adding it to an existing deployment.
 

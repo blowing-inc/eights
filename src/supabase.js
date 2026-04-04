@@ -35,6 +35,73 @@ export async function slist() {
   } catch (e) { console.error('slist exception', e); return [] }
 }
 
+// ─── User accounts ───────────────────────────────────────────────────────────
+
+function genId() { return Math.random().toString(36).slice(2, 9) }
+
+// Returns { id, username, needs_reset } or null — does NOT return pin
+export async function lookupUser(username) {
+  try {
+    const { data, error } = await supabase
+      .from('users').select('id, username, needs_reset')
+      .ilike('username', username).maybeSingle()
+    if (error) { console.error('lookupUser error', error); return null }
+    return data ?? null
+  } catch (e) { console.error('lookupUser exception', e); return null }
+}
+
+// Verifies pin; returns user record on match, null on mismatch
+export async function verifyUser(username, pin) {
+  try {
+    const { data, error } = await supabase
+      .from('users').select('id, username, needs_reset')
+      .ilike('username', username).eq('pin', pin).maybeSingle()
+    if (error) { console.error('verifyUser error', error); return null }
+    return data ?? null
+  } catch (e) { console.error('verifyUser exception', e); return null }
+}
+
+// Creates a new account; returns user record or { error }
+export async function registerUser(username, pin) {
+  try {
+    const id = genId()
+    const { error } = await supabase.from('users').insert({ id, username, pin })
+    if (error) return { error: error.code === '23505' ? 'Username already taken.' : error.message }
+    return { id, username, needs_reset: false }
+  } catch (e) { console.error('registerUser exception', e); return { error: 'Registration failed.' } }
+}
+
+// Updates pin and clears needs_reset — used after admin reset
+export async function setUserPin(username, pin) {
+  try {
+    const { error } = await supabase
+      .from('users').update({ pin, needs_reset: false, updated_at: new Date().toISOString() })
+      .ilike('username', username)
+    if (error) console.error('setUserPin error', error)
+  } catch (e) { console.error('setUserPin exception', e) }
+}
+
+// Admin: flag a user's PIN for reset
+export async function adminResetUser(username) {
+  try {
+    const { error } = await supabase
+      .from('users').update({ needs_reset: true, updated_at: new Date().toISOString() })
+      .ilike('username', username)
+    if (error) console.error('adminResetUser error', error)
+  } catch (e) { console.error('adminResetUser exception', e) }
+}
+
+// Admin: list all users (no pins)
+export async function listUsers() {
+  try {
+    const { data, error } = await supabase
+      .from('users').select('id, username, needs_reset, created_at')
+      .order('username', { ascending: true })
+    if (error) { console.error('listUsers error', error); return [] }
+    return data || []
+  } catch (e) { console.error('listUsers exception', e); return [] }
+}
+
 // ─── Global combatants (bestiary) ────────────────────────────────────────────
 
 // Create or update name/bio only — never clobbers stats
