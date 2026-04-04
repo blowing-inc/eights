@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers } from './supabase.js'
+import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -553,6 +553,12 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
         const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
         const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
         await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
+      }
+      // Publish all combatants once the final round is done
+      const totalRounds = Math.min(...r.players.map(p => (r.combatants[p.id] || []).length))
+      if (r.currentRound >= totalRounds) {
+        const allIds = Object.values(r.combatants).flat().map(c => c.id)
+        await publishCombatants(allIds)
       }
     })()
   }

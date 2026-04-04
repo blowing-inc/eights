@@ -79,13 +79,15 @@ create table if not exists combatants (
   reactions_heart  int         not null default 0,
   reactions_angry  int         not null default 0,
   reactions_cry    int         not null default 0,
+  published        boolean     not null default false,  -- hidden until game ends
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
 
-create index if not exists combatants_wins_idx  on combatants (wins desc);
-create index if not exists combatants_owner_idx on combatants (owner_id);
-create index if not exists combatants_name_idx  on combatants (name);
+create index if not exists combatants_wins_idx      on combatants (wins desc);
+create index if not exists combatants_owner_idx     on combatants (owner_id);
+create index if not exists combatants_name_idx      on combatants (name);
+create index if not exists combatants_published_idx on combatants (published) where published = true;
 
 alter table combatants enable row level security;
 
@@ -121,3 +123,7 @@ create or replace function increment_combatant_stats(
 $$;
 
 grant execute on function increment_combatant_stats(text, int, int, int, int, int) to anon, authenticated;
+
+-- If adding published column to an existing combatants table, run:
+-- alter table combatants add column if not exists published boolean not null default false;
+-- create index if not exists combatants_published_idx on combatants (published) where published = true;

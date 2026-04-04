@@ -141,12 +141,13 @@ export async function getCombatant(id) {
   } catch (e) { console.error('getCombatant exception', e); return null }
 }
 
-// Name search for DraftScreen autocomplete
+// Name search for DraftScreen autocomplete — only published (game-complete) fighters
 export async function searchCombatants(query, limit = 8) {
   try {
     const { data, error } = await supabase
       .from('combatants').select('id, name, bio, wins, losses, owner_name')
       .ilike('name', `%${query}%`)
+      .eq('published', true)
       .order('wins', { ascending: false })
       .limit(limit)
     if (error) { console.error('searchCombatants error', error); return [] }
@@ -154,12 +155,13 @@ export async function searchCombatants(query, limit = 8) {
   } catch (e) { console.error('searchCombatants exception', e); return [] }
 }
 
-// Player's recent fighters — shown on autocomplete focus
+// Player's recent fighters — shown on autocomplete focus, published only
 export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   try {
     const { data, error } = await supabase
       .from('combatants').select('id, name, bio, wins, losses, owner_name')
       .eq('owner_id', ownerId)
+      .eq('published', true)
       .order('updated_at', { ascending: false })
       .limit(limit)
     if (error) { console.error('getPlayerRecentCombatants error', error); return [] }
@@ -167,16 +169,28 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   } catch (e) { console.error('getPlayerRecentCombatants exception', e); return [] }
 }
 
-// Paginated bestiary list
+// Paginated bestiary list — published only
 export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
     const { data, error, count } = await supabase
       .from('combatants').select('*', { count: 'exact' })
+      .eq('published', true)
       .order(sort, { ascending })
       .range(from, to)
     if (error) { console.error('listCombatants error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
   } catch (e) { console.error('listCombatants exception', e); return { items: [], total: 0 } }
+}
+
+// Called once when the last round of a game is confirmed
+export async function publishCombatants(ids) {
+  if (!ids.length) return
+  try {
+    const { error } = await supabase
+      .from('combatants').update({ published: true, updated_at: new Date().toISOString() })
+      .in('id', ids)
+    if (error) console.error('publishCombatants error', error)
+  } catch (e) { console.error('publishCombatants exception', e) }
 }
