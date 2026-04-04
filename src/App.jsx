@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { sget, sset, slist } from './supabase.js'
+import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -54,6 +54,8 @@ export default function App() {
   const [room, setRoom] = useState(null)
   const [viewCombatant, setViewCombatant] = useState(null)
   const [viewHistory, setViewHistory] = useState(false)
+  const [viewBestiary, setViewBestiary] = useState(false)
+  const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
 
   const nav = s => setScreen(s)
 
@@ -78,10 +80,12 @@ export default function App() {
     nav('draft')
   }
 
+  if (viewBestiary) return <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
+  if (viewGlobalCombatant) return <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
   if (viewHistory) return <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   if (viewCombatant) return <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
 
-  if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onDev={startDevMode} />
+  if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} />
   if (screen === 'create') return <CreateRoom playerId={playerId} playerName={playerName} setPlayerName={setPlayerName} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   if (screen === 'join')   return <JoinRoom playerId={playerId} playerName={playerName} setPlayerName={setPlayerName} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   if (screen === 'lobby')  return <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} />
@@ -92,7 +96,7 @@ export default function App() {
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomeScreen({ onCreate, onJoin, onHistory, onDev }) {
+function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -104,6 +108,7 @@ function HomeScreen({ onCreate, onJoin, onHistory, onDev }) {
         <button onClick={onCreate} style={btn('primary')}>Create a room</button>
         <button onClick={onJoin}   style={btn()}>Join a room</button>
         <button onClick={onHistory} style={btn('ghost')}>Battle history ↗</button>
+        <button onClick={onBestiary} style={btn('ghost')}>Bestiary ↗</button>
         <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12, marginTop: 4 }}>
           <button onClick={onDev} style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}>🧪 Dev mode — solo test</button>
         </div>
@@ -224,6 +229,8 @@ function DraftScreen({ room: init, playerId, setRoom, onDone }) {
   const existing = room.combatants[playerId] || []
   const [names, setNames] = useState(() => Array(8).fill('').map((_, i) => existing[i]?.name || ''))
   const [bios,  setBios]  = useState(() => Array(8).fill('').map((_, i) => existing[i]?.bio  || ''))
+  // globalIds[i]: existing global combatant id if loaded from bestiary, null if new
+  const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || null))
   const [submitted, setSubmitted] = useState(existing.length === 8)
 
   useEffect(() => {
@@ -238,11 +245,13 @@ function DraftScreen({ room: init, playerId, setRoom, onDone }) {
 
   async function submit() {
     if (names.some(n => !n.trim())) return
-    const myList = names.map((name, i) => ({
-      id: uid(), name: name.trim(), bio: bios[i].trim(),
-      ownerId: playerId, ownerName: myPlayer.name,
-      wins: 0, losses: 0, draws: 0, battles: []
-    }))
+    const myList = names.map((name, i) => {
+      // Reuse the global id when loading an existing fighter so stats accumulate
+      const id = globalIds[i] || uid()
+      return { id, name: name.trim(), bio: bios[i].trim(), ownerId: playerId, ownerName: myPlayer.name, wins: 0, losses: 0, draws: 0, battles: [] }
+    })
+    // Register / touch each combatant in the global table (non-blocking)
+    myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName: myPlayer.name }))
     const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList } }
     const realPlayers = room.players.filter(p => !p.isBot)
     const draftDone = realPlayers.every(p => p.id === playerId || (updated.combatants[p.id] || []).length === 8)
@@ -281,7 +290,14 @@ function DraftScreen({ room: init, playerId, setRoom, onDone }) {
         <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 20 }}>#{i + 1}</span>
-            <input style={{ ...inp(), flex: 1, margin: 0 }} placeholder={`Combatant ${i + 1}`} value={names[i]} onChange={e => { const n = [...names]; n[i] = e.target.value; setNames(n) }} />
+            <FighterAutocomplete
+              value={names[i]}
+              onChange={v => { const n = [...names]; n[i] = v; setNames(n); const g = [...globalIds]; g[i] = null; setGlobalIds(g) }}
+              onSelect={f => { const n = [...names]; n[i] = f.name; setNames(n); const b = [...bios]; b[i] = f.bio || ''; setBios(b); const g = [...globalIds]; g[i] = f.id; setGlobalIds(g) }}
+              placeholder={`Combatant ${i + 1}`}
+              playerId={playerId}
+            />
+            {globalIds[i] && <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)', whiteSpace: 'nowrap', flexShrink: 0 }}>↩ loaded</span>}
           </div>
           <textarea style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13 }} placeholder="Bio (optional)" value={bios[i]} onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }} />
         </div>
@@ -336,6 +352,13 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory }) {
     const updated = { ...r, rounds: r.rounds.slice(0, r.currentRound - 1), combatants, currentRound: r.currentRound - 1, phase: 'battle' }
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setConfirmUndo(false)
+    // Reverse global stats (non-blocking); reactions are NOT reversed — they're permanent sentiment
+    ;(async () => {
+      for (const c of last.combatants) {
+        const wasWin = last.winner?.id === c.id
+        await incrementCombatantStats(c.id, { wins: wasWin ? -1 : 0, losses: wasWin ? 0 : -1 })
+      }
+    })()
   }
 
   return (
@@ -430,6 +453,23 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
     return () => clearInterval(iv)
   }, [room.id, room.currentRound])
 
+  async function castReaction(combatantId, emoji) {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rd = { ...r.rounds[r.currentRound - 1] }
+    const playerReactions = { ...(rd.playerReactions || {}) }
+    const mine = { ...(playerReactions[playerId] || {}) }
+    // toggle: same emoji removes it
+    if (mine[combatantId] === emoji) delete mine[combatantId]
+    else mine[combatantId] = emoji
+    playerReactions[playerId] = mine
+    rd.playerReactions = playerReactions
+    const rounds = [...r.rounds]; rounds[r.currentRound - 1] = rd
+    const updated = { ...r, rounds }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+  }
+
   async function castPick(combatantId) {
     const r = await sget('room:' + room.id)
     if (!r) return
@@ -461,6 +501,17 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
     const updated = { ...r, rounds, combatants, phase: 'battle' }
     await sset('room:' + r.id, updated)
     setRoom(updated); onResult()
+    // Sync stats to global combatants table (non-blocking)
+    ;(async () => {
+      for (const c of rd.combatants) {
+        const isWin = winner.id === c.id
+        const pr = rd.playerReactions || {}
+        const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
+        const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
+        const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+        await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
+      }
+    })()
   }
 
   function startEdit(c) { setEditingId(c.id); setEditName(c.name); setEditBio(c.bio || '') }
@@ -536,6 +587,24 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
                   ))}
                 </div>
               )}
+
+              {/* Reactions */}
+              {(() => {
+                const pr = round.playerReactions || {}
+                const myReaction = (pr[playerId] || {})[c.id]
+                const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
+                const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
+                const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+                return (
+                  <div onClick={e => e.stopPropagation()} style={{ padding: '6px 12px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', display: 'flex', gap: 6 }}>
+                    {[['heart','❤️',heart],['angry','😡',angry],['cry','😂',cry]].map(([key,icon,count]) => (
+                      <button key={key} onClick={() => castReaction(c.id, key)} style={{ background: myReaction === key ? 'var(--color-background-info)' : 'var(--color-background-tertiary)', border: myReaction === key ? '1px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 99, padding: '3px 9px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {icon}{count > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{count}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
 
               {isHost && isPicked && (
                 <div style={{ padding: '0 16px 14px' }}>
@@ -757,6 +826,241 @@ function CombatantScreen({ room, combatant, playerId, onBack }) {
               <span style={{ fontSize: 13, fontWeight: 500, color: b.result === 'win' ? 'var(--color-text-success)' : 'var(--color-text-danger)' }}>{b.result}</span>
             </div>
           ))}
+        </div>
+      )}
+    </Screen>
+  )
+}
+
+// ─── Fighter autocomplete ─────────────────────────────────────────────────────
+function FighterAutocomplete({ value, onChange, onSelect, placeholder, playerId }) {
+  const [open, setOpen] = useState(false)
+  const [results, setResults] = useState([])
+  const [recent, setRecent] = useState([])
+
+  useEffect(() => {
+    if (playerId) getPlayerRecentCombatants(playerId).then(setRecent)
+  }, [playerId])
+
+  useEffect(() => {
+    if (!value.trim()) { setResults([]); return }
+    const t = setTimeout(() => searchCombatants(value).then(setResults), 280)
+    return () => clearTimeout(t)
+  }, [value])
+
+  const items = value.trim() ? results : recent
+  const showHeader = !value.trim() && items.length > 0
+
+  return (
+    <div style={{ position: 'relative', flex: 1 }}>
+      <input
+        style={{ ...inp(), margin: 0, width: '100%' }}
+        placeholder={placeholder}
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+      />
+      {open && items.length > 0 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', zIndex: 200, overflow: 'hidden', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
+          {showHeader && <div style={{ padding: '5px 12px 3px', fontSize: 10, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Your recent fighters</div>}
+          {items.map(f => (
+            <button key={f.id} onMouseDown={() => { onSelect(f); setOpen(false) }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'transparent', border: 'none', borderTop: '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{f.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 1 }}>
+                {f.wins}W – {f.losses}L · {f.owner_name}{f.bio ? ` · ${f.bio.slice(0, 40)}${f.bio.length > 40 ? '…' : ''}` : ''}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Bestiary ─────────────────────────────────────────────────────────────────
+const BESTIARY_SORTS = [
+  { key: 'wins',            label: 'Wins',   asc: false },
+  { key: 'losses',          label: 'Losses', asc: false },
+  { key: 'reactions_heart', label: '❤️',     asc: false },
+  { key: 'reactions_angry', label: '😡',     asc: false },
+  { key: 'reactions_cry',   label: '😂',     asc: false },
+  { key: 'name',            label: 'A–Z',    asc: true  },
+]
+const PAGE_SIZE = 20
+
+function BestiaryScreen({ onBack, onViewCombatant }) {
+  const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const [sort, setSort] = useState('wins')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    const sortDef = BESTIARY_SORTS.find(s => s.key === sort)
+    listCombatants({ sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE }).then(({ items, total }) => {
+      setItems(items); setTotal(total); setLoading(false)
+    })
+  }, [sort, page])
+
+  function changeSort(key) {
+    if (sort === key) return
+    setSort(key); setPage(0)
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  return (
+    <Screen title="Bestiary" onBack={onBack}>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '-0.75rem 0 1rem' }}>Every fighter ever entered, across all games.</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.25rem' }}>
+        {BESTIARY_SORTS.map(s => (
+          <button key={s.key} onClick={() => changeSort(s.key)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
+      {!loading && items.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No combatants yet — play some games first!</p>}
+
+      {!loading && items.map((c, idx) => (
+        <button key={c.id} onClick={() => onViewCombatant(c)}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 24 }}>#{page * PAGE_SIZE + idx + 1}</span>
+              <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{c.wins}W – {c.losses}L</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 32 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {c.owner_name || 'unknown'}</span>
+            <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+              {c.reactions_heart > 0 && <span>❤️ {c.reactions_heart}</span>}
+              {c.reactions_angry > 0 && <span>😡 {c.reactions_angry}</span>}
+              {c.reactions_cry   > 0 && <span>😂 {c.reactions_cry}</span>}
+            </div>
+          </div>
+          {c.bio && <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0 32px', lineHeight: 1.4 }}>{c.bio.length > 90 ? c.bio.slice(0, 90) + '…' : c.bio}</p>}
+        </button>
+      ))}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: '1.25rem' }}>
+          <button onClick={() => setPage(p => p - 1)} disabled={page === 0} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{page + 1} / {totalPages}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>Next →</button>
+        </div>
+      )}
+    </Screen>
+  )
+}
+
+// ─── Global combatant detail ──────────────────────────────────────────────────
+function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack }) {
+  const [c, setC] = useState(init)
+  const [editMode, setEditMode] = useState(false)
+  const [editName, setEditName] = useState(init.name)
+  const [editBio,  setEditBio]  = useState(init.bio || '')
+  const [saving, setSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  const canEdit = c.owner_id === playerId
+  const totalBattles = (c.wins || 0) + (c.losses || 0)
+  const history = c.bio_history || []
+
+  async function saveEdit() {
+    if (!editName.trim()) return
+    setSaving(true)
+    const newName = editName.trim()
+    const newBio  = editBio.trim()
+    // Append current state to history before overwriting
+    const entry = { name: c.name, bio: c.bio || '', updatedAt: new Date().toISOString(), updatedBy: playerName || 'unknown' }
+    const newHistory = [...history, entry].slice(-20)
+    await updateGlobalCombatant(c.id, { name: newName, bio: newBio, bio_history: newHistory })
+    setC({ ...c, name: newName, bio: newBio, bio_history: newHistory })
+    setSaving(false); setEditMode(false)
+  }
+
+  return (
+    <Screen title={c.name} onBack={onBack}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: '1.5rem' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⚔️</div>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>{c.name}</h2>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>Created by {c.owner_name || 'unknown'}</p>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Battles', totalBattles, 'var(--color-text-secondary)']].map(([label, val, color]) => (
+          <div key={label} style={{ padding: 12, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
+            <div style={{ fontSize: 22, fontWeight: 500, color }}>{val}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Reactions */}
+      {(c.reactions_heart > 0 || c.reactions_angry > 0 || c.reactions_cry > 0) && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+          {[['❤️', c.reactions_heart], ['😡', c.reactions_angry], ['😂', c.reactions_cry]].filter(([, n]) => n > 0).map(([icon, count]) => (
+            <div key={icon} style={{ padding: '5px 12px', background: 'var(--color-background-secondary)', borderRadius: 99, border: '0.5px solid var(--color-border-tertiary)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              {icon} {count}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Bio */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: 0 }}>Bio</h3>
+          {canEdit && !editMode && <button onClick={() => setEditMode(true)} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Edit</button>}
+        </div>
+        {editMode ? (
+          <>
+            <label style={lbl}>Name</label>
+            <input style={inp()} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" />
+            <label style={lbl}>Bio</label>
+            <textarea style={{ ...inp(), width: '100%', resize: 'none', height: 80 }} value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Bio (optional)" />
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button style={btn('primary')} onClick={saveEdit} disabled={saving || !editName.trim()}>{saving ? 'Saving…' : 'Save'}</button>
+              <button style={btn()} onClick={() => { setEditName(c.name); setEditBio(c.bio || ''); setEditMode(false) }}>Cancel</button>
+            </div>
+          </>
+        ) : (
+          <p style={{ color: c.bio ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontSize: 14, margin: 0 }}>{c.bio || 'No bio yet.'}</p>
+        )}
+      </div>
+
+      {/* Bio history — collapsible */}
+      {history.length > 0 && (
+        <div>
+          <button onClick={() => setHistoryOpen(o => !o)}
+            style={{ ...btn('ghost'), width: '100%', textAlign: 'left', fontSize: 13, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Bio history ({history.length})</span>
+            <span>{historyOpen ? '↑' : '↓'}</span>
+          </button>
+          {historyOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[...history].reverse().map((h, i) => (
+                <div key={i} style={{ padding: '10px 12px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{h.name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>{new Date(h.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  </div>
+                  {h.bio && <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4 }}>{h.bio}</p>}
+                  <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '4px 0 0' }}>by {h.updatedBy}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Screen>
