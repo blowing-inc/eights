@@ -218,7 +218,7 @@ function HomeTicker() {
   if (!messages) return null
 
   const text = messages.join('   ·   ')
-  const duration = Math.max(40, messages.length * 4)
+  const duration = Math.max(20, messages.length * 2)
 
   return (
     <div style={{ width: '100%', maxWidth: 280, overflow: 'hidden', marginBottom: '1.75rem', borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', padding: '7px 0' }}>
@@ -791,7 +791,7 @@ function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
 
 // ─── History ──────────────────────────────────────────────────────────────────
 // ─── History: room list ───────────────────────────────────────────────────────
-function HistoryScreen({ activeRoom, onBack, setViewCombatant }) {
+function HistoryScreen({ onBack, setViewCombatant }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
 
