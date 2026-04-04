@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
+import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -134,6 +134,29 @@ export default function App() {
     </div>
   )
 
+  async function handleHostNextBattle(completedRoom) {
+    const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
+    // Build per-player map of winners from the completed game
+    const prevWinners = {}
+    ;(completedRoom.rounds || []).filter(rd => rd.winner).forEach(rd => {
+      const ownerId = rd.winner.ownerId
+      if (!prevWinners[ownerId]) prevWinners[ownerId] = []
+      prevWinners[ownerId].push({ id: rd.winner.id, name: rd.winner.name, bio: rd.winner.bio || '' })
+    })
+    const newRoom = {
+      id: roomCode, code: roomCode, host: playerId, phase: 'draft',
+      players: completedRoom.players,
+      combatants: {}, rounds: [], currentRound: 0,
+      createdAt: Date.now(), prevWinners,
+    }
+    await sset('room:' + roomCode, newRoom)
+    // Signal non-host players still polling the old room
+    await sset('room:' + completedRoom.id, { ...completedRoom, nextRoomId: roomCode })
+    addLobbyCode(roomCode)
+    setRoom(newRoom)
+    nav('draft')
+  }
+
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
   let content = null
@@ -150,8 +173,8 @@ export default function App() {
   else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
-  else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} />
-  else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} />
+  else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} />
+  else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
   else if (screen === 'vote')   content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} />
 
   return <>{userPill}{content}</>
@@ -475,7 +498,7 @@ function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPla
 }
 
 // ─── Draft ────────────────────────────────────────────────────────────────────
-function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
+function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack }) {
   const [room, setLocal] = useState(init)
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
@@ -497,8 +520,23 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
     return () => clearInterval(iv)
   }, [room.id])
 
+  const myPrevWinners = room.prevWinners?.[playerId] || []
+  // A slot "contains" prev winner W when name matches (case-insensitive) or global id matches
+  function slotMatchesPrevWinner(i) {
+    return myPrevWinners.some(w =>
+      (names[i].trim().toLowerCase() === w.name.toLowerCase()) || (globalIds[i] && globalIds[i] === w.id)
+    )
+  }
+  const allPrevWinnersPlaced = myPrevWinners.every(w =>
+    names.some((n, i) => n.trim().toLowerCase() === w.name.toLowerCase() || (globalIds[i] && globalIds[i] === w.id))
+  )
+  const unplacedWinners = myPrevWinners.filter(w =>
+    !names.some((n, i) => n.trim().toLowerCase() === w.name.toLowerCase() || (globalIds[i] && globalIds[i] === w.id))
+  )
+
   async function submit() {
     if (names.some(n => !n.trim())) return
+    if (myPrevWinners.length > 0 && !allPrevWinnersPlaced) return
     const myList = names.map((name, i) => {
       // Reuse the global id when loading an existing fighter so stats accumulate
       const id = globalIds[i] || uid()
@@ -532,7 +570,7 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
     const canForce    = isHost && readyCount >= 2 && readyCount < realPlayers.length
 
     return (
-      <Screen title="Draft submitted!">
+      <Screen title="Draft submitted!" onBack={onBack}>
         {room.devMode && <DevBanner />}
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 2rem' }}>Your combatants are locked in. Waiting for others…</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: canForce ? '1.5rem' : 0 }}>
@@ -565,31 +603,68 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
+      <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, marginBottom: '1rem' }}>← Back</button>
       <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 0.25rem', color: 'var(--color-text-primary)' }}>Your 8 combatants</h2>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.5rem' }}>Keep them secret — anything goes. Add an optional bio for each.</p>
-      {Array(8).fill(0).map((_, i) => (
-        <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 20 }}>#{i + 1}</span>
-            <FighterAutocomplete
-              value={names[i]}
-              onChange={v => { const n = [...names]; n[i] = v; setNames(n); const g = [...globalIds]; g[i] = null; setGlobalIds(g) }}
-              onSelect={f => { const n = [...names]; n[i] = f.name; setNames(n); const b = [...bios]; b[i] = f.bio || ''; setBios(b); const g = [...globalIds]; g[i] = f.id; setGlobalIds(g) }}
-              placeholder={`Combatant ${i + 1}`}
-              playerId={playerId}
-            />
-            {globalIds[i] && <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)', whiteSpace: 'nowrap', flexShrink: 0 }}>↩ loaded</span>}
+
+      {myPrevWinners.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Champions from last battle</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {myPrevWinners.map(w => {
+              const placed = !unplacedWinners.find(u => u.id === w.id)
+              return (
+                <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, color: placed ? 'var(--color-text-success)' : 'var(--color-text-primary)', fontWeight: placed ? 500 : 400 }}>
+                    {placed ? '✓ ' : ''}{w.name}
+                  </span>
+                  {!placed && <span style={{ fontSize: 11, color: 'var(--color-text-warning)' }}>— must be placed in a slot</span>}
+                </div>
+              )
+            })}
           </div>
-          <textarea style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13 }} placeholder="Bio (optional)" value={bios[i]} onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }} />
+          {unplacedWinners.length > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '8px 0 0' }}>
+              Place all champions before locking in.
+            </p>
+          )}
         </div>
-      ))}
-      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim())}>Lock in my 8 →</button>
+      )}
+
+      {Array(8).fill(0).map((_, i) => {
+        const isPrevWinnerSlot = slotMatchesPrevWinner(i)
+        return (
+          <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 20 }}>#{i + 1}</span>
+              <FighterAutocomplete
+                value={names[i]}
+                onChange={v => { const n = [...names]; n[i] = v; setNames(n); const g = [...globalIds]; g[i] = null; setGlobalIds(g) }}
+                onSelect={f => { const n = [...names]; n[i] = f.name; setNames(n); const b = [...bios]; b[i] = f.bio || ''; setBios(b); const g = [...globalIds]; g[i] = f.id; setGlobalIds(g) }}
+                placeholder={`Combatant ${i + 1}`}
+                playerId={playerId}
+              />
+              {isPrevWinnerSlot && globalIds[i] && (
+                <CombatantStatsPill globalId={globalIds[i]} label="🏆 champion" pillStyle={{ background: 'var(--color-background-success)', color: 'var(--color-text-success)', border: '0.5px solid var(--color-border-success)' }} />
+              )}
+              {isPrevWinnerSlot && !globalIds[i] && (
+                <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-success)', color: 'var(--color-text-success)', borderRadius: 99, border: '0.5px solid var(--color-border-success)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏆 champion</span>
+              )}
+              {!isPrevWinnerSlot && globalIds[i] && (
+                <CombatantStatsPill globalId={globalIds[i]} label="↩ loaded" pillStyle={{ background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)' }} />
+              )}
+            </div>
+            <textarea style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13 }} placeholder="Bio (optional)" value={bios[i]} onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }} />
+          </div>
+        )
+      })}
+      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my 8 →</button>
     </div>
   )
 }
 
 // ─── Battle arena ─────────────────────────────────────────────────────────────
-function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome }) {
+function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
 
@@ -597,6 +672,11 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome
     const iv = setInterval(async () => {
       const r = await sget('room:' + room.id)
       if (!r) return
+      // Non-host: redirect when host has started a next battle
+      if (r.nextRoomId) {
+        const nextRoom = await sget('room:' + r.nextRoomId)
+        if (nextRoom) { setRoom(nextRoom); onRejoinNextBattle(nextRoom); return }
+      }
       setLocal(r); setRoom(r)
       if (r.phase === 'voting') onVote()
     }, POLL_INTERVAL)
@@ -700,9 +780,13 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All 8 rounds fought. Check the history for full results.</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button style={btn()} onClick={onHistory}>View full history</button>
-              <button style={btn('primary')} onClick={onHome}>Back to home</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+              {isHost && <button style={btn('primary')} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>}
+              {!isHost && <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next battle…</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={btn()} onClick={onHistory}>View full history</button>
+                <button style={btn()} onClick={onHome}>Back to home</button>
+              </div>
             </div>
           </div>
         )}
@@ -1330,6 +1414,47 @@ function AvatarWithHover({ player, onViewProfile }) {
           {onViewProfile && (
             <button onClick={() => onViewProfile(player.id)} style={{ marginTop: 8, background: 'transparent', border: 'none', fontSize: 11, color: 'var(--color-text-info)', cursor: 'pointer', padding: 0 }}>View profile →</button>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Loaded-combatant stats pill (DraftScreen) ───────────────────────────────
+function CombatantStatsPill({ globalId, label, pillStyle }) {
+  const [hovered, setHovered] = useState(false)
+  const [stats, setStats]     = useState(null)
+  const timerRef = useRef(null)
+
+  function handleEnter() {
+    timerRef.current = setTimeout(() => {
+      setHovered(true)
+      if (!stats && globalId) getCombatant(globalId).then(setStats)
+    }, 300)
+  }
+  function handleLeave() { clearTimeout(timerRef.current); setHovered(false) }
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 99, whiteSpace: 'nowrap', cursor: 'default', ...pillStyle }}>{label}</span>
+      {hovered && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 400, minWidth: 170, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
+          {!stats && <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Loading…</span>}
+          {stats && <>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 5 }}>{stats.name}</div>
+            <div style={{ display: 'flex', gap: 10, fontSize: 12, marginBottom: 4 }}>
+              <span style={{ color: 'var(--color-text-success)' }}>{stats.wins || 0}W</span>
+              <span style={{ color: 'var(--color-text-danger)' }}>{stats.losses || 0}L</span>
+            </div>
+            {(stats.reactions_heart > 0 || stats.reactions_angry > 0 || stats.reactions_cry > 0) && (
+              <div style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                {stats.reactions_heart > 0 && <span>❤️ {stats.reactions_heart}</span>}
+                {stats.reactions_angry > 0 && <span>😡 {stats.reactions_angry}</span>}
+                {stats.reactions_cry   > 0 && <span>😂 {stats.reactions_cry}</span>}
+              </div>
+            )}
+            {stats.bio && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0, lineHeight: 1.4 }}>{stats.bio.length > 60 ? stats.bio.slice(0, 60) + '…' : stats.bio}</p>}
+          </>}
         </div>
       )}
     </div>
