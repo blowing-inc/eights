@@ -45,13 +45,19 @@ grant select, insert, update on table rooms to anon, authenticated;
 -- To reset a user's PIN: set needs_reset = true. Next login forces a new PIN.
 
 create table if not exists users (
-  id           text        primary key,
-  username     text        not null,
-  pin          text        not null,
-  needs_reset  boolean     not null default false,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  id                      text        primary key,
+  username                text        not null,
+  pin                     text        not null,
+  needs_reset             boolean     not null default false,
+  favorite_combatant_id   text        null,
+  favorite_combatant_name text        null,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now()
 );
+
+-- If adding to an existing users table:
+-- alter table users add column if not exists favorite_combatant_id   text null;
+-- alter table users add column if not exists favorite_combatant_name text null;
 
 -- Case-insensitive unique usernames
 create unique index if not exists users_username_lower_idx on users (lower(username));

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers } from './supabase.js'
+import { useState, useEffect, useRef } from 'react'
+import { sget, sset, slist, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -66,6 +66,8 @@ export default function App() {
   const [viewHistory, setViewHistory] = useState(false)
   const [viewBestiary, setViewBestiary] = useState(false)
   const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
+  const [viewPlayers, setViewPlayers] = useState(false)
+  const [viewPlayerProfile, setViewPlayerProfile] = useState(null) // player id
 
   function login(user) {
     localStorage.setItem('eights_user', JSON.stringify(user))
@@ -106,19 +108,21 @@ export default function App() {
   )
 
   let content = null
-  if (viewBestiary)         content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
+  if (viewPlayers && viewPlayerProfile) content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => { setViewGlobalCombatant(c) }} />
+  else if (viewPlayers)     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant) content = <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
+  else if (viewBestiary)    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
   else if (viewHistory)     content = <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   else if (viewCombatant)   content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
   else if (screen === 'auth')   content = <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
   else if (screen === 'admin')  content = <AdminScreen onBack={() => nav('home')} />
-  else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
+  else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} />
   else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} />
+  else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { setRoom(null); nav('home') }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => nav('battle')} isGuest={isGuest} />
   else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={() => { setRoom(null); nav('home') }} />
-  else if (screen === 'vote')   content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} />
+  else if (screen === 'vote')   content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} />
 
   return <>{userPill}{content}</>
 }
@@ -229,7 +233,7 @@ function HomeTicker() {
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
-function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev, currentUser, onLogin, onLogout, onAdmin }) {
+function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev, currentUser, onLogin, onLogout, onAdmin }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
@@ -243,6 +247,7 @@ function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev, currentUse
         <button onClick={onJoin}   style={btn()}>Join a room</button>
         <button onClick={onHistory} style={btn('ghost')}>Battle history ↗</button>
         <button onClick={onBestiary} style={btn('ghost')}>Bestiary ↗</button>
+        <button onClick={onPlayers} style={btn('ghost')}>Players ↗</button>
         <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {currentUser ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
@@ -328,7 +333,7 @@ function JoinRoom({ playerId, playerName, setPlayerName, lockedName, onJoined, o
 }
 
 // ─── Lobby ────────────────────────────────────────────────────────────────────
-function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack }) {
+function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPlayer }) {
   const [room, setLocal] = useState(init)
   const isHost = room.host === playerId
 
@@ -354,7 +359,7 @@ function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '2rem' }}>
         {room.players.map(p => (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
-            <Avatar name={p.name} color={p.color} />
+            <AvatarWithHover player={p} onViewProfile={!p.isBot ? onViewPlayer : null} />
             <span style={{ color: 'var(--color-text-primary)', fontSize: 15 }}>{p.name}</span>
             {p.id === room.host && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-secondary)', background: 'var(--color-background-tertiary)', padding: '2px 8px', borderRadius: 99 }}>host</span>}
           </div>
@@ -416,7 +421,7 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest }) {
           const done = p.isBot || (room.combatants[p.id] || []).length === 8
           return (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
-              <Avatar name={p.name} color={p.color} />
+              <AvatarWithHover player={p} onViewProfile={null} />
               <span style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>{p.name}</span>
               {p.isBot && <Pill>bot</Pill>}
               <span style={{ marginLeft: 'auto', fontSize: 13 }}>{done ? '✓' : '…'}</span>
@@ -577,7 +582,7 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome
 }
 
 // ─── Deliberation / vote screen ───────────────────────────────────────────────
-function VoteScreen({ room: init, playerId, setRoom, onResult }) {
+function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
@@ -724,7 +729,12 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
                   </div>
                 </div>
                 {!isEditing && c.bio && <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{c.bio}</div>}
-                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {owner?.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  by {owner && !owner.isBot
+                    ? <AvatarWithHover player={owner} onViewProfile={onViewPlayer} />
+                    : null}
+                  {owner?.name}
+                </div>
               </div>
 
               {isEditing && (
@@ -1140,6 +1150,239 @@ function AdminScreen({ onBack }) {
   )
 }
 
+// ─── Player stats blurb (shared by hover card and profile header) ─────────────
+function PlayerStatsBlurb({ stats, favoriteName }) {
+  if (!stats) return <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Loading…</span>
+  const { games, wins, losses } = stats
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+        <span style={{ color: 'var(--color-text-secondary)' }}>{games} game{games !== 1 ? 's' : ''}</span>
+        <span style={{ color: 'var(--color-text-success)' }}>{wins}W</span>
+        <span style={{ color: 'var(--color-text-danger)' }}>{losses}L</span>
+      </div>
+      {favoriteName && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>⭐ {favoriteName}</div>}
+    </div>
+  )
+}
+
+// ─── Avatar with hover card ───────────────────────────────────────────────────
+function AvatarWithHover({ player, onViewProfile }) {
+  const [hovered, setHovered] = useState(false)
+  const [stats, setStats]     = useState(null)
+  const [profile, setProfile] = useState(null)
+  const timerRef = useRef(null)
+
+  function handleEnter() {
+    timerRef.current = setTimeout(() => {
+      setHovered(true)
+      if (!stats) getPlayerRoomStats(player.id).then(setStats)
+      if (!profile) getUserProfile(player.id).then(setProfile)
+    }, 400)
+  }
+  function handleLeave() {
+    clearTimeout(timerRef.current)
+    setHovered(false)
+  }
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', background: player.color + '33', border: '0.5px solid ' + player.color + '66', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, color: player.color, cursor: onViewProfile ? 'pointer' : 'default' }}
+        onClick={() => onViewProfile && !player.isBot && onViewProfile(player.id)}>
+        {initials(player.name)}
+      </div>
+      {hovered && !player.isBot && (
+        <div style={{ position: 'absolute', top: 38, left: 0, zIndex: 500, minWidth: 180, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 12px', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 6 }}>{player.name}</div>
+          <PlayerStatsBlurb stats={stats} favoriteName={profile?.favorite_combatant_name} />
+          {onViewProfile && (
+            <button onClick={() => onViewProfile(player.id)} style={{ marginTop: 8, background: 'transparent', border: 'none', fontSize: 11, color: 'var(--color-text-info)', cursor: 'pointer', padding: 0 }}>View profile →</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Players directory ────────────────────────────────────────────────────────
+const PLAYERS_PAGE_SIZE = 20
+const PLAYERS_SORTS = [
+  { key: 'username', label: 'A–Z',  asc: true  },
+  { key: 'created_at', label: 'Newest', asc: false },
+]
+
+function PlayersScreen({ playerId, onBack, onViewPlayer }) {
+  const [query,   setQuery]   = useState('')
+  const [sort,    setSort]    = useState('username')
+  const [page,    setPage]    = useState(0)
+  const [items,   setItems]   = useState([])
+  const [total,   setTotal]   = useState(0)
+  const [loading, setLoading] = useState(true)
+  const searchTimer = useRef(null)
+
+  function load(q, s, p) {
+    setLoading(true)
+    const def = PLAYERS_SORTS.find(x => x.key === s)
+    searchUsers({ query: q, sort: s, ascending: def?.asc ?? true, page: p, pageSize: PLAYERS_PAGE_SIZE })
+      .then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
+  }
+
+  useEffect(() => { load(query, sort, page) }, [sort, page])
+
+  function handleQuery(v) {
+    setQuery(v); setPage(0)
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => load(v, sort, 0), 320)
+  }
+
+  const totalPages = Math.ceil(total / PLAYERS_PAGE_SIZE)
+
+  return (
+    <Screen title="Players" onBack={onBack}>
+      <input style={{ ...inp(), marginBottom: 12 }} value={query} onChange={e => handleQuery(e.target.value)} placeholder="Search by username…" />
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        {PLAYERS_SORTS.map(s => (
+          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }}
+            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
+      {!loading && items.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No players found.</p>}
+      {!loading && items.map(u => (
+        <button key={u.id} onClick={() => onViewPlayer(u.id)}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: u.id === playerId ? 'var(--color-background-info)' : 'var(--color-background-secondary)', border: u.id === playerId ? '0.5px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+              {u.username}{u.id === playerId ? ' (you)' : ''}
+            </span>
+          </div>
+          {u.favorite_combatant_name && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>⭐ {u.favorite_combatant_name}</div>}
+        </button>
+      ))}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: '1.25rem' }}>
+          <button onClick={() => setPage(p => p - 1)} disabled={page === 0} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{page + 1} / {totalPages}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>Next →</button>
+        </div>
+      )}
+    </Screen>
+  )
+}
+
+// ─── Player profile ───────────────────────────────────────────────────────────
+const PROFILE_SORTS = [
+  { key: 'wins',   label: 'Wins',   asc: false },
+  { key: 'losses', label: 'Losses', asc: false },
+  { key: 'name',   label: 'A–Z',    asc: true  },
+]
+
+function PlayerProfile({ profileId, playerId, onBack, onViewCombatant }) {
+  const isOwnProfile = profileId === playerId
+
+  const [profile,   setProfile]   = useState(null)
+  const [stats,     setStats]     = useState(null)
+  const [combatants, setCombatants] = useState([])
+  const [combTotal, setCombTotal] = useState(0)
+  const [query,     setQuery]     = useState('')
+  const [sort,      setSort]      = useState('wins')
+  const [page,      setPage]      = useState(0)
+  const [loading,   setLoading]   = useState(true)
+  const [combLoading, setCombLoading] = useState(true)
+  const [savingFav, setSavingFav] = useState(null)
+  const searchTimer = useRef(null)
+
+  useEffect(() => {
+    getUserProfile(profileId).then(setProfile)
+    getPlayerRoomStats(profileId).then(setStats)
+  }, [profileId])
+
+  function loadCombatants(q, s, p) {
+    setCombLoading(true)
+    const def = PROFILE_SORTS.find(x => x.key === s)
+    getPlayerCombatants({ ownerId: profileId, query: q, sort: s, ascending: def?.asc ?? false, page: p, pageSize: 20 })
+      .then(({ items, total }) => { setCombatants(items); setCombTotal(total); setCombLoading(false); setLoading(false) })
+  }
+
+  useEffect(() => { loadCombatants(query, sort, page) }, [profileId, sort, page])
+
+  function handleQuery(v) {
+    setQuery(v); setPage(0)
+    clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => loadCombatants(v, sort, 0), 320)
+  }
+
+  async function pickFavorite(c) {
+    setSavingFav(c.id)
+    await setFavoriteCombatant(playerId, c.id, c.name)
+    setProfile(p => ({ ...p, favorite_combatant_id: c.id, favorite_combatant_name: c.name }))
+    setSavingFav(null)
+  }
+
+  const totalPages = Math.ceil(combTotal / 20)
+  const username = profile?.username || '…'
+
+  return (
+    <Screen title={isOwnProfile ? 'Your profile' : username} onBack={onBack}>
+      {/* Stats header */}
+      <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)', marginBottom: '1.5rem' }}>
+        <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>{username}</div>
+        <PlayerStatsBlurb stats={stats} favoriteName={profile?.favorite_combatant_name} />
+      </div>
+
+      {/* Combatants list */}
+      <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+        Combatants {combTotal > 0 ? `(${combTotal})` : ''}
+      </h3>
+      <input style={{ ...inp(), marginBottom: 10 }} value={query} onChange={e => handleQuery(e.target.value)} placeholder="Search combatants…" />
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {PROFILE_SORTS.map(s => (
+          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }}
+            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {(loading || combLoading) && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
+      {!combLoading && combatants.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No published combatants yet.</p>}
+      {!combLoading && combatants.map(c => {
+        const isFav = profile?.favorite_combatant_id === c.id
+        return (
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', background: isFav ? 'var(--color-background-info)' : 'var(--color-background-secondary)', border: isFav ? '0.5px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8 }}>
+            <button onClick={() => onViewCombatant(c)} style={{ flex: 1, textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{isFav ? '⭐ ' : ''}{c.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
+              </div>
+              {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{c.bio.length > 70 ? c.bio.slice(0, 70) + '…' : c.bio}</div>}
+            </button>
+            {isOwnProfile && (
+              <button onClick={() => pickFavorite(c)} disabled={!!savingFav || isFav}
+                style={{ background: 'transparent', border: 'none', fontSize: 16, cursor: isFav ? 'default' : 'pointer', opacity: savingFav === c.id ? 0.4 : 1, flexShrink: 0 }}
+                title={isFav ? 'Current favorite' : 'Set as favorite'}>
+                {isFav ? '⭐' : '☆'}
+              </button>
+            )}
+          </div>
+        )
+      })}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: '1.25rem' }}>
+          <button onClick={() => setPage(p => p - 1)} disabled={page === 0} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>← Prev</button>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{page + 1} / {totalPages}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13 }}>Next →</button>
+        </div>
+      )}
+    </Screen>
+  )
+}
+
 // ─── Fighter autocomplete ─────────────────────────────────────────────────────
 function FighterAutocomplete({ value, onChange, onSelect, placeholder, playerId }) {
   const [open, setOpen] = useState(false)
@@ -1386,13 +1629,6 @@ function Screen({ title, onBack, children }) {
   )
 }
 
-function Avatar({ name, color }) {
-  return (
-    <div style={{ width: 32, height: 32, borderRadius: '50%', background: color + '33', border: '0.5px solid ' + color + '66', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, color, flexShrink: 0 }}>
-      {initials(name)}
-    </div>
-  )
-}
 
 function Pill({ children }) {
   return <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-tertiary)', color: 'var(--color-text-tertiary)', borderRadius: 99, border: '0.5px solid var(--color-border-tertiary)' }}>{children}</span>
