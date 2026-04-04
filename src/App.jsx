@@ -502,13 +502,36 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
   const [room, setLocal] = useState(init)
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
-  const [names, setNames] = useState(() => Array(8).fill('').map((_, i) => existing[i]?.name || ''))
-  const [bios,  setBios]  = useState(() => Array(8).fill('').map((_, i) => existing[i]?.bio  || ''))
+  // Restore from auto-saved draft if the player hasn't submitted yet
+  const savedDraft = existing.length === 0 ? (room.drafts?.[playerId] ?? null) : null
+  const [names, setNames] = useState(() => Array(8).fill('').map((_, i) => existing[i]?.name || savedDraft?.names?.[i] || ''))
+  const [bios,  setBios]  = useState(() => Array(8).fill('').map((_, i) => existing[i]?.bio  || savedDraft?.bios?.[i]  || ''))
   // globalIds[i]: existing global combatant id if loaded from bestiary, null if new
-  const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || null))
+  const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || savedDraft?.globalIds?.[i] || null))
   const [submitted, setSubmitted] = useState(existing.length === 8)
   const [forceStarting, setForceStarting] = useState(false)
   const isHost = room.host === playerId
+
+  // Auto-save draft — fires 2 s after the user stops typing, persists to room.drafts
+  const saveTimer = useRef(null)
+  const [saveStatus, setSaveStatus] = useState(savedDraft ? 'restored' : null) // null | 'saving' | 'saved' | 'restored'
+
+  useEffect(() => {
+    if (submitted) return
+    if (names.every(n => !n.trim())) return // nothing entered yet
+    clearTimeout(saveTimer.current)
+    setSaveStatus(null)
+    saveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      const r = await sget('room:' + room.id)
+      if (!r) { setSaveStatus(null); return }
+      const updated = { ...r, drafts: { ...(r.drafts || {}), [playerId]: { names, bios, globalIds } } }
+      await sset('room:' + r.id, updated)
+      setLocal(updated); setRoom(updated)
+      setSaveStatus('saved')
+    }, 2000)
+    return () => clearTimeout(saveTimer.current)
+  }, [names, bios, globalIds, submitted])
 
   useEffect(() => {
     const iv = setInterval(async () => {
@@ -545,7 +568,9 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
     // Register / touch each combatant in the global table (non-blocking)
     const ownerName = isGuest ? `${myPlayer.name} (guest)` : myPlayer.name
     myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName }))
-    const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList } }
+    // Clear saved draft now that we're submitting the final list
+    const { [playerId]: _removed, ...remainingDrafts } = (room.drafts || {})
+    const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList }, drafts: remainingDrafts }
     const realPlayers = room.players.filter(p => !p.isBot)
     const draftDone = realPlayers.every(p => p.id === playerId || (updated.combatants[p.id] || []).length === 8)
     if (draftDone) updated.phase = 'battle'
@@ -604,7 +629,12 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, marginBottom: '1rem' }}>← Back</button>
-      <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 0.25rem', color: 'var(--color-text-primary)' }}>Your 8 combatants</h2>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: '0.25rem' }}>
+        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Your 8 combatants</h2>
+        {saveStatus === 'saving'  && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Saving…</span>}
+        {saveStatus === 'saved'   && <span style={{ fontSize: 11, color: 'var(--color-text-success)' }}>Draft saved ✓</span>}
+        {saveStatus === 'restored' && <span style={{ fontSize: 11, color: 'var(--color-text-info)' }}>Draft restored ↩</span>}
+      </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.5rem' }}>Keep them secret — anything goes. Add an optional bio for each.</p>
 
       {myPrevWinners.length > 0 && (
