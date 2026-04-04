@@ -123,11 +123,117 @@ export default function App() {
   return <>{userPill}{content}</>
 }
 
+// ─── Home ticker ──────────────────────────────────────────────────────────────
+function buildTickerMessages(rooms) {
+  const valid = (rooms || []).filter(r => r && !r.devMode)
+  const completedRounds = valid.flatMap(r => (r.rounds || []).filter(rd => rd.winner))
+  const players = [...new Set(valid.flatMap(r => (r.players || []).filter(p => !p.isBot).map(p => p.name)))]
+
+  // Aggregate stats per combatant name across all rooms
+  const stats = {}
+  valid.forEach(r => {
+    Object.values(r.combatants || {}).flat().filter(c => !c.isBot).forEach(c => {
+      if (!stats[c.name]) stats[c.name] = { wins: 0, losses: 0 }
+      stats[c.name].wins   += c.wins   || 0
+      stats[c.name].losses += c.losses || 0
+    })
+  })
+
+  const msgs = []
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)]
+
+  // Round-based messages (shuffle, take up to 10)
+  ;[...completedRounds].sort(() => Math.random() - 0.5).slice(0, 10).forEach(rd => {
+    const w = rd.winner.name
+    const losers = (rd.combatants || []).filter(c => c.id !== rd.winner.id).map(c => c.name)
+    if (!losers.length) return
+    const l1 = losers[0], l2 = losers[1]
+    msgs.push(pick([
+      `Can you believe ${w} took down ${losers.join(' and ')} in single combat?`,
+      `JUST IN: ${w} has defeated ${l1}. ${l1} could not be reached for comment.`,
+      `In a bout for the ages, ${w} demolished ${l1} into fine powder.`,
+      `${w} wins again. ${l1} is reportedly reconsidering their life choices.`,
+      l2 ? `${w} somehow beat both ${l1} AND ${l2}. The physics community is disturbed.`
+         : `The council has ruled that ${l1}'s loss to ${w} was, quote, "totally deserved."`,
+      `Eyewitnesses describe the scene: ${w} victorious, ${l1} inconsolable. Details at 11.`,
+      `${l1} entered the arena confident. ${w} had other plans.`,
+      `Officials confirm ${w} defeated ${l1}. No further explanation was provided.`,
+    ]))
+  })
+
+  // Stat-based combatant messages
+  Object.entries(stats).forEach(([name, s]) => {
+    if (s.losses >= 4) msgs.push(pick([
+      `Breaking news: ${name} has now lost ${s.losses} times. Thoughts and prayers.`,
+      `${name} is ${s.wins}-${s.losses}. Statistically speaking, rough.`,
+      `Sources close to ${name} say they are "doing fine." They are not fine.`,
+    ]))
+    if (s.wins >= 4 && s.losses === 0) msgs.push(pick([
+      `${name} sits at ${s.wins}-0. Suspicious. Very suspicious.`,
+      `Nobody has beaten ${name} yet. The arena is getting nervous.`,
+      `ALERT: ${name} remains undefeated. An investigation has been opened.`,
+    ]))
+    if (s.wins >= 3 && s.losses >= 3) msgs.push(
+      `${name} is ${s.wins}-${s.losses}. A complicated legacy. A messy record. A legend, maybe.`
+    )
+  })
+
+  // Player-based messages
+  ;[...players].sort(() => Math.random() - 0.5).slice(0, 4).forEach(p => msgs.push(pick([
+    `Greetings, returning player ${p}. The arena remembers. The arena judges.`,
+    `${p} is back. Somebody warn the others.`,
+    `A warm welcome to ${p}, who has definitely lost sleep over these matches.`,
+    `${p} has rejoined the arena. Their combatants tremble with anticipation.`,
+  ])))
+
+  // Static goofy filler (always appended so there's something even on a fresh install)
+  msgs.push(
+    "Today's forecast: chaotic neutral with a high chance of upsets.",
+    "All combatants are equal. Some are just more equal than others.",
+    "The council reminds you: it's not personal. Actually, it's extremely personal.",
+    "Scientists are baffled. Philosophers are concerned. Combatants are ready.",
+    "No crying in the arena. This is your only warning.",
+    "The loser will not be forgotten. Neither will the winner. We forget nothing.",
+    "New challenger approaching. Old challenger still sulking in the corner.",
+    "The arena does not accept appeals, complaints, or requests for recounts.",
+    "Fun fact: 100% of combatants who have never lost are currently undefeated.",
+    "Management is not responsible for emotional damage caused by tournament results.",
+    "Somewhere, a combatant is preparing. It probably won't help.",
+    "Submit your 8. Destiny will handle the rest.",
+    "This ticker is legally distinct from sports journalism.",
+    "Please do not taunt the combatants. They are doing their best.",
+    "Win or lose, everyone goes home with a story. Losers go home with two.",
+  )
+
+  return msgs.sort(() => Math.random() - 0.5)
+}
+
+function HomeTicker() {
+  const [messages, setMessages] = useState(null)
+  useEffect(() => { slist().then(r => setMessages(buildTickerMessages(r))) }, [])
+  if (!messages) return null
+
+  const text = messages.join('   ·   ')
+  const duration = Math.max(40, messages.length * 4)
+
+  return (
+    <div style={{ width: '100%', maxWidth: 280, overflow: 'hidden', marginBottom: '1.75rem', borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', padding: '7px 0' }}>
+      <style>{`@keyframes eights-ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      <div style={{ display: 'flex', whiteSpace: 'nowrap', animation: `eights-ticker ${duration}s linear infinite` }}>
+        {[0, 1].map(i => (
+          <span key={i} style={{ paddingRight: 48, fontSize: 11, color: 'var(--color-text-secondary)', letterSpacing: '0.01em' }}>{text}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Home ─────────────────────────────────────────────────────────────────────
 function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onDev, currentUser, onLogin, onLogout, onAdmin }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+        <HomeTicker />
         <div style={{ fontSize: 56, marginBottom: '0.5rem' }}>⚔️</div>
         <h1 style={{ fontSize: 40, fontWeight: 500, margin: '0 0 0.5rem', color: 'var(--color-text-primary)', letterSpacing: '-1px' }}>Eights</h1>
         <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 16 }}>The game of improbable battles</p>
