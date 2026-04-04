@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { sget, sset } from './supabase.js'
+import { sget, sset, slist } from './supabase.js'
 
 const POLL_INTERVAL = 2500
 
@@ -78,7 +78,7 @@ export default function App() {
     nav('draft')
   }
 
-  if (viewHistory) return <HistoryScreen room={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
+  if (viewHistory) return <HistoryScreen activeRoom={room} onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   if (viewCombatant) return <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
 
   if (screen === 'home')   return <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onDev={startDevMode} />
@@ -556,53 +556,144 @@ function VoteScreen({ room: init, playerId, setRoom, onResult }) {
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
-function HistoryScreen({ room, onBack, setViewCombatant }) {
-  if (!room) return (
-    <Screen title="Battle history" onBack={onBack}>
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No active room. Join or create a room to see history.</p>
-    </Screen>
-  )
+// ─── History: room list ───────────────────────────────────────────────────────
+function HistoryScreen({ activeRoom, onBack, setViewCombatant }) {
+  const [rooms, setRooms] = useState(null)
+  const [selected, setSelected] = useState(null)
 
-  const allCombatants = Object.values(room.combatants || {}).flat()
+  useEffect(() => {
+    slist().then(all => {
+      const valid = all.filter(r => r && r.id && r.createdAt).sort((a, b) => b.createdAt - a.createdAt)
+      setRooms(valid)
+    })
+  }, [])
+
+  if (selected) {
+    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} />
+  }
 
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
         <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
-        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Room {room.code} history</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle history</h2>
       </div>
 
-      <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>Rounds</h3>
-      {room.rounds.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No rounds yet.</p>}
-      {room.rounds.map(r => (
-        <div key={r.id} style={{ padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, border: '0.5px solid var(--color-border-tertiary)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>Round {r.number}</span>
-            {r.winner && <span style={{ fontSize: 12, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {r.combatants.map(c => (
-              <span key={c.id} style={{ fontSize: 12, padding: '2px 8px', background: r.winner?.id === c.id ? 'var(--color-background-success)' : 'var(--color-background-tertiary)', color: r.winner?.id === c.id ? 'var(--color-text-success)' : 'var(--color-text-secondary)', borderRadius: 99, border: '0.5px solid var(--color-border-tertiary)' }}>{c.name}</span>
+      {rooms === null && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
+      {rooms !== null && rooms.length === 0 && (
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No games found. Play a session first!</p>
+      )}
+      {rooms !== null && rooms.map(r => {
+        const completedRounds = (r.rounds || []).filter(rd => rd.winner)
+        const players = (r.players || []).filter(p => !p.isBot).map(p => p.name)
+        const dateStr = new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        return (
+          <button key={r.id} onClick={() => setSelected(r)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 10, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+              <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: 1 }}>{r.code}</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{dateStr}</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {players.join(', ') || 'Unknown players'}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{completedRounds.length} round{completedRounds.length !== 1 ? 's' : ''} played</span>
+              {r.devMode && <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>dev</span>}
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── History: room detail ─────────────────────────────────────────────────────
+function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
+  const completedRounds = (room.rounds || []).filter(r => r.winner)
+  const allRounds = room.rounds || []
+  const players = (room.players || []).filter(p => !p.isBot)
+  const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
+  const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  return (
+    <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
+        <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>Room {room.code}</h2>
+          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>{dateStr} · {players.map(p => p.name).join(', ')}</p>
+        </div>
+      </div>
+
+      {/* Winners summary */}
+      {completedRounds.length > 0 && (
+        <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)', marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Winners</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {completedRounds.map(r => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 56 }}>Round {r.number}</span>
+                <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>
+                  by {(room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'}
+                </span>
+              </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Round breakdown */}
+      <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>All rounds</h3>
+      {allRounds.length === 0 && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: '1.5rem' }}>No rounds were played.</p>}
+      {allRounds.map(r => (
+        <div key={r.id} style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 10, border: '0.5px solid var(--color-border-tertiary)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>Round {r.number}</span>
+            {r.winner
+              ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {r.winner.name}</span>
+              : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>no result</span>}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(r.combatants || []).map(c => {
+              const owner = (room.players || []).find(p => p.id === c.ownerId)
+              const isWinner = r.winner?.id === c.id
+              return (
+                <div key={c.id} style={{ padding: '10px 12px', background: isWinner ? 'var(--color-background-success)' : 'var(--color-background-tertiary)', borderRadius: 'var(--border-radius-md)', border: isWinner ? '0.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-primary)', marginBottom: c.bio ? 3 : 0 }}>
+                      {isWinner && '🏆 '}{c.name}
+                    </div>
+                    <span style={{ fontSize: 11, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-tertiary)', flexShrink: 0, marginLeft: 8 }}>
+                      {owner?.name || c.ownerName || '?'}
+                    </span>
+                  </div>
+                  {c.bio && <div style={{ fontSize: 12, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-secondary)', lineHeight: 1.4 }}>{c.bio}</div>}
+                </div>
+              )
+            })}
           </div>
         </div>
       ))}
 
-      <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '1.5rem 0 12px' }}>All combatants</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {allCombatants.map(c => {
-          const owner = room.players.find(p => p.id === c.ownerId)
-          return (
-            <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name}</div>
-            </button>
-          )
-        })}
-      </div>
+      {/* Roster */}
+      {allCombatants.length > 0 && <>
+        <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '1rem 0 12px' }}>Combatant roster</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {allCombatants.sort((a, b) => b.wins - a.wins).map(c => {
+            const owner = (room.players || []).find(p => p.id === c.ownerId)
+            return (
+              <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
+              </button>
+            )
+          })}
+        </div>
+      </>}
     </div>
   )
 }
