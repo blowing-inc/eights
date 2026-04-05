@@ -67,7 +67,7 @@ export default function App() {
       const rooms = await getRoomsByIds(codes)
       const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote']
       const active = rooms.filter(r =>
-        r && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId)
+        r && !r.nextRoomId && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId)
       )
       saveLobbyCodes(active.map(r => r.id))
       setOpenLobbies(active)
@@ -134,6 +134,7 @@ export default function App() {
     }
     await sset('room:' + roomCode, newRoom)
     await sset('room:' + completedRoom.id, { ...completedRoom, nextRoomId: roomCode })
+    removeLobbyCode(completedRoom.id)
     addLobbyCode(roomCode)
     setRoom(newRoom)
     nav('draft')

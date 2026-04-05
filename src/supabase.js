@@ -55,7 +55,7 @@ export async function getActiveRoomsForPlayer(playerId) {
     if (error) { console.error('getActiveRoomsForPlayer error', error); return [] }
     return (data || [])
       .map(row => row.data)
-      .filter(r => r && !r.devMode && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId && !p.isBot))
+      .filter(r => r && !r.devMode && !r.nextRoomId && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId && !p.isBot))
   } catch (e) { console.error('getActiveRoomsForPlayer exception', e); return [] }
 }
 
