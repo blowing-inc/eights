@@ -19,6 +19,7 @@ import PlayersScreen from './screens/PlayersScreen.jsx'
 import PlayerProfile from './screens/PlayerProfile.jsx'
 import BestiaryScreen from './screens/BestiaryScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
+import SpectateScreen from './screens/SpectateScreen.jsx'
 
 // Read ?join=XXXX from the URL once at module load (before any React rendering)
 const _urlJoinCode = new URLSearchParams(window.location.search).get('join')?.toUpperCase() || ''
@@ -166,7 +167,9 @@ export default function App() {
   else if (screen === 'create')
     content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
-    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={_urlJoinCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
+    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={_urlJoinCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
+  else if (screen === 'spectate')
+    content = <SpectateScreen room={room} playerId={playerId} setRoom={setRoom} onHome={goHome} />
   else if (screen === 'lobby')
     content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')

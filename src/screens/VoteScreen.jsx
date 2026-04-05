@@ -5,6 +5,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom } from '../supabase.js'
+import SpectatorList from '../components/SpectatorList.jsx'
 import { canEditCombatant, simulateBattleToEnd } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
@@ -181,7 +182,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           {simulating ? 'Simulating…' : '🧪 Simulate to end of battle'}
         </button>
       )}
-      <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 0.25rem', color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
+        <SpectatorList spectators={room.spectators} />
+      </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}
       </p>

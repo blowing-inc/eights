@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import ShareLinkButton from '../components/ShareLinkButton.jsx'
+import SpectatorList from '../components/SpectatorList.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, subscribeToRoom } from '../supabase.js'
 
@@ -23,7 +24,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, onStart, on
   }
 
   return (
-    <Screen title={`Room ${room.code}`} onBack={onBack}>
+    <Screen title={`Room ${room.code}`} onBack={onBack} right={<SpectatorList spectators={room.spectators} />}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>Share this code with your friends</p>
       <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 500, letterSpacing: 8, color: 'var(--color-text-primary)', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', padding: '1.5rem', marginBottom: '0.75rem' }}>{room.code}</div>
       <ShareLinkButton code={room.code} />
