@@ -12,6 +12,148 @@ export function initials(name) {
 export const COLORS = ['#7F77DD','#1D9E75','#D85A30','#378ADD','#D4537E','#639922','#BA7517','#E24B4A']
 export function playerColor(idx) { return COLORS[idx % COLORS.length] }
 
+// ─── Bot data ─────────────────────────────────────────────────────────────────
+
+export const BOT_COMBATANTS = [
+  ['Lorem Ipsum','Dolor Sit','Amet Consectetur','Adipiscing Elit','Sed Do Eiusmod','Tempor Incididunt','Ut Labore','Et Dolore'],
+  ['Magna Aliqua','Enim Minim','Veniam Quis','Nostrud Exercit','Ullamco Laboris','Nisi Aliquip','Ex Ea Commodo','Consequat Duis'],
+]
+export const BOT_BIOS = [
+  'Forged in the fires of placeholder text, their power is unknowable.',
+  'Ancient beyond reckoning. Meaning: disputed.',
+  'Transcends the concept of biography.',
+  'Once defeated a semicolon in single combat.',
+  'No bio. Only vibes.',
+  'Their origin story is redacted for legal reasons.',
+  'Exists primarily as a rhetorical device.',
+  'Lorem ipsum dolor sit amet — this IS their bio.',
+]
+
+/**
+ * Creates 8 combatant objects for a bot player from the predefined template lists.
+ * idFn is injectable so tests can use deterministic IDs.
+ */
+export function makeBotCombatants(botIdx, botId, botName, idFn = uid) {
+  return BOT_COMBATANTS[botIdx % 2].map((name, i) => ({
+    id: idFn(), name, bio: BOT_BIOS[i],
+    ownerId: botId, ownerName: botName,
+    isBot: true, wins: 0, losses: 0, draws: 0, battles: [],
+  }))
+}
+
+/** Creates count bot player objects (max 2 named bots, rest get generic names). */
+export function makeBots(count = 2) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: 'bot_' + i,
+    name: ['Bot Alpha', 'Bot Beta'][i] || 'Bot ' + i,
+    color: playerColor(i + 1),
+    ready: true,
+    isBot: true,
+  }))
+}
+
+// ─── Draft logic ──────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the slot at slotIndex "contains" the given prevWinner —
+ * matching by name (case-insensitive) OR by global combatant id.
+ */
+export function slotMatchesPrevWinner(names, globalIds, slotIndex, prevWinner) {
+  const name = (names[slotIndex] || '').trim().toLowerCase()
+  const gid  = globalIds[slotIndex] || null
+  return name === prevWinner.name.toLowerCase() || (gid !== null && gid === prevWinner.id)
+}
+
+/**
+ * Returns true when every prevWinner has been placed in at least one draft slot.
+ */
+export function areAllPrevWinnersPlaced(prevWinners, names, globalIds) {
+  return prevWinners.every(w =>
+    names.some((_, i) => slotMatchesPrevWinner(names, globalIds, i, w))
+  )
+}
+
+/**
+ * Returns the subset of prevWinners that have NOT been placed in any draft slot.
+ */
+export function getUnplacedWinners(prevWinners, names, globalIds) {
+  return prevWinners.filter(w =>
+    !names.some((_, i) => slotMatchesPrevWinner(names, globalIds, i, w))
+  )
+}
+
+/**
+ * Constructs a single combatant object from draft form inputs.
+ * Reuses globalId when provided (stats accumulate across games).
+ * idFn is injectable for deterministic test IDs.
+ */
+export function buildCombatantFromDraft(name, bio, globalId, ownerId, ownerName, idFn = uid) {
+  return {
+    id: globalId || idFn(),
+    name: name.trim(),
+    bio: bio.trim(),
+    ownerId,
+    ownerName,
+    wins: 0, losses: 0, draws: 0, battles: [],
+  }
+}
+
+/**
+ * Returns true when every real (non-bot) player has exactly 8 combatants submitted.
+ * combatants map must already include the current player's freshly submitted list.
+ */
+export function isDraftComplete(players, combatants) {
+  return players.filter(p => !p.isBot).every(p => (combatants[p.id] || []).length === 8)
+}
+
+/** How many real players have submitted their full 8-combatant roster. */
+export function getReadyPlayerCount(players, combatants) {
+  return players.filter(p => !p.isBot && (combatants[p.id] || []).length === 8).length
+}
+
+/**
+ * Whether the host can force-start the battle phase with only some players ready.
+ * Requires: is host, at least 2 ready, and at least 1 still not ready.
+ */
+export function canForceStart(isHost, readyCount, totalRealPlayers) {
+  return isHost && readyCount >= 2 && readyCount < totalRealPlayers
+}
+
+// ─── Battle logic ─────────────────────────────────────────────────────────────
+
+/**
+ * Whether the host can undo the last round.
+ * Requires: is host, at least one round has been played, and that round has a winner.
+ */
+export function canUndoLastRound(isHost, currentRound, round) {
+  return isHost && currentRound > 0 && Boolean(round?.winner)
+}
+
+/**
+ * Whether a player can edit a combatant (owner or room host).
+ */
+export function canEditCombatant(ownerId, playerId, hostId) {
+  return ownerId === playerId || playerId === hostId
+}
+
+// ─── Room lifecycle ───────────────────────────────────────────────────────────
+
+/**
+ * Scans a completed room's rounds and builds a per-owner map of winning combatants.
+ * Used to populate prevWinners on the next battle room so the draft can enforce
+ * that champions are re-entered.
+ * Returns { [ownerId]: [{ id, name, bio }, ...] }
+ */
+export function extractPreviousWinners(rounds) {
+  const map = {}
+  ;(rounds || []).filter(rd => rd.winner).forEach(rd => {
+    const ownerId = rd.winner.ownerId
+    if (!map[ownerId]) map[ownerId] = []
+    map[ownerId].push({ id: rd.winner.id, name: rd.winner.name, bio: rd.winner.bio || '' })
+  })
+  return map
+}
+
 // ─── Room stats ───────────────────────────────────────────────────────────────
 
 /**

@@ -1,50 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { sget, sset, slist, getRoomsByIds, getActiveRoomsForPlayer, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats, getAllCombatantsForExport } from './supabase.js'
+import { uid, initials, COLORS, playerColor, BOT_COMBATANTS, BOT_BIOS, makeBotCombatants, makeBots, slotMatchesPrevWinner, areAllPrevWinnersPlaced, getUnplacedWinners, buildCombatantFromDraft, isDraftComplete, getReadyPlayerCount, canForceStart, canUndoLastRound, canEditCombatant, extractPreviousWinners, totalRoundsFor, matchupForRound, applyWinner, undoRound, tallyReactions, toggleReaction, isFinalRound, authFlowFor, ownerLabel, buildTickerMessages } from './gameLogic.js'
 
 const POLL_INTERVAL = 2500
 
 // Read ?join=XXXX from the URL once at module load (before any React rendering)
 const _urlJoinCode = new URLSearchParams(window.location.search).get('join')?.toUpperCase() || ''
 if (_urlJoinCode) window.history.replaceState(null, '', window.location.pathname)
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-function uid() { return Math.random().toString(36).slice(2, 9) }
-function initials(name) { return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) }
-
-const COLORS = ['#7F77DD','#1D9E75','#D85A30','#378ADD','#D4537E','#639922','#BA7517','#E24B4A']
-function playerColor(idx) { return COLORS[idx % COLORS.length] }
-
-// ─── Dev / bot data ───────────────────────────────────────────────────────────
-const BOT_COMBATANTS = [
-  ['Lorem Ipsum','Dolor Sit','Amet Consectetur','Adipiscing Elit','Sed Do Eiusmod','Tempor Incididunt','Ut Labore','Et Dolore'],
-  ['Magna Aliqua','Enim Minim','Veniam Quis','Nostrud Exercit','Ullamco Laboris','Nisi Aliquip','Ex Ea Commodo','Consequat Duis'],
-]
-const BOT_BIOS = [
-  'Forged in the fires of placeholder text, their power is unknowable.',
-  'Ancient beyond reckoning. Meaning: disputed.',
-  'Transcends the concept of biography.',
-  'Once defeated a semicolon in single combat.',
-  'No bio. Only vibes.',
-  'Their origin story is redacted for legal reasons.',
-  'Exists primarily as a rhetorical device.',
-  'Lorem ipsum dolor sit amet — this IS their bio.',
-]
-function makeBotCombatants(botIdx, botId, botName) {
-  return BOT_COMBATANTS[botIdx % 2].map((name, i) => ({
-    id: uid(), name, bio: BOT_BIOS[i],
-    ownerId: botId, ownerName: botName,
-    isBot: true, wins: 0, losses: 0, draws: 0, battles: []
-  }))
-}
-function makeBots(count = 2) {
-  return Array.from({ length: count }, (_, i) => ({
-    id: 'bot_' + i,
-    name: ['Bot Alpha', 'Bot Beta'][i] || 'Bot ' + i,
-    color: playerColor(i + 1),
-    ready: true,
-    isBot: true,
-  }))
-}
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -150,13 +112,7 @@ export default function App() {
 
   async function handleHostNextBattle(completedRoom) {
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
-    // Build per-player map of winners from the completed game
-    const prevWinners = {}
-    ;(completedRoom.rounds || []).filter(rd => rd.winner).forEach(rd => {
-      const ownerId = rd.winner.ownerId
-      if (!prevWinners[ownerId]) prevWinners[ownerId] = []
-      prevWinners[ownerId].push({ id: rd.winner.id, name: rd.winner.name, bio: rd.winner.bio || '' })
-    })
+    const prevWinners = extractPreviousWinners(completedRoom.rounds)
     const newRoom = {
       id: roomCode, code: roomCode, host: playerId, phase: 'draft',
       players: completedRoom.players,
@@ -562,39 +518,23 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
   }, [room.id])
 
   const myPrevWinners = room.prevWinners?.[playerId] || []
-  // A slot "contains" prev winner W when name matches (case-insensitive) or global id matches
-  function slotMatchesPrevWinner(i) {
-    return myPrevWinners.some(w =>
-      (names[i].trim().toLowerCase() === w.name.toLowerCase()) || (globalIds[i] && globalIds[i] === w.id)
-    )
-  }
-  const allPrevWinnersPlaced = myPrevWinners.every(w =>
-    names.some((n, i) => n.trim().toLowerCase() === w.name.toLowerCase() || (globalIds[i] && globalIds[i] === w.id))
-  )
-  const unplacedWinners = myPrevWinners.filter(w =>
-    !names.some((n, i) => n.trim().toLowerCase() === w.name.toLowerCase() || (globalIds[i] && globalIds[i] === w.id))
-  )
+  const allPrevWinnersPlaced = areAllPrevWinnersPlaced(myPrevWinners, names, globalIds)
+  const unplacedWinners      = getUnplacedWinners(myPrevWinners, names, globalIds)
 
   async function submit() {
     if (names.some(n => !n.trim())) return
     if (myPrevWinners.length > 0 && !allPrevWinnersPlaced) return
-    const myList = names.map((name, i) => {
-      // Reuse the global id when loading an existing fighter so stats accumulate
-      const id = globalIds[i] || uid()
-      return { id, name: name.trim(), bio: bios[i].trim(), ownerId: playerId, ownerName: myPlayer.name, wins: 0, losses: 0, draws: 0, battles: [] }
-    })
+    const ownerName = ownerLabel(myPlayer.name, isGuest)
+    const myList = names.map((name, i) => buildCombatantFromDraft(name, bios[i], globalIds[i], playerId, ownerName))
     // Register / touch each combatant in the global table (non-blocking)
-    const ownerName = isGuest ? `${myPlayer.name} (guest)` : myPlayer.name
     myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName }))
     // Clear saved draft now that we're submitting the final list
     const { [playerId]: _removed, ...remainingDrafts } = (room.drafts || {})
     const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList }, drafts: remainingDrafts }
-    const realPlayers = room.players.filter(p => !p.isBot)
-    const draftDone = realPlayers.every(p => p.id === playerId || (updated.combatants[p.id] || []).length === 8)
-    if (draftDone) updated.phase = 'battle'
+    if (isDraftComplete(room.players, updated.combatants)) updated.phase = 'battle'
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); setSubmitted(true)
-    if (draftDone) onDone()
+    if (updated.phase === 'battle') onDone()
   }
 
   async function forceStart() {
@@ -609,8 +549,8 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
 
   if (submitted) {
     const realPlayers = room.players.filter(p => !p.isBot)
-    const readyCount  = realPlayers.filter(p => (room.combatants[p.id] || []).length === 8).length
-    const canForce    = isHost && readyCount >= 2 && readyCount < realPlayers.length
+    const readyCount  = getReadyPlayerCount(room.players, room.combatants)
+    const canForce    = canForceStart(isHost, readyCount, realPlayers.length)
 
     return (
       <Screen title="Draft submitted!" onBack={onBack}>
@@ -680,7 +620,7 @@ function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack })
       )}
 
       {Array(8).fill(0).map((_, i) => {
-        const isPrevWinnerSlot = slotMatchesPrevWinner(i)
+        const isPrevWinnerSlot = myPrevWinners.some(w => slotMatchesPrevWinner(names, globalIds, i, w))
         return (
           <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -734,7 +674,7 @@ function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome
   const isHost = room.host === playerId
   const round = room.rounds[room.currentRound - 1]
   const totalRounds = Math.min(...room.players.map(p => (room.combatants[p.id] || []).length))
-  const canUndo = isHost && room.currentRound > 0 && round?.winner
+  const canUndo = canUndoLastRound(isHost, room.currentRound, round)
 
   async function startRound() {
     const roundNum = room.currentRound + 1
@@ -991,7 +931,7 @@ function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
           const owner = room.players.find(p => p.id === c.ownerId)
           const isPicked = myPick === c.id
           const pickers = pickerNames(c.id)
-          const canEdit = playerId === c.ownerId || playerId === room.host
+          const canEdit = canEditCombatant(c.ownerId, playerId, room.host)
           const isEditing = editingId === c.id
 
           return (
@@ -1381,7 +1321,7 @@ function CombatantScreen({ room, combatant, playerId, onBack }) {
   const [editBio, setEditBio] = useState(false)
   const [bio, setBio] = useState(combatant.bio || '')
   const owner = room?.players.find(p => p.id === c.ownerId)
-  const canEdit = c.ownerId === playerId || playerId === room?.host
+  const canEdit = canEditCombatant(c.ownerId, playerId, room?.host)
 
   async function saveBio() {
     if (!room) return
