@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { sget, sset, slist, getRoomsByIds, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats, getAllCombatantsForExport } from './supabase.js'
+import { sget, sset, slist, getRoomsByIds, getActiveRoomsForPlayer, upsertGlobalCombatant, incrementCombatantStats, updateGlobalCombatant, searchCombatants, getPlayerRecentCombatants, listCombatants, publishCombatants, getCombatant, lookupUser, verifyUser, registerUser, setUserPin, adminResetUser, listUsers, searchUsers, getUserProfile, setFavoriteCombatant, getPlayerCombatants, getPlayerRoomStats, getAllCombatantsForExport } from './supabase.js'
 
 const POLL_INTERVAL = 2500
+
+// Read ?join=XXXX from the URL once at module load (before any React rendering)
+const _urlJoinCode = new URLSearchParams(window.location.search).get('join')?.toUpperCase() || ''
+if (_urlJoinCode) window.history.replaceState(null, '', window.location.pathname)
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 9) }
@@ -44,13 +48,7 @@ function makeBots(count = 2) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  // If the URL has ?join=XXXX, start on the join screen with that code pre-filled
-  const [initialJoinCode] = useState(() => {
-    const p = new URLSearchParams(window.location.search).get('join')
-    if (p) { window.history.replaceState(null, '', window.location.pathname) }
-    return p ? p.toUpperCase() : ''
-  })
-  const [screen, setScreen] = useState(() => initialJoinCode ? 'join' : 'home')
+  const [screen, setScreen] = useState(_urlJoinCode ? 'join' : 'home')
   // Guest ID — stable for the browser session
   const [guestId] = useState(() => {
     const s = sessionStorage.getItem('eights_pid') || uid()
@@ -82,23 +80,26 @@ export default function App() {
   const [viewLobbies, setViewLobbies] = useState(false)
 
   async function refreshLobbies() {
-    const codes = loadLobbyCodes()
-    if (!codes.length) { setOpenLobbies([]); return }
-    const rooms = await getRoomsByIds(codes)
-    // Keep only rooms still in lobby/draft phase where this player is actually a member.
-    // The player-membership check prevents "Next Battle" rooms (which copy the previous
-    // game's player list) from appearing for guests or players not in that game.
-    const active = rooms.filter(r =>
-      r &&
-      (r.phase === 'lobby' || r.phase === 'draft') &&
-      (r.players || []).some(p => p.id === playerId)
-    )
-    const activeCodes = active.map(r => r.id)
-    saveLobbyCodes(activeCodes)
-    setOpenLobbies(active)
+    if (currentUser) {
+      // Logged-in: query DB directly so rejoining works on any device/browser
+      const rooms = await getActiveRoomsForPlayer(playerId)
+      setOpenLobbies(rooms)
+      saveLobbyCodes(rooms.map(r => r.id))
+    } else {
+      // Guest: fall back to localStorage codes
+      const codes = loadLobbyCodes()
+      if (!codes.length) { setOpenLobbies([]); return }
+      const rooms = await getRoomsByIds(codes)
+      const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote']
+      const active = rooms.filter(r =>
+        r && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId)
+      )
+      saveLobbyCodes(active.map(r => r.id))
+      setOpenLobbies(active)
+    }
   }
 
-  useEffect(() => { refreshLobbies() }, [])
+  useEffect(() => { refreshLobbies() }, [currentUser?.id])
 
   const [afterAuth, setAfterAuth] = useState(null) // screen to return to after auth
   const [room, setRoom] = useState(null)
@@ -173,7 +174,7 @@ export default function App() {
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
   let content = null
-  if (viewLobbies)          content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : 'draft') }} />
+  if (viewLobbies)          content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : r.phase === 'draft' ? 'draft' : r.phase === 'vote' ? 'vote' : 'battle') }} />
   else if (viewPlayers && viewPlayerProfile) content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => { setViewGlobalCombatant(c) }} />
   else if (viewPlayers)     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant) content = <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={playerName} onBack={() => setViewGlobalCombatant(null)} />
@@ -184,7 +185,7 @@ export default function App() {
   else if (screen === 'admin')  content = <AdminScreen onBack={() => nav('home')} />
   else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
   else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={initialJoinCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
+  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={_urlJoinCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
   else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} />
   else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
@@ -360,7 +361,7 @@ function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) {
         const realPlayers = r.players.filter(p => !p.isBot)
         const submitted = realPlayers.filter(p => (r.combatants[p.id] || []).length === 8)
         const isMyTurn  = r.phase === 'draft' && (r.combatants[playerId] || []).length < 8
-        const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : 'Drafting combatants'
+        const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : r.phase === 'draft' ? 'Drafting combatants' : r.phase === 'vote' ? 'Voting in progress' : 'Battle in progress'
 
         return (
           <div key={r.id} style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', border: isMyTurn ? '1.5px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 12 }}>
@@ -385,7 +386,7 @@ function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) {
                       {p.name}{isMe ? ' (you)' : ''}{p.id === r.host ? ' · host' : ''}
                     </span>
                     <span style={{ marginLeft: 'auto', fontSize: 11, color: ready ? 'var(--color-text-success)' : 'var(--color-text-tertiary)' }}>
-                      {r.phase === 'lobby' ? 'waiting' : ready ? 'ready ✓' : 'working…'}
+                      {r.phase === 'lobby' ? 'waiting' : r.phase === 'battle' || r.phase === 'vote' ? 'in game' : ready ? 'ready ✓' : 'working…'}
                     </span>
                   </div>
                 )
@@ -393,8 +394,8 @@ function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) {
               {r.phase === 'draft' && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{submitted.length} / {realPlayers.length} ready</div>}
             </div>
 
-            <button onClick={() => onEnter(r)} style={{ ...btn(isMyTurn ? 'primary' : 'ghost' ), padding: '8px 14px', fontSize: 13 }}>
-              {isMyTurn ? 'Rejoin — your turn ⚔️' : 'Rejoin'}
+            <button onClick={() => onEnter(r)} style={{ ...btn(isMyTurn || r.phase === 'battle' || r.phase === 'vote' ? 'primary' : 'ghost'), padding: '8px 14px', fontSize: 13 }}>
+              {isMyTurn ? 'Rejoin — your turn ⚔️' : r.phase === 'battle' || r.phase === 'vote' ? 'Rejoin battle ⚔️' : 'Rejoin'}
             </button>
           </div>
         )

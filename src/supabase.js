@@ -45,6 +45,20 @@ export async function slist() {
   } catch (e) { console.error('slist exception', e); return [] }
 }
 
+// Active rooms for a logged-in player — queries DB directly so it works across devices
+// Fetches all rooms and filters client-side (acceptable at small scale)
+export async function getActiveRoomsForPlayer(playerId) {
+  if (!playerId) return []
+  const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote']
+  try {
+    const { data, error } = await supabase.from('rooms').select('data').order('updated_at', { ascending: false })
+    if (error) { console.error('getActiveRoomsForPlayer error', error); return [] }
+    return (data || [])
+      .map(row => row.data)
+      .filter(r => r && !r.devMode && ACTIVE_PHASES.includes(r.phase) && (r.players || []).some(p => p.id === playerId && !p.isBot))
+  } catch (e) { console.error('getActiveRoomsForPlayer exception', e); return [] }
+}
+
 // ─── User accounts ───────────────────────────────────────────────────────────
 
 function genId() { return Math.random().toString(36).slice(2, 9) }
