@@ -10,7 +10,7 @@ import { sget, sset, upsertGlobalCombatant, subscribeToRoom } from '../supabase.
 import {
   ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
-  getReadyPlayerCount, canForceStart
+  getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
 } from '../gameLogic.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack }) {
@@ -140,6 +140,15 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         {saveStatus === 'restored' && <span style={{ fontSize: 11, color: 'var(--color-text-info)' }}>Draft restored ↩</span>}
       </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.5rem' }}>Keep them secret — anything goes. Add an optional bio for each.</p>
+
+      {room.devMode && (
+        <button
+          onClick={() => { setNames([...DEV_ROSTER_NAMES]); setBios([...DEV_ROSTER_BIOS]); setGlobalIds(Array(8).fill(null)) }}
+          style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: '1.25rem', color: 'var(--color-text-warning)' }}
+        >
+          🧪 Fill dummy roster
+        </button>
+      )}
 
       {myPrevWinners.length > 0 && (
         <div style={{ marginBottom: '1.5rem', padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>

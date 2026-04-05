@@ -5,7 +5,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom } from '../supabase.js'
-import { canEditCombatant } from '../gameLogic.js'
+import { canEditCombatant, simulateBattleToEnd } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -13,6 +13,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [editName, setEditName] = useState('')
   const [editBio,  setEditBio]  = useState('')
   const [saving, setSaving] = useState(false)
+  const [simulating, setSimulating] = useState(false)
 
   const round = room.rounds[room.currentRound - 1]
   const isHost = room.host === playerId
@@ -127,6 +128,15 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setLocal(updated); setRoom(updated); setEditingId(null); setSaving(false)
   }
 
+  async function simulateToEnd() {
+    setSimulating(true)
+    const r = await sget('room:' + room.id)
+    if (!r) { setSimulating(false); return }
+    const updated = simulateBattleToEnd(r)
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated); setSimulating(false); onResult()
+  }
+
   async function sendChat(text) {
     const r = await sget('room:' + room.id)
     if (!r) return
@@ -166,6 +176,11 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
+      {room.devMode && (
+        <button onClick={simulateToEnd} disabled={simulating} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: '1rem', color: 'var(--color-text-warning)' }}>
+          {simulating ? 'Simulating…' : '🧪 Simulate to end of battle'}
+        </button>
+      )}
       <h2 style={{ fontSize: 22, fontWeight: 500, margin: '0 0 0.25rem', color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}

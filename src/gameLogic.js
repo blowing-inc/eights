@@ -12,6 +12,84 @@ export function initials(name) {
 export const COLORS = ['#7F77DD','#1D9E75','#D85A30','#378ADD','#D4537E','#639922','#BA7517','#E24B4A']
 export function playerColor(idx) { return COLORS[idx % COLORS.length] }
 
+// ─── Dev helpers ─────────────────────────────────────────────────────────────
+
+// Instant dummy roster for dev mode draft screen
+export const DEV_ROSTER_NAMES = [
+  'Dumpster Fire', 'Spreadsheet Phantom', 'Generic Protagonist',
+  'Tuesday', 'Partially Hydrated Raisin', 'Sentient Parking Ticket',
+  'Discount Wizard', 'A Strongly Worded Email',
+]
+export const DEV_ROSTER_BIOS = [
+  'Moves fast and breaks things. Mostly themselves.',
+  'Haunts corporate hallways. Unknown motives.',
+  'Technically the hero. Nobody asked.',
+  'Unremarkable day. Exceptional fighter.',
+  'Once powerful. Now just wrinkly.',
+  'Cannot be appealed. Cannot be ignored.',
+  'Studied the blade. Briefly.',
+  'Will not be cc\'d on the outcome.',
+]
+
+/**
+ * Simulates all remaining rounds of a battle to completion.
+ * Picks a random winner for each unplayed round.
+ * Returns the fully updated room object (does not write to DB).
+ */
+export function simulateBattleToEnd(room) {
+  const totalRounds = Math.min(...room.players.map(p => (room.combatants[p.id] || []).length))
+  let updated = JSON.parse(JSON.stringify(room))
+
+  // If the current round is already open (exists but has no winner), resolve it first.
+  // Otherwise start from the next round.
+  const currentRoundObj = updated.currentRound > 0 ? updated.rounds[updated.currentRound - 1] : null
+  const startFrom = currentRoundObj && !currentRoundObj.winner
+    ? updated.currentRound
+    : updated.currentRound + 1
+
+  for (let roundNum = startFrom; roundNum <= totalRounds; roundNum++) {
+    // For the in-progress round, use the combatants already stored on it.
+    // For new rounds, derive from roster position.
+    const isCurrentRound = roundNum === updated.currentRound && updated.rounds[roundNum - 1]
+    const matchup = isCurrentRound
+      ? updated.rounds[roundNum - 1].combatants
+      : updated.players.map(p => (updated.combatants[p.id] || [])[roundNum - 1]).filter(Boolean)
+
+    if (!matchup.length) break
+    const winner = matchup[Math.floor(Math.random() * matchup.length)]
+    const roundId = isCurrentRound ? updated.rounds[roundNum - 1].id : uid()
+
+    // Update combatant win/loss records
+    Object.keys(updated.combatants).forEach(pid => {
+      updated.combatants[pid] = updated.combatants[pid].map(c => {
+        if (!matchup.find(rc => rc.id === c.id)) return c
+        const isWin = winner.id === c.id
+        return {
+          ...c,
+          wins: c.wins + (isWin ? 1 : 0),
+          losses: c.losses + (isWin ? 0 : 1),
+          battles: [...(c.battles || []), {
+            roundId,
+            opponent: matchup.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '),
+            result: isWin ? 'win' : 'loss',
+          }],
+        }
+      })
+    })
+
+    if (isCurrentRound) {
+      // Resolve the open round in-place
+      updated.rounds[roundNum - 1] = { ...updated.rounds[roundNum - 1], winner }
+    } else {
+      updated.rounds = [...updated.rounds, { id: roundId, number: roundNum, combatants: matchup, picks: {}, winner, createdAt: Date.now() }]
+      updated.currentRound = roundNum
+    }
+  }
+
+  updated.phase = 'battle'
+  return updated
+}
+
 // ─── Bot data ─────────────────────────────────────────────────────────────────
 
 export const BOT_COMBATANTS = [
