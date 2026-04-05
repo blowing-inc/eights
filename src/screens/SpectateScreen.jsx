@@ -134,6 +134,12 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
 
   // Vote / deliberation — full reaction UI
   if (inVote && round) {
+    const anonymous   = room.settings?.anonymousCombatants || false
+    const blindVoting = room.settings?.blindVoting || false
+    const picks       = round.picks || {}
+    const allVoted    = realPlayers.every(p => picks[p.id])
+    const showPickers = !blindVoting || allVoted
+
     // Detect trap
     const trapAnnouncement = (() => {
       for (const c of round.combatants) {
@@ -162,9 +168,11 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
             <div style={{ fontSize: 28, marginBottom: 6 }}>🪤</div>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-danger)', marginBottom: 8 }}>Trap sprung</div>
             <div style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>
-              {trapAnnouncement.trapperPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.trapperCombatant}</span>
-              {' '}has trapped{' '}
-              {trapAnnouncement.targetPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.targetCombatant}</span>
+              {anonymous ? (
+                <><span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.trapperCombatant}</span>{' '}has set a trap for{' '}<span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.targetCombatant}</span></>
+              ) : (
+                <>{trapAnnouncement.trapperPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.trapperCombatant}</span>{' '}has trapped{' '}{trapAnnouncement.targetPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.targetCombatant}</span></>
+              )}
             </div>
           </div>
         )}
@@ -180,8 +188,6 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
             const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
             const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
 
-            // Who voted for this combatant
-            const picks = round.picks || {}
             const voters = realPlayers.filter(p => picks[p.id] === c.id).map(p => p.name)
 
             return (
@@ -189,14 +195,19 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
                 <div style={{ padding: '14px 16px' }}>
                   <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 3 }}>{c.name}</div>
                   {c.bio && <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 5 }}>{c.bio}</div>}
-                  <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {owner?.name || c.ownerName}</div>
+                  {!anonymous && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {owner?.name || c.ownerName}</div>}
                 </div>
 
-                {voters.length > 0 && (
+                {showPickers && voters.length > 0 && (
                   <div style={{ padding: '4px 16px 8px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {voters.map(name => (
                       <span key={name} style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)' }}>{name}</span>
                     ))}
+                  </div>
+                )}
+                {blindVoting && !allVoted && (
+                  <div style={{ padding: '4px 16px 8px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Votes hidden until everyone picks</span>
                   </div>
                 )}
 

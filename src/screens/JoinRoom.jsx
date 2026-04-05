@@ -33,8 +33,11 @@ export default function JoinRoom({ playerId, playerName, setPlayerName, lockedNa
       setLoading(false); onJoined(room); return
     }
 
-    // Game in progress — offer spectate
+    // Game in progress — offer spectate (if allowed)
     if (room.phase !== 'lobby') {
+      if (room.settings?.spectatorsAllowed === false) {
+        setError('This room doesn\'t allow spectators.'); setLoading(false); return
+      }
       setSpectateRoom(room); setLoading(false); return
     }
 

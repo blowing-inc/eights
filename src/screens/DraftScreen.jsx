@@ -62,12 +62,14 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     })
   }, [room.id])
 
+  const biosRequired = room.settings?.biosRequired || false
   const myPrevWinners = room.prevWinners?.[playerId] || []
   const allPrevWinnersPlaced = areAllPrevWinnersPlaced(myPrevWinners, names, globalIds)
   const unplacedWinners      = getUnplacedWinners(myPrevWinners, names, globalIds)
 
   async function submit() {
     if (names.some(n => !n.trim())) return
+    if (biosRequired && bios.some(b => !b.trim())) return
     if (myPrevWinners.length > 0 && !allPrevWinnersPlaced) return
     const ownerName = ownerLabel(myPlayer.name, isGuest)
     const myList = names.map((name, i) => {
@@ -139,7 +141,10 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         {saveStatus === 'saved'    && <span style={{ fontSize: 11, color: 'var(--color-text-success)' }}>Draft saved ✓</span>}
         {saveStatus === 'restored' && <span style={{ fontSize: 11, color: 'var(--color-text-info)' }}>Draft restored ↩</span>}
       </div>
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.5rem' }}>Keep them secret — anything goes. Add an optional bio for each.</p>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.5rem' }}>
+        Keep them secret — anything goes.{' '}
+        {biosRequired ? <span style={{ color: 'var(--color-text-warning)' }}>A bio is required for each combatant.</span> : 'Add an optional bio for each.'}
+      </p>
 
       {room.devMode && (
         <button
@@ -202,7 +207,12 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
               )}
             </div>
 
-            <textarea style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13 }} placeholder="Bio (optional)" value={bios[i]} onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }} />
+            <textarea
+              style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13, ...(biosRequired && !bios[i].trim() ? { borderColor: 'var(--color-border-warning)' } : {}) }}
+              placeholder={biosRequired ? 'Bio (required)' : 'Bio (optional)'}
+              value={bios[i]}
+              onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }}
+            />
 
             {/* Trap controls — only for brand-new combatants in a Next Battle */}
             {isNewCombatant && otherPrevWinners.length > 0 && (
@@ -260,7 +270,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
           </div>
         )
       })}
-      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my 8 →</button>
+      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my 8 →</button>
     </div>
   )
 }
