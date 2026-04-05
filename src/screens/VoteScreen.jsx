@@ -4,8 +4,8 @@ import Pill from '../components/Pill.jsx'
 import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants } from '../supabase.js'
-import { POLL_INTERVAL, canEditCombatant } from '../gameLogic.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom } from '../supabase.js'
+import { canEditCombatant } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -18,9 +18,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const isHost = room.host === playerId
 
   useEffect(() => {
-    const iv = setInterval(async () => {
-      const r = await sget('room:' + room.id)
-      if (!r) return
+    return subscribeToRoom(room.id, async r => {
       const rd = r.rounds[r.currentRound - 1]
       if (rd?.winner) {
         const updated = { ...r, phase: 'battle' }
@@ -28,8 +26,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         setRoom(updated); onResult(); return
       }
       setLocal(r); setRoom(r)
-    }, POLL_INTERVAL)
-    return () => clearInterval(iv)
+    })
   }, [room.id, room.currentRound])
 
   async function castReaction(combatantId, emoji) {

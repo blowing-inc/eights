@@ -3,19 +3,17 @@ import Screen from '../components/Screen.jsx'
 import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import ShareLinkButton from '../components/ShareLinkButton.jsx'
 import { btn } from '../styles.js'
-import { sget, sset } from '../supabase.js'
-import { POLL_INTERVAL } from '../gameLogic.js'
+import { sget, sset, subscribeToRoom } from '../supabase.js'
 
 export default function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPlayer }) {
   const [room, setLocal] = useState(init)
   const isHost = room.host === playerId
 
   useEffect(() => {
-    const iv = setInterval(async () => {
-      const r = await sget('room:' + room.id)
-      if (r) { setLocal(r); setRoom(r); if (r.phase === 'draft') onStart() }
-    }, POLL_INTERVAL)
-    return () => clearInterval(iv)
+    return subscribeToRoom(room.id, r => {
+      setLocal(r); setRoom(r)
+      if (r.phase === 'draft') onStart()
+    })
   }, [room.id])
 
   async function startGame() {

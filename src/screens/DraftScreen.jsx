@@ -6,9 +6,9 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom } from '../supabase.js'
 import {
-  POLL_INTERVAL, ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
+  ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart
 } from '../gameLogic.js'
@@ -46,13 +46,10 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   }, [names, bios, globalIds, submitted])
 
   useEffect(() => {
-    const iv = setInterval(async () => {
-      const r = await sget('room:' + room.id)
-      if (!r) return
+    return subscribeToRoom(room.id, r => {
       setLocal(r); setRoom(r)
       if (r.phase === 'battle') onDone()
-    }, POLL_INTERVAL)
-    return () => clearInterval(iv)
+    })
   }, [room.id])
 
   const myPrevWinners = room.prevWinners?.[playerId] || []

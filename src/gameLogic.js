@@ -1,8 +1,6 @@
 // Pure game logic extracted from App.jsx for testability.
 // No React, no Supabase imports — all functions are deterministic given their inputs.
 
-export const POLL_INTERVAL = 2500
-
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 export function uid() { return Math.random().toString(36).slice(2, 9) }

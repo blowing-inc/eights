@@ -1,25 +1,22 @@
 import { useState, useEffect } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import { btn } from '../styles.js'
-import { sget, sset, incrementCombatantStats } from '../supabase.js'
-import { POLL_INTERVAL, uid, canUndoLastRound } from '../gameLogic.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom } from '../supabase.js'
+import { uid, canUndoLastRound } from '../gameLogic.js'
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
 
   useEffect(() => {
-    const iv = setInterval(async () => {
-      const r = await sget('room:' + room.id)
-      if (!r) return
+    return subscribeToRoom(room.id, async r => {
       if (r.nextRoomId) {
         const nextRoom = await sget('room:' + r.nextRoomId)
         if (nextRoom) { setRoom(nextRoom); onRejoinNextBattle(nextRoom); return }
       }
       setLocal(r); setRoom(r)
       if (r.phase === 'voting') onVote()
-    }, POLL_INTERVAL)
-    return () => clearInterval(iv)
+    })
   }, [room.id])
 
   const isHost = room.host === playerId

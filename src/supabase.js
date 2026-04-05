@@ -59,6 +59,27 @@ export async function getActiveRoomsForPlayer(playerId) {
   } catch (e) { console.error('getActiveRoomsForPlayer exception', e); return [] }
 }
 
+// ─── Realtime ────────────────────────────────────────────────────────────────
+
+// Subscribe to live updates for a single room row.
+// onUpdate receives the full room data object whenever it changes.
+// Returns an unsubscribe function — call it in your useEffect cleanup.
+//
+// Prerequisites: enable Realtime for the `rooms` table in the Supabase
+// dashboard (Table Editor → rooms → Realtime toggle), and ensure row-level
+// security allows SELECT for anon/authenticated as appropriate.
+export function subscribeToRoom(roomId, onUpdate) {
+  const channel = supabase
+    .channel('room-' + roomId)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+      payload => { if (payload.new?.data) onUpdate(payload.new.data) }
+    )
+    .subscribe()
+  return () => supabase.removeChannel(channel)
+}
+
 // ─── User accounts ───────────────────────────────────────────────────────────
 
 function genId() { return Math.random().toString(36).slice(2, 9) }
