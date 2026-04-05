@@ -156,7 +156,7 @@ export default function App() {
   else if (viewHistory)
     content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   else if (viewCombatant)
-    content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
+    content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} onViewCombatant={setViewCombatant} />
   else if (screen === 'auth')
     content = <AuthScreen onLogin={u => { login(u); nav(afterAuth || 'home'); setAfterAuth(null) }} onBack={() => { nav(afterAuth || 'home'); setAfterAuth(null) }} />
   else if (screen === 'admin')

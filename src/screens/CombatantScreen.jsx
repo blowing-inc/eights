@@ -4,7 +4,7 @@ import { btn, inp } from '../styles.js'
 import { sset } from '../supabase.js'
 import { canEditCombatant } from '../gameLogic.js'
 
-export default function CombatantScreen({ room, combatant, playerId, onBack }) {
+export default function CombatantScreen({ room, combatant, playerId, onBack, onViewCombatant }) {
   const [c, setC] = useState(combatant)
   const [editBio, setEditBio] = useState(false)
   const [bio, setBio] = useState(combatant.bio || '')
@@ -53,6 +53,34 @@ export default function CombatantScreen({ room, combatant, playerId, onBack }) {
           <p style={{ color: c.bio ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontSize: 14, margin: 0 }}>{c.bio || 'No bio yet.'}</p>
         )}
       </div>
+      {c.trapTarget && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>Trap</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Set as trap for</span>
+            {(() => {
+              // Find the target combatant in room data so we can navigate to it
+              const targetCombatant = room
+                ? Object.values(room.combatants || {}).flat().find(x => x.id === c.trapTarget.targetId)
+                : null
+              return (
+                <button
+                  onClick={() => targetCombatant && onViewCombatant?.(targetCombatant)}
+                  disabled={!targetCombatant || !onViewCombatant}
+                  style={{ fontSize: 13, padding: '3px 10px', background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 99, cursor: targetCombatant && onViewCombatant ? 'pointer' : 'default' }}
+                >
+                  🪤 {c.trapTarget.targetName}
+                </button>
+              )
+            })()}
+            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>({c.trapTarget.targetOwnerName})</span>
+          </div>
+          <div style={{ marginTop: 6, fontSize: 12, color: c.trapTriggered ? 'var(--color-text-success)' : 'var(--color-text-tertiary)' }}>
+            {c.trapTriggered ? '✓ Trap sprung' : 'Trap never triggered'}
+          </div>
+        </div>
+      )}
+
       {(c.battles || []).length > 0 && (
         <div>
           <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>Battle record</h3>

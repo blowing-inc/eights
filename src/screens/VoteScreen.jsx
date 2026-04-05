@@ -70,7 +70,17 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       combatants[pid] = combatants[pid].map(c => {
         if (!rd.combatants.find(rc => rc.id === c.id)) return c
         const isWin = winner.id === c.id
-        return { ...c, wins: c.wins + (isWin ? 1 : 0), losses: c.losses + (isWin ? 0 : 1), battles: [...(c.battles || []), { roundId: rd.id, opponent: rd.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '), result: isWin ? 'win' : 'loss' }] }
+        const updates = {
+          wins: c.wins + (isWin ? 1 : 0),
+          losses: c.losses + (isWin ? 0 : 1),
+          battles: [...(c.battles || []), { roundId: rd.id, opponent: rd.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '), result: isWin ? 'win' : 'loss' }],
+        }
+        // Record whether the trap was sprung (target appeared in the same round)
+        if (c.trapTarget) {
+          const targetInRound = rd.combatants.some(rc => rc.id === c.trapTarget.targetId)
+          if (targetInRound) updates.trapTriggered = true
+        }
+        return { ...c, ...updates }
       })
     })
     const updated = { ...r, rounds, combatants, phase: 'battle' }
@@ -135,6 +145,24 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const realPlayers = room.players.filter(p => !p.isBot)
   const pickerNames = cid => realPlayers.filter(p => picks[p.id] === cid).map(p => p.name)
 
+  // Detect if a trap has been sprung this round
+  const trapAnnouncement = (() => {
+    for (const c of round.combatants) {
+      if (!c.trapTarget) continue
+      const target = round.combatants.find(other => other.id === c.trapTarget.targetId)
+      if (!target) continue
+      const trapperOwner = room.players.find(p => p.id === c.ownerId)
+      const targetOwner  = room.players.find(p => p.id === target.ownerId)
+      return {
+        trapperPlayer:    trapperOwner?.name || c.ownerName || '?',
+        trapperCombatant: c.name,
+        targetPlayer:     targetOwner?.name  || c.trapTarget.targetOwnerName || '?',
+        targetCombatant:  target.name,
+      }
+    }
+    return null
+  })()
+
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
@@ -142,6 +170,18 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}
       </p>
+
+      {trapAnnouncement && (
+        <div style={{ marginBottom: '1.5rem', padding: '16px 18px', background: 'var(--color-background-danger)', border: '1.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-lg)', textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>🪤</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-danger)', marginBottom: 8 }}>Trap sprung</div>
+          <div style={{ fontSize: 20, fontWeight: 500, color: 'var(--color-text-primary)', lineHeight: 1.35 }}>
+            {trapAnnouncement.trapperPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.trapperCombatant}</span>
+            {' '}has trapped{' '}
+            {trapAnnouncement.targetPlayer}'s <span style={{ color: 'var(--color-text-danger)' }}>{trapAnnouncement.targetCombatant}</span>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: '1.5rem' }}>
         {round.combatants.map(c => {

@@ -21,12 +21,22 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [names, setNames] = useState(() => Array(8).fill('').map((_, i) => existing[i]?.name || savedDraft?.names?.[i] || ''))
   const [bios,  setBios]  = useState(() => Array(8).fill('').map((_, i) => existing[i]?.bio  || savedDraft?.bios?.[i]  || ''))
   const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || savedDraft?.globalIds?.[i] || null))
+  const [traps, setTraps] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.trapTarget || savedDraft?.traps?.[i] || null))
+  const [trapPickerFor, setTrapPickerFor] = useState(null) // slot index with picker open, or null
   const [submitted, setSubmitted] = useState(existing.length === 8)
   const [forceStarting, setForceStarting] = useState(false)
   const isHost = room.host === playerId
 
   const saveTimer = useRef(null)
   const [saveStatus, setSaveStatus] = useState(savedDraft ? 'restored' : null)
+
+  // Other players' prev winners — the pool of valid trap targets
+  const otherPrevWinners = Object.entries(room.prevWinners || {})
+    .filter(([ownerId]) => ownerId !== playerId)
+    .flatMap(([ownerId, winners]) => {
+      const ownerName = room.players.find(p => p.id === ownerId)?.name || '?'
+      return winners.map(w => ({ ...w, ownerName }))
+    })
 
   useEffect(() => {
     if (submitted) return
@@ -37,13 +47,13 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       setSaveStatus('saving')
       const r = await sget('room:' + room.id)
       if (!r) { setSaveStatus(null); return }
-      const updated = { ...r, drafts: { ...(r.drafts || {}), [playerId]: { names, bios, globalIds } } }
+      const updated = { ...r, drafts: { ...(r.drafts || {}), [playerId]: { names, bios, globalIds, traps } } }
       await sset('room:' + r.id, updated)
       setLocal(updated); setRoom(updated)
       setSaveStatus('saved')
     }, 2000)
     return () => clearTimeout(saveTimer.current)
-  }, [names, bios, globalIds, submitted])
+  }, [names, bios, globalIds, traps, submitted])
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
@@ -60,7 +70,11 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     if (names.some(n => !n.trim())) return
     if (myPrevWinners.length > 0 && !allPrevWinnersPlaced) return
     const ownerName = ownerLabel(myPlayer.name, isGuest)
-    const myList = names.map((name, i) => buildCombatantFromDraft(name, bios[i], globalIds[i], playerId, ownerName))
+    const myList = names.map((name, i) => {
+      const c = buildCombatantFromDraft(name, bios[i], globalIds[i], playerId, ownerName)
+      if (traps[i]) c.trapTarget = traps[i]
+      return c
+    })
     myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName }))
     const { [playerId]: _removed, ...remainingDrafts } = (room.drafts || {})
     const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList }, drafts: remainingDrafts }
@@ -153,6 +167,10 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
       {Array(8).fill(0).map((_, i) => {
         const isPrevWinnerSlot = myPrevWinners.some(w => slotMatchesPrevWinner(names, globalIds, i, w))
+        const isNewCombatant   = names[i].trim() && !isPrevWinnerSlot && !globalIds[i]
+        const trap             = traps[i]
+        const trapPickerOpen   = trapPickerFor === i
+
         return (
           <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -174,7 +192,62 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 <CombatantStatsPill globalId={globalIds[i]} label="↩ loaded" pillStyle={{ background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)' }} />
               )}
             </div>
+
             <textarea style={{ ...inp(), margin: 0, width: '100%', resize: 'none', height: 52, fontSize: 13 }} placeholder="Bio (optional)" value={bios[i]} onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }} />
+
+            {/* Trap controls — only for brand-new combatants in a Next Battle */}
+            {isNewCombatant && otherPrevWinners.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                {trap ? (
+                  // Trap is set — show label + clear button
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, padding: '3px 8px', background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 99 }}>
+                      🪤 trapping {trap.targetName} ({trap.targetOwnerName})
+                    </span>
+                    <button
+                      onClick={() => { const t = [...traps]; t[i] = null; setTraps(t) }}
+                      style={{ background: 'transparent', border: 'none', fontSize: 13, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px 4px', lineHeight: 1 }}
+                      title="Remove trap"
+                    >×</button>
+                  </div>
+                ) : (
+                  // No trap set yet — show toggle button
+                  <button
+                    onClick={() => setTrapPickerFor(trapPickerOpen ? null : i)}
+                    style={{ ...btn('ghost'), width: 'auto', padding: '4px 10px', fontSize: 12, color: trapPickerOpen ? 'var(--color-text-danger)' : 'var(--color-text-secondary)' }}
+                  >
+                    {trapPickerOpen ? 'Cancel' : '🪤 Set trap'}
+                  </button>
+                )}
+
+                {/* Trap target picker */}
+                {trapPickerOpen && !trap && (
+                  <div style={{ marginTop: 8, padding: '10px 12px', background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-danger)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Choose your target
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {otherPrevWinners.map(w => (
+                        <button
+                          key={w.id}
+                          onClick={() => {
+                            const t = [...traps]
+                            t[i] = { targetId: w.id, targetName: w.name, targetOwnerName: w.ownerName }
+                            setTraps(t)
+                            setTrapPickerFor(null)
+                          }}
+                          style={{ textAlign: 'left', padding: '8px 10px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}
+                        >
+                          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{w.name}</span>
+                          <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 8 }}>by {w.ownerName}</span>
+                          {w.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>{w.bio}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )
       })}

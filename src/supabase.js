@@ -202,7 +202,7 @@ export async function getPlayerRoomStats(playerId) {
   try {
     const { data, error } = await supabase.from('rooms').select('data')
     if (error) { console.error('getPlayerRoomStats error', error); return null }
-    let games = 0, wins = 0, losses = 0
+    let games = 0, wins = 0, losses = 0, trapsSet = 0, trapsTriggered = 0
     ;(data || []).forEach(row => {
       const r = row.data
       if (!r || r.devMode) return
@@ -210,9 +210,16 @@ export async function getPlayerRoomStats(playerId) {
       if (!participated) return
       games++
       const myCombatants = (r.combatants?.[playerId] || [])
-      myCombatants.forEach(c => { wins += c.wins || 0; losses += c.losses || 0 })
+      myCombatants.forEach(c => {
+        wins   += c.wins   || 0
+        losses += c.losses || 0
+        if (c.trapTarget) {
+          trapsSet++
+          if (c.trapTriggered) trapsTriggered++
+        }
+      })
     })
-    return { games, wins, losses }
+    return { games, wins, losses, trapsSet, trapsTriggered }
   } catch (e) { console.error('getPlayerRoomStats exception', e); return null }
 }
 
