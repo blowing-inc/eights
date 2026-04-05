@@ -4,7 +4,7 @@ import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import ShareLinkButton from '../components/ShareLinkButton.jsx'
 import SpectatorList from '../components/SpectatorList.jsx'
 import { btn } from '../styles.js'
-import { sget, sset, subscribeToRoom } from '../supabase.js'
+import { sset, subscribeToRoom } from '../supabase.js'
 
 export default function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -28,6 +28,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, onStart, on
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>Share this code with your friends</p>
       <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 500, letterSpacing: 8, color: 'var(--color-text-primary)', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', padding: '1.5rem', marginBottom: '0.75rem' }}>{room.code}</div>
       <ShareLinkButton code={room.code} />
+      {room.settings?.spectatorsAllowed !== false && <ShareLinkButton code={room.code} spectate style={{ marginTop: -8 }} />}
       <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 12px' }}>Players ({room.players.length})</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '2rem' }}>
         {room.players.map(p => (

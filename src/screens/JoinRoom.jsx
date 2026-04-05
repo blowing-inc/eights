@@ -4,7 +4,7 @@ import { btn, inp, lbl } from '../styles.js'
 import { sget, sset } from '../supabase.js'
 import { playerColor } from '../gameLogic.js'
 
-export default function JoinRoom({ playerId, playerName, setPlayerName, lockedName, initialCode = '', onJoined, onSpectated, onBack, onLogin }) {
+export default function JoinRoom({ playerId, playerName, setPlayerName, lockedName, initialCode = '', spectateMode = false, onJoined, onSpectated, onBack, onLogin }) {
   const [name, setName] = useState(playerName)
   const [code, setCode] = useState(initialCode)
   const [error, setError] = useState('')
@@ -27,10 +27,18 @@ export default function JoinRoom({ playerId, playerName, setPlayerName, lockedNa
       setLoading(false); onSpectated(room); return
     }
 
-    // Already a player — rejoin
+    // Already a player — rejoin as player (even on spectate links)
     if (alreadyPlayer) {
       sessionStorage.setItem('eights_pname', name.trim()); setPlayerName(name.trim())
       setLoading(false); onJoined(room); return
+    }
+
+    // Spectate link — skip player join, go straight to spectate
+    if (spectateMode) {
+      if (room.settings?.spectatorsAllowed === false) {
+        setError('This room doesn\'t allow spectators.'); setLoading(false); return
+      }
+      setSpectateRoom(room); setLoading(false); return
     }
 
     // Game in progress — offer spectate (if allowed)
@@ -81,7 +89,7 @@ export default function JoinRoom({ playerId, playerName, setPlayerName, lockedNa
       {spectateRoom ? (
         <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
-            That game has already started. You can watch as a spectator.
+            {spectateMode ? 'You\'ve been invited to watch this game as a spectator.' : 'That game has already started. You can watch as a spectator.'}
           </p>
           <button style={{ ...btn('primary'), marginBottom: 8 }} onClick={spectate} disabled={!name.trim() || loading}>
             {loading ? 'Joining…' : '👁 Watch as spectator'}
