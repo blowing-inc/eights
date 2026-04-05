@@ -44,7 +44,13 @@ function makeBots(count = 2) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState('home')
+  // If the URL has ?join=XXXX, start on the join screen with that code pre-filled
+  const [initialJoinCode] = useState(() => {
+    const p = new URLSearchParams(window.location.search).get('join')
+    if (p) { window.history.replaceState(null, '', window.location.pathname) }
+    return p ? p.toUpperCase() : ''
+  })
+  const [screen, setScreen] = useState(() => initialJoinCode ? 'join' : 'home')
   // Guest ID — stable for the browser session
   const [guestId] = useState(() => {
     const s = sessionStorage.getItem('eights_pid') || uid()
@@ -94,6 +100,7 @@ export default function App() {
 
   useEffect(() => { refreshLobbies() }, [])
 
+  const [afterAuth, setAfterAuth] = useState(null) // screen to return to after auth
   const [room, setRoom] = useState(null)
   const [viewCombatant, setViewCombatant] = useState(null)
   const [viewHistory, setViewHistory] = useState(false)
@@ -173,11 +180,11 @@ export default function App() {
   else if (viewBestiary)    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
   else if (viewHistory)     content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
   else if (viewCombatant)   content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} />
-  else if (screen === 'auth')   content = <AuthScreen onLogin={u => { login(u); nav('home') }} onBack={() => nav('home')} />
+  else if (screen === 'auth')   content = <AuthScreen onLogin={u => { login(u); nav(afterAuth || 'home'); setAfterAuth(null) }} onBack={() => { nav(afterAuth || 'home'); setAfterAuth(null) }} />
   else if (screen === 'admin')  content = <AdminScreen onBack={() => nav('home')} />
   else if (screen === 'home')   content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
   else if (screen === 'create') content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
-  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+  else if (screen === 'join')   content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={initialJoinCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
   else if (screen === 'lobby')  content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')  content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} />
   else if (screen === 'battle') content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
@@ -428,9 +435,9 @@ function CreateRoom({ playerId, playerName, setPlayerName, lockedName, onCreated
 }
 
 // ─── Join Room ────────────────────────────────────────────────────────────────
-function JoinRoom({ playerId, playerName, setPlayerName, lockedName, onJoined, onBack }) {
+function JoinRoom({ playerId, playerName, setPlayerName, lockedName, initialCode = '', onJoined, onBack, onLogin }) {
   const [name, setName] = useState(playerName)
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(initialCode)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -439,8 +446,9 @@ function JoinRoom({ playerId, playerName, setPlayerName, lockedName, onJoined, o
     setLoading(true); setError('')
     const room = await sget('room:' + code.toUpperCase())
     if (!room) { setError('Room not found. Check the code and try again.'); setLoading(false); return }
-    if (room.phase !== 'lobby') { setError('That game has already started.'); setLoading(false); return }
-    if (!room.players.find(p => p.id === playerId)) {
+    const alreadyIn = room.players.find(p => p.id === playerId)
+    if (room.phase !== 'lobby' && !alreadyIn) { setError('That game has already started.'); setLoading(false); return }
+    if (!alreadyIn) {
       room.players.push({ id: playerId, name: name.trim(), color: playerColor(room.players.length), ready: false })
       await sset('room:' + room.id, room)
     }
@@ -454,9 +462,11 @@ function JoinRoom({ playerId, playerName, setPlayerName, lockedName, onJoined, o
     <Screen title="Join room" onBack={onBack}>
       <label style={lbl}>Your name</label>
       <input style={{ ...inp(), opacity: lockedName ? 0.65 : 1 }} value={name} onChange={e => { if (!lockedName) setName(e.target.value) }} placeholder="Enter your name" autoFocus={!lockedName} readOnly={lockedName} />
-      {lockedName && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>}
+      {lockedName
+        ? <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>
+        : onLogin && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Playing as guest. <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in or create account</button></p>}
       <label style={{ ...lbl, marginTop: 16 }}>Room code</label>
-      <input style={{ ...inp(), textTransform: 'uppercase', letterSpacing: 4, fontSize: 22 }} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="XXXX" maxLength={4} onKeyDown={e => e.key === 'Enter' && join()} />
+      <input style={{ ...inp(), textTransform: 'uppercase', letterSpacing: 4, fontSize: 22 }} value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="XXXX" maxLength={4} onKeyDown={e => e.key === 'Enter' && join()} autoFocus={lockedName} />
       {error && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, margin: '8px 0 0' }}>{error}</p>}
       <button style={{ ...btn('primary'), marginTop: 8 }} onClick={join} disabled={!name.trim() || !code.trim() || loading}>{loading ? 'Joining…' : 'Join room'}</button>
     </Screen>
@@ -484,8 +494,9 @@ function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPla
 
   return (
     <Screen title={`Room ${room.code}`} onBack={onBack}>
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>Share this code with your friends</p>
-      <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 500, letterSpacing: 8, color: 'var(--color-text-primary)', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', padding: '1.5rem', marginBottom: '2rem' }}>{room.code}</div>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>Share this code with your friends</p>
+      <div style={{ textAlign: 'center', fontSize: 52, fontWeight: 500, letterSpacing: 8, color: 'var(--color-text-primary)', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', padding: '1.5rem', marginBottom: '0.75rem' }}>{room.code}</div>
+      <ShareLinkButton code={room.code} />
       <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 12px' }}>Players ({room.players.length})</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '2rem' }}>
         {room.players.map(p => (
@@ -2143,6 +2154,23 @@ function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack }
 }
 
 // ─── Shared components ────────────────────────────────────────────────────────
+function ShareLinkButton({ code }) {
+  const [copied, setCopied] = useState(false)
+  function share() {
+    const url = `${window.location.origin}${window.location.pathname}?join=${code}`
+    if (navigator.share) {
+      navigator.share({ title: 'Join my Eights game', url }).catch(() => {})
+    } else {
+      navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+    }
+  }
+  return (
+    <button onClick={share} style={{ ...btn('ghost'), width: '100%', marginBottom: '1.5rem', fontSize: 13 }}>
+      {copied ? 'Link copied!' : '🔗 Share join link'}
+    </button>
+  )
+}
+
 function Screen({ title, onBack, children }) {
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
