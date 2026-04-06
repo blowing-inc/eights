@@ -82,7 +82,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         const origId = Object.keys(activeFormMap).find(k => activeFormMap[k] === v.id)
         if (origId) subs[origId] = {
           id: v.id, name: v.name, bio: v.bio || '',
-          wins: v.wins || 0, losses: v.losses || 0,
+          wins: v.wins || 0, losses: v.losses || 0, draws: v.draws || 0,
           owner_name: v.owner_name || '',
         }
       }

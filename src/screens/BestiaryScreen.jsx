@@ -85,7 +85,7 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
                   </span>
                 )}
               </div>
-              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{c.wins}W – {c.losses}L</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{c.wins}W – {c.losses}L{c.draws > 0 ? ` – ${c.draws}D` : ''}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 32 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>

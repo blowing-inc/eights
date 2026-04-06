@@ -94,7 +94,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
 
   // Battle (between rounds)
   if (room.phase === 'battle') {
-    const completedRounds = room.rounds.filter(r => r.winner)
+    const completedRounds = room.rounds.filter(r => r.winner || r.draw)
     const totalRounds = Math.min(...room.players.map(p => (room.combatants[p.id] || []).length))
     const isComplete = completedRounds.length >= totalRounds && totalRounds > 0
 
@@ -113,7 +113,9 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
                 <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>{r.combatants.map(c => c.name).join(' vs ')}</span>
                 {r.winner
                   ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)', flexShrink: 0 }}>🏆 {r.winner.name}</span>
-                  : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
+                  : r.draw
+                    ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>🤝 Draw</span>
+                    : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
               </div>
             ))}
           </div>

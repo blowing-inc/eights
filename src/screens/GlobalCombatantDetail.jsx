@@ -98,7 +98,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [h2hRows,  setH2hRows]  = useState(null)  // null = not yet loaded
 
   const canEdit    = c.owner_id === playerId
-  const totalBattles = (c.wins || 0) + (c.losses || 0)
+  const totalBattles = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   const history    = c.bio_history || []
   const isVariant  = !!c.lineage
   const rootId     = c.lineage?.rootId || c.id
@@ -199,11 +199,11 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
       )}
 
       {/* ── Stats ────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
-        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Battles', totalBattles, 'var(--color-text-secondary)']].map(([label, val, color]) => (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Battles', totalBattles, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: 12, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 500, color }}>{val}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{label}</div>
+            <div style={{ fontSize: 20, fontWeight: 500, color }}>{val}</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</div>
           </div>
         ))}
       </div>

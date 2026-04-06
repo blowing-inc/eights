@@ -81,7 +81,7 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
             <button onClick={() => onViewCombatant(c)} style={{ flex: 1, textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{isFav ? '⭐ ' : ''}{c.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L{c.draws > 0 ? ` – ${c.draws}D` : ''}</span>
               </div>
               {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{c.bio.length > 70 ? c.bio.slice(0, 70) + '…' : c.bio}</div>}
             </button>

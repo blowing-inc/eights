@@ -441,22 +441,24 @@ export function ownerLabel(name, isGuest) {
  */
 export function buildTickerMessages(rooms) {
   const valid = (rooms || []).filter(r => r && !r.devMode)
-  const completedRounds = valid.flatMap(r => (r.rounds || []).filter(rd => rd.winner))
+  const winRounds  = valid.flatMap(r => (r.rounds || []).filter(rd => rd.winner))
+  const drawRounds = valid.flatMap(r => (r.rounds || []).filter(rd => rd.draw && !rd.winner))
   const players = [...new Set(valid.flatMap(r => (r.players || []).filter(p => !p.isBot).map(p => p.name)))]
 
   const stats = {}
   valid.forEach(r => {
     Object.values(r.combatants || {}).flat().filter(c => !c.isBot).forEach(c => {
-      if (!stats[c.name]) stats[c.name] = { wins: 0, losses: 0 }
+      if (!stats[c.name]) stats[c.name] = { wins: 0, losses: 0, draws: 0 }
       stats[c.name].wins   += c.wins   || 0
       stats[c.name].losses += c.losses || 0
+      stats[c.name].draws  += c.draws  || 0
     })
   })
 
   const msgs = []
   const pick = arr => arr[Math.floor(Math.random() * arr.length)]
 
-  ;[...completedRounds].sort(() => Math.random() - 0.5).slice(0, 10).forEach(rd => {
+  ;[...winRounds].sort(() => Math.random() - 0.5).slice(0, 10).forEach(rd => {
     const w = rd.winner.name
     const losers = (rd.combatants || []).filter(c => c.id !== rd.winner.id).map(c => c.name)
     if (!losers.length) return
@@ -471,6 +473,17 @@ export function buildTickerMessages(rooms) {
       `Eyewitnesses describe the scene: ${w} victorious, ${l1} inconsolable. Details at 11.`,
       `${l1} entered the arena confident. ${w} had other plans.`,
       `Officials confirm ${w} defeated ${l1}. No further explanation was provided.`,
+    ]))
+  })
+
+  ;[...drawRounds].sort(() => Math.random() - 0.5).slice(0, 3).forEach(rd => {
+    const names = (rd.combatants || []).map(c => c.name)
+    if (names.length < 2) return
+    msgs.push(pick([
+      `${names[0]} and ${names[1]} fought to a draw. The council is still arguing about it.`,
+      `DRAW DECLARED. ${names[0]} vs ${names[1]}. Nobody won. Everyone lost.`,
+      `${names[0]} and ${names[1]} were so evenly matched it became a diplomatic incident.`,
+      `The arena officially ruled ${names[0]} vs ${names[1]} a draw. Both parties are unsatisfied.`,
     ]))
   })
 

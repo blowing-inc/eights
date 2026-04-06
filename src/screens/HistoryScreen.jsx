@@ -99,29 +99,38 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
                 </span>
                 {rd.winner
                   ? <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
-                  : <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>}
+                  : rd.draw
+                    ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)' }}>🤝 Draw</span>
+                    : <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {(rd.combatants || []).map(c => {
                   const isWinner = rd.winner?.id === c.id
+                  const isDraw   = !rd.winner && rd.draw
                   const owner = (room.players || []).find(p => p.id === c.ownerId)
                   const voters = Object.entries(rd.picks || {})
                     .filter(([, cid]) => cid === c.id)
                     .map(([pid]) => (room.players || []).find(p => p.id === pid)?.name || '?')
                   const { heart, angry, cry } = tallyReactions(rd.playerReactions, c.id)
 
+                  const cardBg     = isWinner ? 'var(--color-background-success)' : 'var(--color-background-tertiary)'
+                  const cardBorder = isWinner ? '0.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)'
+                  const nameColor  = isWinner ? 'var(--color-text-success)' : 'var(--color-text-primary)'
+                  const metaColor  = isWinner ? 'var(--color-text-success)' : 'var(--color-text-tertiary)'
+                  const bioColor   = isWinner ? 'var(--color-text-success)' : 'var(--color-text-secondary)'
+
                   return (
-                    <div key={c.id} style={{ padding: '10px 12px', background: isWinner ? 'var(--color-background-success)' : 'var(--color-background-tertiary)', borderRadius: 'var(--border-radius-md)', border: isWinner ? '0.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
+                    <div key={c.id} style={{ padding: '10px 12px', background: cardBg, borderRadius: 'var(--border-radius-md)', border: cardBorder }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: c.bio ? 3 : 0 }}>
-                        <span style={{ fontSize: 14, fontWeight: 500, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-primary)' }}>
-                          {isWinner ? '🏆 ' : ''}{c.name}
+                        <span style={{ fontSize: 14, fontWeight: 500, color: nameColor }}>
+                          {isWinner ? '🏆 ' : isDraw ? '🤝 ' : ''}{c.name}
                         </span>
-                        <span style={{ fontSize: 11, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-tertiary)', flexShrink: 0, marginLeft: 8 }}>
+                        <span style={{ fontSize: 11, color: metaColor, flexShrink: 0, marginLeft: 8 }}>
                           {owner?.name || c.ownerName || '?'}
                         </span>
                       </div>
-                      {c.bio && <div style={{ fontSize: 12, color: isWinner ? 'var(--color-text-success)' : 'var(--color-text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{c.bio}</div>}
+                      {c.bio && <div style={{ fontSize: 12, color: bioColor, lineHeight: 1.4, marginBottom: 4 }}>{c.bio}</div>}
                       {voters.length > 0 && (
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>
                           {voters.map(name => (
@@ -196,7 +205,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
                   <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
-                      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L</span>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L{c.draws > 0 ? ` – ${c.draws}D` : ''}</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
                   </button>
@@ -207,17 +216,20 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
                 const battle   = (c.battles || [])[0]
                 const isWin    = c.wins > 0
                 const isLoss   = c.losses > 0
-                const played   = isWin || isLoss
+                const isDraw   = !isWin && !isLoss && (c.draws || 0) > 0
+                const played   = isWin || isLoss || isDraw
+                const bg       = played ? (isWin ? 'var(--color-background-success)' : isLoss ? 'var(--color-background-danger)' : 'var(--color-background-secondary)') : 'var(--color-background-secondary)'
+                const border   = `0.5px solid ${played ? (isWin ? 'var(--color-border-success)' : isLoss ? 'var(--color-border-danger)' : 'var(--color-border-tertiary)') : 'var(--color-border-tertiary)'}`
                 return (
-                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: played ? (isWin ? 'var(--color-background-success)' : 'var(--color-background-danger)') : 'var(--color-background-secondary)', border: `0.5px solid ${played ? (isWin ? 'var(--color-border-success)' : 'var(--color-border-danger)') : 'var(--color-border-tertiary)'}`, borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
+                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: bg, border, borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {roundNum}</span>
                         <span style={{ fontSize: 15, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-primary)' }}>
-                          {isWin ? '🏆 ' : ''}{c.name}
+                          {isWin ? '🏆 ' : isDraw ? '🤝 ' : ''}{c.name}
                         </span>
                       </div>
-                      {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : 'var(--color-text-danger)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : 'L'}</span>}
+                      {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : isLoss ? 'L' : 'D'}</span>}
                     </div>
                     {battle?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {battle.opponent}</div>}
                     {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 60 }}>{c.bio}</div>}
@@ -232,7 +244,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
 }
 
 function RoomRow({ room, onSelect, playerId }) {
-  const completedRounds = (room.rounds || []).filter(rd => rd.winner)
+  const completedRounds = (room.rounds || []).filter(rd => rd.winner || rd.draw)
   const players = (room.players || []).filter(p => !p.isBot).map(p => p.name)
   const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   const isHost = playerId && room.host === playerId
@@ -300,7 +312,7 @@ function SeriesRow({ item, onSelect, playerId }) {
     ? new Date(rooms[rooms.length - 1].createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null
 
-  const totalRounds = rooms.reduce((n, r) => n + (r.rounds || []).filter(rd => rd.winner).length, 0)
+  const totalRounds = rooms.reduce((n, r) => n + (r.rounds || []).filter(rd => rd.winner || rd.draw).length, 0)
 
   function exportSeries() {
     const sorted = [...rooms].sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
