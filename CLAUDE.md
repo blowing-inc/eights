@@ -85,6 +85,8 @@ The codebase should be readable by someone who didn't write it — including fut
 - **One source of truth per concept.** `normalizeRoomSettings` is the canonical place for setting defaults. `applyWinner` is the canonical place for resolving a round. Don't re-implement these inline.
 - **Name things for what they do.** A future reader should be able to understand a function from its name and signature without reading its body first.
 - **Comments for why, not what.** The code says what it does. Comments explain decisions that aren't obvious from the code alone.
+- **App.jsx is a router and session manager, not a business logic file.** It may hold top-level state (currentUser, room, screen) and navigation handlers, but any non-trivial decision logic — series detection, heritage chain translation, draft preparation — belongs in `gameLogic.js` or a dedicated helper, then called from App.jsx. If a function in App.jsx is longer than ~10 lines of logic, ask whether it belongs elsewhere.
+- **Prefer deriving data over storing it.** Before adding a new field to the room schema (or any persistent object), check whether the value can be reliably computed from data that already exists. Denormalization is acceptable when reads are frequent and the derivation is expensive — not as a default. When a new field is proposed, name the derivation it replaces and explain why caching is worth the drift risk.
 
 ---
 
