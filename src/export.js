@@ -14,33 +14,55 @@ export function downloadFile(filename, content, mimeType = 'text/plain;charset=u
 
 /**
  * Formats a combatant's full history as plain text.
- * lineageTree is the raw array from getLineageTree — root + all variants,
- * each with id, name, bio, wins, losses, lineage.
+ * lineageTree   — raw array from getLineageTree for the heritage chain (rootId → all descendants)
+ * ownChainTree  — raw array from getLineageTree(c.id) when the combatant is itself a standalone root
+ *                 (only non-empty when c is both a variant in one chain AND a root in another)
  */
-export function formatCombatantHistory(combatant, lineageTree = []) {
-  const sorted = [...lineageTree].sort((a, b) =>
-    (a.lineage?.generation ?? 0) - (b.lineage?.generation ?? 0)
-  )
+export function formatCombatantHistory(combatant, lineageTree = [], ownChainTree = []) {
   const lines = []
 
   lines.push(`EIGHTS — COMBATANT HISTORY`)
   lines.push(`${combatant.name}  ·  by ${combatant.owner_name || '?'}`)
   lines.push('')
 
-  if (sorted.length > 1) {
-    lines.push('=== EVOLUTION CHAIN ===')
-    sorted.forEach(node => {
+  // ── Heritage chain (where this combatant sits within its ancestral tree) ──
+  const heritageNodes = [...lineageTree].sort((a, b) =>
+    (a.lineage?.generation ?? 0) - (b.lineage?.generation ?? 0)
+  )
+  if (heritageNodes.length > 1) {
+    lines.push('=== HERITAGE CHAIN ===')
+    heritageNodes.forEach(node => {
       const gen = node.lineage?.generation ?? 0
       const bf  = node.lineage?.bornFrom
       if (bf) {
         lines.push(`  ⚡ Beat ${bf.opponentName || 'opponent'} in ${bf.gameCode} R${bf.roundNumber} →`)
       }
-      lines.push(`  Gen ${gen}: ${node.name}`)
+      const marker = node.id === combatant.id ? ' ◀ this form' : ''
+      lines.push(`  Gen ${gen}: ${node.name}${marker}`)
       if (node.bio) lines.push(`    "${node.bio}"`)
     })
     lines.push('')
   } else if (combatant.bio) {
     lines.push(`"${combatant.bio}"`)
+    lines.push('')
+  }
+
+  // ── Own chain (variants this combatant spawned as a standalone root) ──
+  const ownNodes = [...ownChainTree].sort((a, b) =>
+    (a.lineage?.generation ?? 0) - (b.lineage?.generation ?? 0)
+  )
+  if (ownNodes.length > 1) {
+    lines.push('=== STANDALONE EVOLUTION ===')
+    ownNodes.forEach(node => {
+      const gen = node.lineage?.generation ?? 0
+      const bf  = node.lineage?.bornFrom
+      if (bf) {
+        lines.push(`  ⚡ Beat ${bf.opponentName || 'opponent'} in ${bf.gameCode} R${bf.roundNumber} →`)
+      }
+      const marker = node.id === combatant.id ? ' ◀ this form' : ''
+      lines.push(`  Gen ${gen}: ${node.name}${marker}`)
+      if (node.bio) lines.push(`    "${node.bio}"`)
+    })
     lines.push('')
   }
 

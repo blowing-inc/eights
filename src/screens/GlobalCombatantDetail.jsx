@@ -6,23 +6,23 @@ import { buildStoryFromLineageTree } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 
 // Renders a lineage tree (handles both linear chains and branching).
-// rawTree: raw combatant rows from getLineageTree — used to build the parent→children
-//          map for branching support. Pass null for own-chain (always linear).
-function LineageSection({ title, story, rawTree, currentId }) {
-  // Build parent→children map. rawTree has lineage.parentId; story has display data.
+// rawTree: raw combatant rows from getLineageTree — used for the parent→children map
+//          (branching support) and for navigation data when a node is tapped.
+// onViewCombatant: optional — if provided, non-current nodes become tappable links.
+function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
+  // Build parent→children map using lineage.parentId from raw tree data.
   const childMap = {}
-  if (rawTree) {
-    rawTree.forEach(raw => {
-      const pid = raw.lineage?.parentId
-      if (!pid) return
-      const node = story.find(n => n.combatantId === raw.id)
-      if (node) {
-        if (!childMap[pid]) childMap[pid] = []
-        childMap[pid].push(node)
-      }
-    })
-  } else {
-    // Linear: each node's parent is the previous node in generation order
+  ;(rawTree || []).forEach(raw => {
+    const pid = raw.lineage?.parentId
+    if (!pid) return
+    const node = story.find(n => n.combatantId === raw.id)
+    if (node) {
+      if (!childMap[pid]) childMap[pid] = []
+      childMap[pid].push(node)
+    }
+  })
+  // Fallback for trees without rawTree (shouldn't happen, but keeps rendering safe)
+  if (!rawTree || rawTree.length === 0) {
     story.forEach((node, i) => {
       if (i === 0) return
       const parent = story[i - 1]
@@ -32,9 +32,12 @@ function LineageSection({ title, story, rawTree, currentId }) {
   }
 
   function renderNode(node, depth) {
-    const isCurrent = node.combatantId === currentId
-    const children  = childMap[node.combatantId] || []
-    const indent    = depth * 16
+    const isCurrent  = node.combatantId === currentId
+    const children   = childMap[node.combatantId] || []
+    const indent     = depth * 16
+    const rawRecord  = (rawTree || []).find(r => r.id === node.combatantId)
+    const canTap     = !isCurrent && onViewCombatant && rawRecord
+
     return (
       <div key={node.combatantId}>
         {node.bornFrom && (
@@ -43,9 +46,12 @@ function LineageSection({ title, story, rawTree, currentId }) {
             {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', paddingLeft: indent }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isCurrent ? 'var(--color-text-info)' : 'var(--color-border-secondary)' }} />
-          <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+        <div
+          onClick={canTap ? () => onViewCombatant(rawRecord) : undefined}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', paddingLeft: indent, cursor: canTap ? 'pointer' : 'default' }}
+        >
+          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isCurrent ? 'var(--color-text-info)' : canTap ? 'var(--color-text-secondary)' : 'var(--color-border-secondary)' }} />
+          <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : canTap ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textDecoration: canTap ? 'underline' : 'none', textDecorationColor: 'var(--color-border-tertiary)' }}>
             {node.name}
           </span>
           {isCurrent && (
@@ -77,7 +83,7 @@ function LineageSection({ title, story, rawTree, currentId }) {
   )
 }
 
-export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack }) {
+export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack, onViewCombatant }) {
   const [c, setC] = useState(init)
   const [editMode, setEditMode] = useState(false)
   const [editName, setEditName] = useState(init.name)
@@ -85,8 +91,9 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [saving, setSaving] = useState(false)
   const [historyOpen,   setHistoryOpen]   = useState(false)
   const [lineageStory,  setLineageStory]  = useState([])  // heritage chain (where this combatant sits)
-  const [lineageTree,   setLineageTree]   = useState([])  // raw tree data — needed to build child map for branching display
-  const [ownChainStory, setOwnChainStory] = useState([])  // standalone tree (variants this combatant produced as a root)
+  const [lineageTree,   setLineageTree]   = useState([])  // raw tree data for heritage — needed for branching child map + navigation
+  const [ownChainStory, setOwnChainStory] = useState([])  // standalone tree (variants produced from this combatant as root)
+  const [ownChainTree,  setOwnChainTree]  = useState([])  // raw tree data for own chain — needed for navigation
 
   const canEdit    = c.owner_id === playerId
   const totalBattles = (c.wins || 0) + (c.losses || 0)
@@ -105,6 +112,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     // Only possible if it's a variant (rootId ≠ c.id), otherwise the call above already covers it.
     if (c.lineage) {
       getLineageTree(c.id).then(tree => {
+        setOwnChainTree(tree)
         const story = buildStoryFromLineageTree(tree)
         if (story.length > 1) setOwnChainStory(story)
       })
@@ -115,12 +123,17 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     return c.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
   }
   function exportText() {
-    const tree = lineageTree.length > 0 ? lineageTree : [c]
-    downloadFile(`eights-combatant-${nameSlug()}.txt`, formatCombatantHistory(c, tree))
+    const heritage = lineageTree.length > 0 ? lineageTree : [c]
+    const own      = ownChainTree.length > 1 ? ownChainTree : []
+    downloadFile(`eights-combatant-${nameSlug()}.txt`, formatCombatantHistory(c, heritage, own))
   }
   function exportJson() {
-    const tree = lineageTree.length > 0 ? lineageTree : [c]
-    downloadFile(`eights-combatant-${nameSlug()}.json`, JSON.stringify(tree, null, 2), 'application/json')
+    const heritage = lineageTree.length > 0 ? lineageTree : [c]
+    const own      = ownChainTree.length > 1 ? ownChainTree : []
+    const payload  = own.length
+      ? { heritage, ownChain: own }
+      : heritage
+    downloadFile(`eights-combatant-${nameSlug()}.json`, JSON.stringify(payload, null, 2), 'application/json')
   }
 
   async function saveEdit() {
@@ -163,14 +176,16 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           story={lineageStory}
           rawTree={lineageTree}
           currentId={c.id}
+          onViewCombatant={onViewCombatant}
         />
       )}
       {ownChainStory.length > 1 && (
         <LineageSection
           title="Standalone evolution"
           story={ownChainStory}
-          rawTree={null}
+          rawTree={ownChainTree}
           currentId={c.id}
+          onViewCombatant={onViewCombatant}
         />
       )}
 
