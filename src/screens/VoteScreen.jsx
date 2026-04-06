@@ -193,9 +193,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       },
     }
 
-    // Create the global combatant record for the variant
+    // Create the global combatant record for the variant.
+    // If no new bio was written, fall back to the original's bio so the variant
+    // isn't blank — the original's bio is preserved separately on room.combatants.
+    const variantBio = newBio || winner.bio || ''
     await createVariantCombatant({
-      id: newId, name: newName, bio: newBio,
+      id: newId, name: newName, bio: variantBio,
       ownerId, ownerName: winner.ownerName, lineage,
     })
 
@@ -212,7 +215,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       fromName:  winner.name,
       toId:      newId,
       toName:    newName,
-      toBio:     newBio,
+      toBio:     variantBio,
       ownerId,
       ownerName: winner.ownerName,
       authorId,

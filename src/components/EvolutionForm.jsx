@@ -34,12 +34,12 @@ export default function EvolutionForm({ winner, onSubmit, onCancel, error = null
         <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 8px', lineHeight: 1.4 }}>{error}</p>
       )}
 
-      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Bio</div>
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Bio for the evolved form</div>
       <textarea
         style={{ ...inp(), margin: 0, resize: 'none', height: 68, fontSize: 13, width: '100%' }}
         value={bio}
         onChange={e => setBio(e.target.value)}
-        placeholder="What happened to them?"
+        placeholder="What happened to them? What did they become?"
       />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
