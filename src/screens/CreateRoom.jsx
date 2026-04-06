@@ -21,6 +21,24 @@ function SettingRow({ label, description, value, onToggle }) {
   )
 }
 
+function RosterSizeRow({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+      <div>
+        <div style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>Roster size</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 1 }}>Combatants each player drafts</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 16 }}>
+        <button onClick={() => onChange(Math.max(3, value - 1))} disabled={value <= 3}
+          style={{ width: 28, height: 28, borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-tertiary)', color: 'var(--color-text-primary)', fontSize: 16, cursor: value <= 3 ? 'default' : 'pointer', opacity: value <= 3 ? 0.35 : 1, lineHeight: 1 }}>−</button>
+        <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', minWidth: 18, textAlign: 'center' }}>{value}</span>
+        <button onClick={() => onChange(Math.min(12, value + 1))} disabled={value >= 12}
+          style={{ width: 28, height: 28, borderRadius: '50%', border: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-tertiary)', color: 'var(--color-text-primary)', fontSize: 16, cursor: value >= 12 ? 'default' : 'pointer', opacity: value >= 12 ? 0.35 : 1, lineHeight: 1 }}>+</button>
+      </div>
+    </div>
+  )
+}
+
 const SETTINGS = [
   ['spectatorsAllowed',      'Allow spectators',        'Let others watch without playing'],
   ['anonymousCombatants',    'Anonymous combatants',    'Hide owner names during voting'],
@@ -60,6 +78,7 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
 
       <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '1.5rem 0 0' }}>Settings</h3>
       <div style={{ marginBottom: '1.5rem' }}>
+        <RosterSizeRow value={settings.rosterSize} onChange={v => setSettings(s => ({ ...s, rosterSize: v }))} />
         {SETTINGS.map(([key, label, desc]) => (
           <SettingRow key={key} label={label} description={desc} value={settings[key]} onToggle={() => toggle(key)} />
         ))}

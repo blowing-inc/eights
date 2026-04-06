@@ -111,7 +111,8 @@ export default function App() {
       id: roomCode, code: roomCode, host: playerId,
       phase: 'draft', devMode: true,
       players: allPlayers, combatants,
-      rounds: [], currentRound: 0, createdAt: Date.now()
+      rounds: [], currentRound: 0, createdAt: Date.now(),
+      settings: { rosterSize: 8 },
     }
     await sset('room:' + roomCode, newRoom)
     sessionStorage.setItem('eights_pname', myName)
