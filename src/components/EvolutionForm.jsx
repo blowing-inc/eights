@@ -50,7 +50,7 @@ export default function EvolutionForm({ winner, onSubmit, onCancel, error = null
         >
           {submitting ? 'Checking…' : 'Confirm evolution ⚡'}
         </button>
-        <button onClick={onCancel} style={{ ...btn(), fontSize: 13, padding: '9px' }}>
+        <button onClick={onCancel} style={{ ...btn('ghost'), fontSize: 13, padding: '9px 14px' }}>
           Cancel
         </button>
       </div>
