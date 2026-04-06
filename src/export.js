@@ -10,6 +10,54 @@ export function downloadFile(filename, content, mimeType = 'text/plain;charset=u
   document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 
+// ─── Combatant export ─────────────────────────────────────────────────────────
+
+/**
+ * Formats a combatant's full history as plain text.
+ * lineageTree is the raw array from getLineageTree — root + all variants,
+ * each with id, name, bio, wins, losses, lineage.
+ */
+export function formatCombatantHistory(combatant, lineageTree = []) {
+  const sorted = [...lineageTree].sort((a, b) =>
+    (a.lineage?.generation ?? 0) - (b.lineage?.generation ?? 0)
+  )
+  const lines = []
+
+  lines.push(`EIGHTS — COMBATANT HISTORY`)
+  lines.push(`${combatant.name}  ·  by ${combatant.owner_name || '?'}`)
+  lines.push('')
+
+  if (sorted.length > 1) {
+    lines.push('=== EVOLUTION CHAIN ===')
+    sorted.forEach(node => {
+      const gen = node.lineage?.generation ?? 0
+      const bf  = node.lineage?.bornFrom
+      if (bf) {
+        lines.push(`  ⚡ Beat ${bf.opponentName || 'opponent'} in ${bf.gameCode} R${bf.roundNumber} →`)
+      }
+      lines.push(`  Gen ${gen}: ${node.name}`)
+      if (node.bio) lines.push(`    "${node.bio}"`)
+    })
+    lines.push('')
+  } else if (combatant.bio) {
+    lines.push(`"${combatant.bio}"`)
+    lines.push('')
+  }
+
+  const total = (combatant.wins || 0) + (combatant.losses || 0)
+  lines.push('=== RECORD ===')
+  lines.push(`  ${combatant.wins || 0}W  ${combatant.losses || 0}L  ·  ${total} battle${total !== 1 ? 's' : ''}`)
+
+  const heart = combatant.reactions_heart || 0
+  const angry = combatant.reactions_angry || 0
+  const cry   = combatant.reactions_cry   || 0
+  if (heart + angry + cry > 0) {
+    lines.push(`  Reactions: ❤️ ${heart}  😡 ${angry}  😂 ${cry}`)
+  }
+
+  return lines.join('\n')
+}
+
 // ─── Single-tournament export ─────────────────────────────────────────────────
 
 export function formatRoomAsText(room) {

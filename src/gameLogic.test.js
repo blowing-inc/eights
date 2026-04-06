@@ -22,6 +22,7 @@ import {
   buildStoryFromLineageTree,
   applyActiveFormMap,
   groupRoomsForHistory,
+  prepareNextBattle,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -830,6 +831,69 @@ describe('groupRoomsForHistory', () => {
     expect(result).toHaveLength(2)
     const types = result.map(i => i.type).sort()
     expect(types).toEqual(['series', 'standalone'])
+  })
+})
+
+// ─── prepareNextBattle ────────────────────────────────────────────────────────
+
+describe('prepareNextBattle', () => {
+  const baseRoom = {
+    id: 'ROOM1', code: 'ROOM1', host: 'p1', phase: 'battle',
+    players: [{ id: 'p1', name: 'Alice', isBot: false }],
+    combatants: {}, rounds: [], currentRound: 0, createdAt: 1000,
+  }
+
+  it('sets seriesId from completedRoom.id when no prior series', () => {
+    const { newRoom, updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(newRoom.seriesId).toBe('ROOM1')
+    expect(updatedCompletedRoom.seriesId).toBe('ROOM1')
+  })
+
+  it('inherits existing seriesId', () => {
+    const room = { ...baseRoom, seriesId: 'ORIG', seriesIndex: 2 }
+    const { newRoom, updatedCompletedRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM3', hostId: 'p1', now: 3000 })
+    expect(newRoom.seriesId).toBe('ORIG')
+    expect(updatedCompletedRoom.seriesId).toBe('ORIG')
+  })
+
+  it('increments seriesIndex', () => {
+    const room = { ...baseRoom, seriesId: 'S1', seriesIndex: 1 }
+    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(newRoom.seriesIndex).toBe(2)
+  })
+
+  it('stamps seriesIndex: 1 on the completed room when first next-battle', () => {
+    const { updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(updatedCompletedRoom.seriesIndex).toBe(1)
+  })
+
+  it('sets prevRoomId and nextRoomId correctly', () => {
+    const { newRoom, updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(newRoom.prevRoomId).toBe('ROOM1')
+    expect(updatedCompletedRoom.nextRoomId).toBe('ROOM2')
+  })
+
+  it('starts new room with empty combatants and rounds', () => {
+    const { newRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(newRoom.combatants).toEqual({})
+    expect(newRoom.rounds).toEqual([])
+    expect(newRoom.phase).toBe('draft')
+  })
+
+  it('translates evolved winners to their active form in prevWinners', () => {
+    const room = {
+      ...baseRoom,
+      rounds: [{
+        id: 'r1', number: 1,
+        combatants: [{ id: 'c1', name: 'MJ', ownerId: 'p1', ownerName: 'Alice' }],
+        winner: { id: 'c1', name: 'MJ', ownerId: 'p1' },
+        picks: {},
+        evolution: { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ Evolved', toBio: 'new form', ownerId: 'p1', ownerName: 'Alice' },
+      }],
+    }
+    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const winners = newRoom.prevWinners?.p1 || []
+    expect(winners.some(w => w.id === 'c2' && w.name === 'MJ Evolved')).toBe(true)
   })
 })
 

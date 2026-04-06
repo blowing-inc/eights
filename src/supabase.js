@@ -341,6 +341,22 @@ export async function getEligibleCombatants(ownerId) {
   } catch (e) { console.error('getEligibleCombatants exception', e); return [] }
 }
 
+// Returns true if a published combatant with this name already exists.
+// Case-insensitive. Used to enforce the novel-entry constraint on evolution.
+export async function checkCombatantNameExists(name) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants')
+      .select('id')
+      .ilike('name', name.trim())
+      .eq('published', true)
+      .limit(1)
+      .maybeSingle()
+    if (error) { console.error('checkCombatantNameExists error', error); return false }
+    return !!data
+  } catch (e) { console.error('checkCombatantNameExists exception', e); return false }
+}
+
 // Fetch a specific set of combatants by id — used to resolve variant data for
 // heritage-game substitutions without relying on room.combatants snapshots.
 export async function getCombatantsByIds(ids) {

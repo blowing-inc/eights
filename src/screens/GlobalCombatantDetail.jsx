@@ -3,6 +3,79 @@ import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { updateGlobalCombatant, getLineageTree } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
+import { downloadFile, formatCombatantHistory } from '../export.js'
+
+// Renders a lineage tree (handles both linear chains and branching).
+// rawTree: raw combatant rows from getLineageTree — used to build the parent→children
+//          map for branching support. Pass null for own-chain (always linear).
+function LineageSection({ title, story, rawTree, currentId }) {
+  // Build parent→children map. rawTree has lineage.parentId; story has display data.
+  const childMap = {}
+  if (rawTree) {
+    rawTree.forEach(raw => {
+      const pid = raw.lineage?.parentId
+      if (!pid) return
+      const node = story.find(n => n.combatantId === raw.id)
+      if (node) {
+        if (!childMap[pid]) childMap[pid] = []
+        childMap[pid].push(node)
+      }
+    })
+  } else {
+    // Linear: each node's parent is the previous node in generation order
+    story.forEach((node, i) => {
+      if (i === 0) return
+      const parent = story[i - 1]
+      if (!childMap[parent.combatantId]) childMap[parent.combatantId] = []
+      childMap[parent.combatantId].push(node)
+    })
+  }
+
+  function renderNode(node, depth) {
+    const isCurrent = node.combatantId === currentId
+    const children  = childMap[node.combatantId] || []
+    const indent    = depth * 16
+    return (
+      <div key={node.combatantId}>
+        {node.bornFrom && (
+          <div style={{ paddingLeft: indent + 8, padding: '3px 0 3px ' + (indent + 8) + 'px', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+            ⚡ beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
+            {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', paddingLeft: indent }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isCurrent ? 'var(--color-text-info)' : 'var(--color-border-secondary)' }} />
+          <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+            {node.name}
+          </span>
+          {isCurrent && (
+            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
+              this form
+            </span>
+          )}
+          {!isCurrent && children.length === 0 && (
+            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
+              latest
+            </span>
+          )}
+        </div>
+        {children.map(child => renderNode(child, depth + 1))}
+      </div>
+    )
+  }
+
+  const root = story.find(n => n.generation === 0)
+  if (!root) return null
+
+  return (
+    <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+      <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {title}
+      </h3>
+      {renderNode(root, 0)}
+    </div>
+  )
+}
 
 export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack }) {
   const [c, setC] = useState(init)
@@ -10,8 +83,10 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [editName, setEditName] = useState(init.name)
   const [editBio,  setEditBio]  = useState(init.bio || '')
   const [saving, setSaving] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [lineageStory, setLineageStory] = useState([])
+  const [historyOpen,   setHistoryOpen]   = useState(false)
+  const [lineageStory,  setLineageStory]  = useState([])  // heritage chain (where this combatant sits)
+  const [lineageTree,   setLineageTree]   = useState([])  // raw tree data — needed to build child map for branching display
+  const [ownChainStory, setOwnChainStory] = useState([])  // standalone tree (variants this combatant produced as a root)
 
   const canEdit    = c.owner_id === playerId
   const totalBattles = (c.wins || 0) + (c.losses || 0)
@@ -19,13 +94,34 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const isVariant  = !!c.lineage
   const rootId     = c.lineage?.rootId || c.id
 
-  // Load the full lineage tree and build the story
   useEffect(() => {
+    // Heritage chain — where this combatant sits within its ancestral tree
     getLineageTree(rootId).then(tree => {
+      setLineageTree(tree)
       const story = buildStoryFromLineageTree(tree)
       if (story.length > 1) setLineageStory(story)
     })
-  }, [rootId])
+    // Own chain — did this combatant start a separate standalone tree?
+    // Only possible if it's a variant (rootId ≠ c.id), otherwise the call above already covers it.
+    if (c.lineage) {
+      getLineageTree(c.id).then(tree => {
+        const story = buildStoryFromLineageTree(tree)
+        if (story.length > 1) setOwnChainStory(story)
+      })
+    }
+  }, [rootId, c.id])
+
+  function nameSlug() {
+    return c.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
+  }
+  function exportText() {
+    const tree = lineageTree.length > 0 ? lineageTree : [c]
+    downloadFile(`eights-combatant-${nameSlug()}.txt`, formatCombatantHistory(c, tree))
+  }
+  function exportJson() {
+    const tree = lineageTree.length > 0 ? lineageTree : [c]
+    downloadFile(`eights-combatant-${nameSlug()}.json`, JSON.stringify(tree, null, 2), 'application/json')
+  }
 
   async function saveEdit() {
     if (!editName.trim()) return
@@ -43,63 +139,39 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     <Screen title={c.name} onBack={onBack}>
 
       {/* ── Identity ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: '1rem' }}>
         <div style={{ width: 56, height: 56, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
           {isVariant ? '⚡' : '⚔️'}
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>{c.name}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
             Created by {c.owner_name || 'unknown'}
             {isVariant && <span style={{ color: 'var(--color-text-info)', marginLeft: 6 }}>· gen {c.lineage.generation}</span>}
           </p>
         </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button onClick={exportText} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12 }}>⬇ Text</button>
+          <button onClick={exportJson} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12 }}>⬇ JSON</button>
+        </div>
       </div>
 
-      {/* ── Lineage story — story first ───────────────────────────────────── */}
+      {/* ── Lineage — story first ────────────────────────────────────────── */}
       {lineageStory.length > 1 && (
-        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
-          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Evolution
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {lineageStory.map((node, i) => {
-              const isCurrent = node.combatantId === c.id
-              const isLast    = i === lineageStory.length - 1
-              return (
-                <div key={node.combatantId}>
-                  {/* Birth event line — shown above the variant it produced */}
-                  {node.bornFrom && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px' }}>
-                      <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--color-border-tertiary)', marginRight: 7, flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                        beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
-                        {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>}
-                      </span>
-                    </div>
-                  )}
-                  {/* Combatant node */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: isCurrent ? 'var(--color-text-info)' : 'var(--color-border-secondary)', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                      {node.name}
-                    </span>
-                    {isCurrent && (
-                      <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
-                        this form
-                      </span>
-                    )}
-                    {isLast && !isCurrent && (
-                      <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
-                        latest
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <LineageSection
+          title="Heritage"
+          story={lineageStory}
+          rawTree={lineageTree}
+          currentId={c.id}
+        />
+      )}
+      {ownChainStory.length > 1 && (
+        <LineageSection
+          title="Standalone evolution"
+          story={ownChainStory}
+          rawTree={null}
+          currentId={c.id}
+        />
       )}
 
       {/* ── Stats ────────────────────────────────────────────────────────── */}

@@ -1,6 +1,22 @@
 -- Run this in your Supabase project → SQL Editor
--- Creates the rooms table and sets up Row Level Security so anyone
--- can read/write rooms without needing auth (appropriate for a party game).
+-- Full schema for a fresh deployment. Safe to re-run (all statements are idempotent).
+
+-- ─── Rooms ───────────────────────────────────────────────────────────────────
+-- Each room is a single JSON blob. All game state lives in rooms.data.
+-- Notable top-level fields in data (not enforced by DB — documented here for reference):
+--
+--   id, code, host, phase, players[], combatants{}, rounds[], currentRound
+--   createdAt, devMode, settings{ rosterSize, biosRequired, anonymousCombatants,
+--                                  blindVoting, allowSpectators }
+--   prevRoomId, nextRoomId   — heritage chain (linked list, oldest↔newest)
+--   seriesId                 — id of the first room in this heritage chain
+--   seriesIndex              — 1-based position within the series
+--   prevWinners{ [ownerId]: [{id, name, bio}] }  — carried into next draft
+--
+--   round: { id, number, combatants[], winner, picks{}, playerReactions{},
+--            chat[], createdAt,
+--            evolution: { fromId, fromName, toId, toName, toBio,
+--                         ownerId, ownerName, authorId } | null }
 
 create table if not exists rooms (
   id          text primary key,
@@ -8,41 +24,20 @@ create table if not exists rooms (
   updated_at  timestamptz not null default now()
 );
 
--- Index so polling by id is instant
 create index if not exists rooms_updated_at_idx on rooms (updated_at desc);
 
--- Enable RLS
 alter table rooms enable row level security;
 
--- Allow anyone to read any room (needed for join-by-code)
-create policy "public read"
-  on rooms for select
-  using (true);
+create policy "public read"   on rooms for select using (true);
+create policy "public insert" on rooms for insert with check (true);
+create policy "public update" on rooms for update using (true);
 
--- Allow anyone to insert a new room
-create policy "public insert"
-  on rooms for insert
-  with check (true);
-
--- Allow anyone to update any room (host/player writes during game)
-create policy "public update"
-  on rooms for update
-  using (true);
-
--- Explicit grants required on PostgreSQL 15+ (Supabase newer projects no longer
--- auto-grant these to anon — RLS policies alone are not sufficient)
 grant usage  on schema public to anon, authenticated;
 grant select, insert, update on table rooms to anon, authenticated;
 
--- Optional: auto-clean rooms older than 7 days
--- (Uncomment if you want automatic cleanup via a cron job in Supabase)
--- create or replace function delete_old_rooms() returns void language sql as $$
---   delete from rooms where updated_at < now() - interval '7 days';
--- $$;
-
--- ─── Users (persistent accounts) ────────────────────────────────────────────
--- PIN is stored in plain text — low-stakes party game, no auth library.
--- To reset a user's PIN: set needs_reset = true. Next login forces a new PIN.
+-- ─── Users ───────────────────────────────────────────────────────────────────
+-- PIN stored in plain text — low-stakes party game, no auth library.
+-- To force a PIN reset: set needs_reset = true. Next login prompts a new PIN.
 
 create table if not exists users (
   id                      text        primary key,
@@ -55,10 +50,6 @@ create table if not exists users (
   updated_at              timestamptz not null default now()
 );
 
--- If adding to an existing users table:
--- alter table users add column if not exists favorite_combatant_id   text null;
--- alter table users add column if not exists favorite_combatant_name text null;
-
 -- Case-insensitive unique usernames
 create unique index if not exists users_username_lower_idx on users (lower(username));
 
@@ -70,8 +61,27 @@ create policy "public update users" on users for update using (true);
 
 grant select, insert, update on table users to anon, authenticated;
 
--- ─── Global combatants (bestiary) ────────────────────────────────────────────
--- Run this block separately if you're adding it to an existing deployment.
+-- ─── Combatants ──────────────────────────────────────────────────────────────
+-- Global bestiary. One row per combatant form (base + evolved variants).
+-- published = false while the game is in progress; set to true on room end.
+--
+-- lineage is null for generation-0 combatants.
+-- For variants (evolved forms):
+--   lineage: {
+--     rootId:     id of the original gen-0 combatant
+--     parentId:   id of the immediate predecessor form
+--     generation: integer depth (1 = first variant, 2 = second, …)
+--     bornFrom: {
+--       opponentName: name of the combatant that was defeated to trigger evolution
+--       opponentId:   id of that opponent
+--       roundNumber:  which round the evolution occurred in
+--       gameCode:     room.code of the game where it happened
+--       parentName:   name of the combatant before evolving
+--     }
+--   }
+--
+-- round.evolution (stored in rooms.data JSON — no separate table):
+--   { fromId, fromName, toId, toName, toBio, ownerId, ownerName, authorId }
 
 create table if not exists combatants (
   id               text        primary key,
@@ -85,26 +95,36 @@ create table if not exists combatants (
   reactions_heart  int         not null default 0,
   reactions_angry  int         not null default 0,
   reactions_cry    int         not null default 0,
-  published        boolean     not null default false,  -- hidden until game ends
+  published        boolean     not null default false,
+  lineage          jsonb       null,                   -- null for gen-0; see structure above
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
 
-create index if not exists combatants_wins_idx      on combatants (wins desc);
-create index if not exists combatants_owner_idx     on combatants (owner_id);
-create index if not exists combatants_name_idx      on combatants (name);
-create index if not exists combatants_published_idx on combatants (published) where published = true;
+create index if not exists combatants_wins_idx        on combatants (wins desc);
+create index if not exists combatants_owner_idx       on combatants (owner_id);
+create index if not exists combatants_name_idx        on combatants (name);
+create index if not exists combatants_published_idx   on combatants (published) where published = true;
+
+-- Fast lookup: all variants whose root is X → used by getLineageTree
+create index if not exists combatants_lineage_root_idx
+  on combatants ((lineage->>'rootId'))
+  where lineage is not null;
+
+-- Note: there is intentionally NO unique constraint on parentId.
+-- A combatant may spawn multiple variants across different games (e.g., MJ
+-- evolves into "MJ on a bike" in one game and "MJ scuffed knee" in another).
+-- The only enforced constraint is novelty — evolution names must not match any
+-- existing published combatant. That constraint is enforced at the app level
+-- (checkCombatantNameExists in supabase.js) rather than the DB level, because
+-- the uniqueness check is against the full name string across the combatants
+-- table, not a structural constraint on the lineage graph.
 
 alter table combatants enable row level security;
 
-create policy "public read combatants"
-  on combatants for select using (true);
-
-create policy "public insert combatants"
-  on combatants for insert with check (true);
-
-create policy "public update combatants"
-  on combatants for update using (true);
+create policy "public read combatants"   on combatants for select using (true);
+create policy "public insert combatants" on combatants for insert with check (true);
+create policy "public update combatants" on combatants for update using (true);
 
 grant select, insert, update on table combatants to anon, authenticated;
 
@@ -119,8 +139,8 @@ create or replace function increment_combatant_stats(
   p_cry    int
 ) returns void language sql as $$
   update combatants set
-    wins            = greatest(0, wins   + p_wins),
-    losses          = greatest(0, losses + p_losses),
+    wins            = greatest(0, wins            + p_wins),
+    losses          = greatest(0, losses          + p_losses),
     reactions_heart = greatest(0, reactions_heart + p_heart),
     reactions_angry = greatest(0, reactions_angry + p_angry),
     reactions_cry   = greatest(0, reactions_cry   + p_cry),
@@ -130,24 +150,9 @@ $$;
 
 grant execute on function increment_combatant_stats(text, int, int, int, int, int) to anon, authenticated;
 
--- If adding published column to an existing combatants table, run:
--- alter table combatants add column if not exists published boolean not null default false;
--- create index if not exists combatants_published_idx on combatants (published) where published = true;
-
--- ─── Lineage (combatant evolution) ───────────────────────────────────────────
--- lineage is null for original combatants (generation 0).
--- Variants carry: { rootId, parentId, generation }
---   rootId     — id of the original combatant at the start of the lineage
---   parentId   — id of the immediate predecessor (the form that was evolved)
---   generation — integer depth: 0 = original, 1 = first variant, etc.
+-- Optional: auto-clean rooms older than 7 days via a Supabase scheduled function.
+-- Uncomment and run separately if you want automatic cleanup:
 --
--- round.evolution (stored in rooms.data JSON, no separate table needed):
---   { fromId, fromName, toId, toName, authorId }
---   Written to the round object when a variant is created from that round.
-
-alter table combatants add column if not exists lineage jsonb null;
-
--- Fast lookup: "give me all variants whose root is X"
-create index if not exists combatants_lineage_root_idx
-  on combatants ((lineage->>'rootId'))
-  where lineage is not null;
+-- create or replace function delete_old_rooms() returns void language sql as $$
+--   delete from rooms where updated_at < now() - interval '7 days';
+-- $$;

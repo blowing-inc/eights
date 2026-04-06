@@ -9,8 +9,10 @@ import { btn, inp } from '../styles.js'
  *   winner     — the combatant being evolved (id, name, bio)
  *   onSubmit   — (name: string, bio: string) => void
  *   onCancel   — () => void
+ *   error      — optional string shown below the name field (e.g. name-taken message)
+ *   submitting — optional bool to disable the confirm button during async validation
  */
-export default function EvolutionForm({ winner, onSubmit, onCancel }) {
+export default function EvolutionForm({ winner, onSubmit, onCancel, error = null, submitting = false }) {
   const [name, setName] = useState(winner.name)
   const [bio,  setBio]  = useState(winner.bio || '')
 
@@ -22,12 +24,15 @@ export default function EvolutionForm({ winner, onSubmit, onCancel }) {
 
       <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>New name</div>
       <input
-        style={{ ...inp(), margin: '0 0 8px', fontSize: 14 }}
+        style={{ ...inp(), margin: '0 0 4px', fontSize: 14, borderColor: error ? 'var(--color-border-danger)' : undefined }}
         value={name}
         onChange={e => setName(e.target.value)}
         placeholder={winner.name}
         autoFocus
       />
+      {error && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 8px', lineHeight: 1.4 }}>{error}</p>
+      )}
 
       <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Bio</div>
       <textarea
@@ -40,10 +45,10 @@ export default function EvolutionForm({ winner, onSubmit, onCancel }) {
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button
           onClick={() => onSubmit(name.trim() || winner.name, bio.trim())}
-          disabled={!name.trim()}
+          disabled={!name.trim() || submitting}
           style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '9px' }}
         >
-          Confirm evolution ⚡
+          {submitting ? 'Checking…' : 'Confirm evolution ⚡'}
         </button>
         <button onClick={onCancel} style={{ ...btn(), fontSize: 13, padding: '9px' }}>
           Cancel

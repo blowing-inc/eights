@@ -676,6 +676,62 @@ export function buildChainEvolutionStory(rooms, rootId) {
   return story
 }
 
+// ─── Next battle preparation ──────────────────────────────────────────────────
+
+/**
+ * Pure function: derives the new room and the updated completed room for a
+ * "Host Next Battle" transition. Contains all series/heritage logic so App.jsx
+ * only handles the two DB writes and navigation.
+ *
+ * @param {object} completedRoom  The room that just finished
+ * @param {object} opts
+ * @param {string} opts.newRoomCode  Pre-generated code for the new room
+ * @param {string} opts.hostId       Player ID of the host
+ * @param {number} [opts.now]        Timestamp for createdAt (defaults to Date.now())
+ * @returns {{ newRoom: object, updatedCompletedRoom: object }}
+ */
+export function prepareNextBattle(completedRoom, { newRoomCode, hostId, now = Date.now() }) {
+  let prevWinners = extractPreviousWinners(completedRoom.rounds)
+
+  // Translate any evolved winners to their current active form using the
+  // self-contained evolution records on each round (not room.combatants).
+  const activeFormMap = buildActiveFormMap([completedRoom])
+  if (Object.keys(activeFormMap).length > 0) {
+    const variantById = {}
+    for (const rd of (completedRoom.rounds || [])) {
+      if (rd.evolution) {
+        variantById[rd.evolution.toId] = {
+          id:   rd.evolution.toId,
+          name: rd.evolution.toName,
+          bio:  rd.evolution.toBio || '',
+        }
+      }
+    }
+    prevWinners = applyActiveFormMap(prevWinners, activeFormMap, variantById)
+  }
+
+  const seriesId    = completedRoom.seriesId    || completedRoom.id
+  const seriesIndex = (completedRoom.seriesIndex || 1) + 1
+
+  const newRoom = {
+    id: newRoomCode, code: newRoomCode, host: hostId, phase: 'draft',
+    players: completedRoom.players,
+    combatants: {}, rounds: [], currentRound: 0,
+    prevRoomId:  completedRoom.id,
+    seriesId, seriesIndex,
+    createdAt: now, prevWinners,
+  }
+
+  const updatedCompletedRoom = {
+    ...completedRoom,
+    nextRoomId:  newRoomCode,
+    seriesId,
+    seriesIndex: completedRoom.seriesIndex || 1,
+  }
+
+  return { newRoom, updatedCompletedRoom }
+}
+
 // ─── History grouping ─────────────────────────────────────────────────────────
 
 /**

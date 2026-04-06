@@ -5,7 +5,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
@@ -21,7 +21,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   // null                              — no evolution in progress
   // { stage: 'pending', combatantId } — host clicked Evolve, choosing who writes
   // { stage: 'writing', combatantId } — host is filling the form themselves
-  const [evolveFlow, setEvolveFlow] = useState(null)
+  const [evolveFlow,       setEvolveFlow]       = useState(null)
+  const [evolveError,      setEvolveError]      = useState(null)   // novel-name validation message
+  const [evolveSubmitting, setEvolveSubmitting] = useState(false)  // true while name-check is in flight
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
@@ -124,9 +126,18 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   }
 
   // Core evolution handler — called when either host or owner submits the form.
-  // Creates the global variant, wires the round record, replaces the original
-  // in the room roster for all future round slots, then confirms the win.
+  // Validates that the proposed name is novel (not an existing published combatant),
+  // then creates the global variant and wires the round record.
   async function handleEvolution(winnerId, newName, newBio, authorId) {
+    setEvolveSubmitting(true)
+    setEvolveError(null)
+    const nameTaken = await checkCombatantNameExists(newName)
+    if (nameTaken) {
+      setEvolveError(`"${newName}" already exists — evolution must be a new entry.`)
+      setEvolveSubmitting(false)
+      return
+    }
+    setEvolveSubmitting(false)
     const r = await sget('room:' + room.id)
     if (!r) return
 
@@ -454,7 +465,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                 <EvolutionForm
                   winner={c}
                   onSubmit={(name, bio) => handleEvolution(c.id, name, bio, playerId)}
-                  onCancel={() => setEvolveFlow(null)}
+                  onCancel={() => { setEvolveFlow(null); setEvolveError(null) }}
+                  error={evolveError}
+                  submitting={evolveSubmitting}
                 />
               )}
             </div>
@@ -487,7 +500,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           <EvolutionForm
             winner={ownerPromptWinner}
             onSubmit={(name, bio) => handleEvolution(evolutionPending.winnerId, name, bio, playerId)}
-            onCancel={() => skipEvolution(evolutionPending.winnerId)}
+            onCancel={() => { skipEvolution(evolutionPending.winnerId); setEvolveError(null) }}
+            error={evolveError}
+            submitting={evolveSubmitting}
           />
         </div>
       )}

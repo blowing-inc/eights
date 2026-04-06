@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getRoomsByIds, getActiveRoomsForPlayer, sset } from './supabase.js'
-import { uid, makeBots, makeBotCombatants, playerColor, extractPreviousWinners, buildActiveFormMap, applyActiveFormMap } from './gameLogic.js'
+import { uid, makeBots, makeBotCombatants, playerColor, prepareNextBattle } from './gameLogic.js'
 
 // Screens
 import HomeScreen from './screens/HomeScreen.jsx'
@@ -129,47 +129,9 @@ export default function App() {
 
   async function handleHostNextBattle(completedRoom) {
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
-    let prevWinners = extractPreviousWinners(completedRoom.rounds)
-
-    // Ticket 16: translate any evolved winners to their current active form.
-    // Variant data comes from round.evolution records — the variant is NOT in
-    // room.combatants (draft is immutable; variant only enters the next battle).
-    const activeFormMap = buildActiveFormMap([completedRoom])
-    if (Object.keys(activeFormMap).length > 0) {
-      const variantById = {}
-      for (const rd of (completedRoom.rounds || [])) {
-        if (rd.evolution) {
-          variantById[rd.evolution.toId] = {
-            id:   rd.evolution.toId,
-            name: rd.evolution.toName,
-            bio:  rd.evolution.toBio || '',
-          }
-        }
-      }
-      prevWinners = applyActiveFormMap(prevWinners, activeFormMap, variantById)
-    }
-
-    // Carry forward or initialise the series identifier. The first time a host
-    // creates "Next Battle", the completed room becomes Game 1 of the series.
-    const seriesId    = completedRoom.seriesId    || completedRoom.id
-    const seriesIndex = (completedRoom.seriesIndex || 1) + 1
-
-    const newRoom = {
-      id: roomCode, code: roomCode, host: playerId, phase: 'draft',
-      players: completedRoom.players,
-      combatants: {}, rounds: [], currentRound: 0,
-      prevRoomId: completedRoom.id,
-      seriesId, seriesIndex,
-      createdAt: Date.now(), prevWinners,
-    }
+    const { newRoom, updatedCompletedRoom } = prepareNextBattle(completedRoom, { newRoomCode: roomCode, hostId: playerId })
     await sset('room:' + roomCode, newRoom)
-    // Retroactively stamp the completed room if this is the first "next battle"
-    await sset('room:' + completedRoom.id, {
-      ...completedRoom,
-      nextRoomId: roomCode,
-      seriesId,
-      seriesIndex: completedRoom.seriesIndex || 1,
-    })
+    await sset('room:' + completedRoom.id, updatedCompletedRoom)
     removeLobbyCode(completedRoom.id)
     addLobbyCode(roomCode)
     setRoom(newRoom)
