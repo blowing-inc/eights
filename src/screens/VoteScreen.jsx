@@ -5,7 +5,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
@@ -178,10 +178,16 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     const newId   = uid()
     const ownerId = winner.ownerId
     const opponent = rd.combatants.find(c => c.id !== winnerId)
+
+    // Fetch the global record to get accurate lineage — the in-room combatant
+    // is built from the draft and does not carry lineage data. Without this,
+    // a gen1 combatant would produce a gen1 variant instead of gen2, and the
+    // rootId would point to the wrong ancestor.
+    const globalWinner = await getCombatant(winner.id)
     const lineage = {
-      rootId:     winner.lineage?.rootId || winner.id,
+      rootId:     globalWinner?.lineage?.rootId || winner.id,
       parentId:   winner.id,
-      generation: (winner.lineage?.generation || 0) + 1,
+      generation: (globalWinner?.lineage?.generation || 0) + 1,
       // bornFrom is the permanent record of what caused this evolution.
       // Stored on the combatant so the story is self-contained in the DB.
       bornFrom: {
