@@ -758,13 +758,24 @@ export function prepareNextBattle(completedRoom, { newRoomCode, hostId, now = Da
   const seriesId    = completedRoom.seriesId    || completedRoom.id
   const seriesIndex = (completedRoom.seriesIndex || 1) + 1
 
+  // In dev mode, pre-populate bot combatants so they don't need to draft.
+  const { rosterSize } = normalizeRoomSettings(completedRoom.settings)
+  const botCombatants = {}
+  if (completedRoom.devMode) {
+    completedRoom.players
+      .filter(p => p.isBot)
+      .forEach((b, i) => { botCombatants[b.id] = makeBotCombatants(i, b.id, b.name, { rosterSize }) })
+  }
+
   const newRoom = {
     id: newRoomCode, code: newRoomCode, host: hostId, phase: 'draft',
     players: completedRoom.players,
-    combatants: {}, rounds: [], currentRound: 0,
+    combatants: botCombatants, rounds: [], currentRound: 0,
     prevRoomId:  completedRoom.id,
     seriesId, seriesIndex,
     createdAt: now, prevWinners,
+    ...(completedRoom.settings  && { settings:  completedRoom.settings }),
+    ...(completedRoom.devMode   && { devMode:   true }),
   }
 
   const updatedCompletedRoom = {
