@@ -15,6 +15,7 @@ import {
   canUndoLastRound, canEditCombatant,
   extractPreviousWinners,
   normalizeRoomSettings,
+  simulateBattleToEnd,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -954,5 +955,100 @@ describe('applyWinner trap detection', () => {
     const original = JSON.parse(JSON.stringify(room))
     applyWinner(room, { id: 'r1', combatants: [c1, c2], winner: c1 }, 'c1')
     expect(room).toEqual(original)
+  })
+})
+
+// ─── simulateBattleToEnd ──────────────────────────────────────────────────────
+
+describe('simulateBattleToEnd', () => {
+  it('simulates all 8 rounds from a fresh game (currentRound 0)', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const result = simulateBattleToEnd(room)
+    expect(result.rounds).toHaveLength(8)
+    expect(result.currentRound).toBe(8)
+    expect(result.phase).toBe('battle')
+  })
+
+  it('every simulated round has a winner', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const result = simulateBattleToEnd(room)
+    result.rounds.forEach(r => {
+      expect(r.winner).not.toBeNull()
+      expect(r.winner).toBeDefined()
+    })
+  })
+
+  it('continues from mid-game (currentRound 3, 3 completed rounds)', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    // Build 3 completed rounds manually
+    let partial = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    // Trim to 3 rounds to simulate mid-game state
+    partial = { ...partial, rounds: partial.rounds.slice(0, 3), currentRound: 3 }
+    const result = simulateBattleToEnd(partial)
+    expect(result.rounds).toHaveLength(8)
+    expect(result.currentRound).toBe(8)
+  })
+
+  it('resolves an open (winner-less) round in-place without duplicating it', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const c1 = room.combatants.p1[0]
+    const c2 = room.combatants.p2[0]
+    // Simulate round 1 open — round exists, no winner
+    const openRound = { id: 'rd_open', number: 1, combatants: [c1, c2], picks: {}, winner: null, createdAt: Date.now() }
+    const midRoom = { ...room, currentRound: 1, rounds: [openRound] }
+    const result = simulateBattleToEnd(midRoom)
+    // Round 1 should be resolved in-place (same id), not duplicated
+    expect(result.rounds[0].id).toBe('rd_open')
+    expect(result.rounds[0].winner).not.toBeNull()
+    expect(result.rounds).toHaveLength(8)
+  })
+
+  it('accumulates win/loss stats on combatants', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const result = simulateBattleToEnd(room)
+    // Each player's combatants should have 1 win+loss total across all 8 slots
+    const p1Stats = result.combatants.p1.map(c => c.wins + c.losses)
+    const p2Stats = result.combatants.p2.map(c => c.wins + c.losses)
+    p1Stats.forEach(total => expect(total).toBe(1))
+    p2Stats.forEach(total => expect(total).toBe(1))
+  })
+
+  it('each combatant gets exactly one battle record', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const result = simulateBattleToEnd(room)
+    result.combatants.p1.forEach(c => expect(c.battles).toHaveLength(1))
+    result.combatants.p2.forEach(c => expect(c.battles).toHaveLength(1))
+  })
+
+  it('breaks early if a matchup slot is empty', () => {
+    const room = makeRoom()
+    // Give p2 only 3 combatants — totalRounds will be 3
+    room.combatants.p2 = room.combatants.p2.slice(0, 3)
+    const result = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    expect(result.rounds).toHaveLength(3)
+  })
+
+  it('sets phase to battle even when totalRounds is 0', () => {
+    const room = makeRoom()
+    room.combatants.p1 = []
+    const result = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    expect(result.rounds).toHaveLength(0)
+    expect(result.phase).toBe('battle')
+  })
+
+  it('does not mutate the original room', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const original = JSON.parse(JSON.stringify(room))
+    simulateBattleToEnd(room)
+    expect(room).toEqual(original)
+  })
+
+  it('winner is always one of the round combatants', () => {
+    const room = makeRoom({ currentRound: 0, rounds: [] })
+    const result = simulateBattleToEnd(room)
+    result.rounds.forEach(r => {
+      const ids = r.combatants.map(c => c.id)
+      expect(ids).toContain(r.winner.id)
+    })
   })
 })
