@@ -3,10 +3,11 @@ import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import Pill from '../components/Pill.jsx'
 import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
+import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
-import { canEditCombatant, simulateBattleToEnd, applyWinner, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -16,8 +17,14 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [saving, setSaving] = useState(false)
   const [simulating, setSimulating] = useState(false)
 
-  const round = room.rounds[room.currentRound - 1]
-  const isHost = room.host === playerId
+  // Evolution flow state machine.
+  // null                              — no evolution in progress
+  // { stage: 'pending', combatantId } — host clicked Evolve, choosing who writes
+  // { stage: 'writing', combatantId } — host is filling the form themselves
+  const [evolveFlow, setEvolveFlow] = useState(null)
+
+  const round   = room.rounds[room.currentRound - 1]
+  const isHost  = room.host === playerId
 
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
@@ -30,6 +37,8 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       setLocal(r); setRoom(r)
     })
   }, [room.id, room.currentRound])
+
+  // ── Voting ────────────────────────────────────────────────────────────────
 
   async function castReaction(combatantId, emoji) {
     const r = await sget('room:' + room.id)
@@ -53,29 +62,27 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setLocal(updated); setRoom(updated)
   }
 
+  // ── Win confirmation (no evolution) ──────────────────────────────────────
+
   async function confirmWinner(combatantId) {
     const r = await sget('room:' + room.id)
     if (!r) return
 
-    // 1. Identify the round and winner
     const rdIdx  = r.currentRound - 1
     const rd     = r.rounds[rdIdx]
     const winner = rd.combatants.find(c => c.id === combatantId)
     if (!winner) return
 
-    // 2. Stamp winner and host's pick onto the round
     const updatedRound = { ...rd, winner, picks: { ...(rd.picks || {}), [playerId]: combatantId } }
+    // Clear any pending evolution state that may have been set
+    delete updatedRound.evolutionPending
     const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
 
-    // 3. Apply win/loss/trap stats to in-room combatant records (pure)
     const combatants = applyWinner(r, updatedRound, combatantId)
-
-    // 4. Persist and transition to battle phase
     const updated = { ...r, rounds, combatants, phase: 'battle' }
     await sset('room:' + r.id, updated)
     setRoom(updated); onResult()
 
-    // 5. Fire-and-forget: update global combatant stats + publish if final round
     ;(async () => {
       for (const c of updatedRound.combatants) {
         const isWin = winner.id === c.id
@@ -92,6 +99,110 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     })()
   }
 
+  // ── Evolution flow ────────────────────────────────────────────────────────
+
+  // Push evolution authorship to the combatant's owner.
+  // Writes evolutionPending to the round so the owner's subscription fires.
+  async function pushEvolutionToOwner(winnerId, ownerId) {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rdIdx = r.currentRound - 1
+    const rounds = [...r.rounds]
+    rounds[rdIdx] = { ...r.rounds[rdIdx], evolutionPending: { winnerId, requestedFrom: ownerId } }
+    const updated = { ...r, rounds }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    setEvolveFlow(null)
+  }
+
+  // Host skips evolution — clears pending state and confirms win normally.
+  async function skipEvolution(winnerId) {
+    setEvolveFlow(null)
+    // confirmWinner re-fetches and clears evolutionPending via delete in updatedRound
+    await confirmWinner(winnerId)
+  }
+
+  // Core evolution handler — called when either host or owner submits the form.
+  // Creates the global variant, wires the round record, replaces the original
+  // in the room roster for all future round slots, then confirms the win.
+  async function handleEvolution(winnerId, newName, newBio, authorId) {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+
+    const rdIdx  = r.currentRound - 1
+    const rd     = r.rounds[rdIdx]
+    const winner = rd.combatants.find(c => c.id === winnerId)
+    if (!winner) return
+
+    const newId   = uid()
+    const ownerId = winner.ownerId
+    const lineage = {
+      rootId:     winner.lineage?.rootId || winner.id,
+      parentId:   winner.id,
+      generation: (winner.lineage?.generation || 0) + 1,
+    }
+
+    // Create the global combatant record for the variant
+    await createVariantCombatant({
+      id: newId, name: newName, bio: newBio,
+      ownerId, ownerName: winner.ownerName, lineage,
+    })
+
+    // The in-room snapshot for the variant (lightweight, same shape as roster entries)
+    const variantSnapshot = {
+      id: newId, name: newName, bio: newBio,
+      ownerId, ownerName: winner.ownerName,
+      wins: 0, losses: 0, battles: [], lineage,
+    }
+
+    // 1. Apply win/loss to the original first (while it's still in the roster)
+    const combatantsAfterWin = applyWinner(r, { ...rd, winner }, winnerId)
+
+    // 2. Replace the original with the variant for all future round slots
+    const finalCombatants = { ...combatantsAfterWin }
+    if (finalCombatants[ownerId]) {
+      finalCombatants[ownerId] = finalCombatants[ownerId].map((c, idx) =>
+        idx >= r.currentRound && c.id === winnerId ? variantSnapshot : c
+      )
+    }
+
+    // 3. Build the final round record: winner set, evolution recorded, pending cleared
+    const evolution = { fromId: winnerId, fromName: winner.name, toId: newId, toName: newName, authorId }
+    const finalRound = {
+      ...rd,
+      winner,
+      evolution,
+      picks: { ...(rd.picks || {}), [playerId]: winnerId },
+    }
+    delete finalRound.evolutionPending
+
+    const rounds = [...r.rounds]; rounds[rdIdx] = finalRound
+
+    const updated = { ...r, rounds, combatants: finalCombatants, phase: 'battle' }
+    await sset('room:' + r.id, updated)
+    setEvolveFlow(null)
+    setRoom(updated); onResult()
+
+    // Fire-and-forget: global stats for the original combatants in this round
+    // (variant is brand new — it doesn't get stats for the round that birthed it)
+    ;(async () => {
+      for (const c of finalRound.combatants) {
+        const isWin = c.id === winnerId
+        const { heart, angry, cry } = tallyReactions(finalRound.playerReactions, c.id)
+        await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
+      }
+      if (isFinalRound(r)) {
+        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const allIds = Object.values(finalCombatants)
+          .filter(list => list.length === rosterSize)
+          .flat().map(c => c.id)
+        await publishCombatants([...new Set(allIds)])
+      }
+    })()
+  }
+
+  // ── Inline combatant editing ──────────────────────────────────────────────
+
   function startEdit(c) { setEditingId(c.id); setEditName(c.name); setEditBio(c.bio || '') }
 
   async function saveEdit(c) {
@@ -107,12 +218,14 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     const rounds = r.rounds.map(rd => ({
       ...rd,
       combatants: rd.combatants.map(x => x.id === c.id ? { ...x, name: newName, bio: newBio } : x),
-      winner: rd.winner?.id === c.id ? { ...rd.winner, name: newName } : rd.winner
+      winner: rd.winner?.id === c.id ? { ...rd.winner, name: newName } : rd.winner,
     }))
     const updated = { ...r, combatants, rounds }
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setEditingId(null); setSaving(false)
   }
+
+  // ── Dev helper ────────────────────────────────────────────────────────────
 
   async function simulateToEnd() {
     setSimulating(true)
@@ -135,17 +248,29 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setLocal(updated); setRoom(updated)
   }
 
-  if (!round) return null
-  const myPick = round.picks?.[playerId]
-  const picks = round.picks || {}
-  const realPlayers = room.players.filter(p => !p.isBot)
-  const pickerNames = cid => realPlayers.filter(p => picks[p.id] === cid).map(p => p.name)
-  const anonymous = room.settings?.anonymousCombatants || false
-  const blindVoting = room.settings?.blindVoting || false
-  const allVoted = realPlayers.every(p => picks[p.id])
-  const showPickers = !blindVoting || allVoted
+  // ── Derived values ────────────────────────────────────────────────────────
 
-  // Detect if a trap has been sprung this round
+  if (!round) return null
+  const myPick         = round.picks?.[playerId]
+  const picks          = round.picks || {}
+  const realPlayers    = room.players.filter(p => !p.isBot)
+  const pickerNames    = cid => realPlayers.filter(p => picks[p.id] === cid).map(p => p.name)
+  const anonymous      = room.settings?.anonymousCombatants || false
+  const blindVoting    = room.settings?.blindVoting || false
+  const allVoted       = realPlayers.every(p => picks[p.id])
+  const showPickers    = !blindVoting || allVoted
+  const evolutionPending = round.evolutionPending || null
+
+  // The combatant whose evolution the current player has been asked to write
+  const ownerPromptWinner = evolutionPending?.requestedFrom === playerId
+    ? round.combatants.find(c => c.id === evolutionPending.winnerId)
+    : null
+
+  // Name of the owner the host is waiting on (for the host waiting state)
+  const waitingOwnerName = isHost && evolutionPending && evolutionPending.requestedFrom !== playerId
+    ? room.players.find(p => p.id === evolutionPending.requestedFrom)?.name || 'the owner'
+    : null
+
   const trapAnnouncement = (() => {
     for (const c of round.combatants) {
       if (!c.trapTarget) continue
@@ -163,6 +288,8 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     return null
   })()
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
@@ -171,6 +298,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           {simulating ? 'Simulating…' : '🧪 Simulate to end of battle'}
         </button>
       )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
         <SpectatorList spectators={room.spectators} />
@@ -193,35 +321,38 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         </div>
       )}
 
+      {/* ── Combatant cards ─────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: '1.5rem' }}>
         {round.combatants.map(c => {
-          const owner = room.players.find(p => p.id === c.ownerId)
-          const isPicked = myPick === c.id
-          const pickers = pickerNames(c.id)
-          const canEdit = canEditCombatant(c.ownerId, playerId, room.host)
-          const isEditing = editingId === c.id
+          const owner      = room.players.find(p => p.id === c.ownerId)
+          const isPicked   = myPick === c.id
+          const pickers    = pickerNames(c.id)
+          const canEdit    = canEditCombatant(c.ownerId, playerId, room.host)
+          const isEditing  = editingId === c.id
+          const isEvolving = evolveFlow?.combatantId === c.id
 
           return (
             <div key={c.id} style={{ background: isPicked ? 'var(--color-background-info)' : 'var(--color-background-secondary)', border: isPicked ? '2px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', overflow: 'hidden', transition: 'border 0.15s' }}>
-              <div onClick={() => !isEditing && castPick(c.id)} style={{ padding: '14px 16px', cursor: 'pointer' }}>
+
+              {/* Card body */}
+              <div onClick={() => !isEditing && !isEvolving && castPick(c.id)} style={{ padding: '14px 16px', cursor: isEditing || isEvolving ? 'default' : 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                   <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, marginLeft: 8 }}>
                     {owner?.isBot && <Pill>bot</Pill>}
-                    {canEdit && <button onClick={e => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(c) }} style={{ fontSize: 11, padding: '2px 8px', background: 'transparent', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99, cursor: 'pointer' }}>{isEditing ? 'cancel' : 'edit'}</button>}
+                    {canEdit && !isEvolving && <button onClick={e => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(c) }} style={{ fontSize: 11, padding: '2px 8px', background: 'transparent', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99, cursor: 'pointer' }}>{isEditing ? 'cancel' : 'edit'}</button>}
                   </div>
                 </div>
                 {!isEditing && c.bio && <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{c.bio}</div>}
                 {!anonymous && (
                   <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    by {owner && !owner.isBot
-                      ? <AvatarWithHover player={owner} onViewProfile={onViewPlayer} />
-                      : null}
+                    by {owner && !owner.isBot ? <AvatarWithHover player={owner} onViewProfile={onViewPlayer} /> : null}
                     {owner?.name}
                   </div>
                 )}
               </div>
 
+              {/* Inline edit form */}
               {isEditing && (
                 <div style={{ padding: '0 16px 14px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
                   <input style={{ ...inp(), margin: '10px 0 8px', fontSize: 14 }} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" />
@@ -230,6 +361,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                 </div>
               )}
 
+              {/* Vote pickers */}
               {showPickers && pickers.length > 0 && (
                 <div style={{ padding: '6px 16px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {pickers.map(name => (
@@ -243,6 +375,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                 </div>
               )}
 
+              {/* Reactions */}
               {(() => {
                 const pr = round.playerReactions || {}
                 const myReaction = (pr[playerId] || {})[c.id]
@@ -258,21 +391,104 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                 )
               })()}
 
-              {isHost && isPicked && (
-                <div style={{ padding: '0 16px 14px' }}>
-                  <button onClick={() => confirmWinner(c.id)} style={{ ...btn('primary'), padding: '10px', fontSize: 14 }}>
-                    Confirm {c.name} wins ✓
+              {/* ── Host confirm/evolve buttons ──────────────────────────────── */}
+
+              {/* Normal: two-button decision */}
+              {isHost && isPicked && !evolutionPending && !isEvolving && (
+                <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8 }}>
+                  <button onClick={() => confirmWinner(c.id)} style={{ ...btn('primary'), flex: 1, padding: '10px', fontSize: 14 }}>
+                    Confirm win ✓
+                  </button>
+                  <button
+                    onClick={() => setEvolveFlow({
+                      stage:       c.ownerId === playerId ? 'writing' : 'pending',
+                      combatantId: c.id,
+                    })}
+                    style={{ ...btn(), padding: '10px', fontSize: 14 }}
+                  >
+                    Evolve ⚡
                   </button>
                 </div>
+              )}
+
+              {/* Evolve: choice step (host ≠ owner) */}
+              {isHost && isEvolving && evolveFlow.stage === 'pending' && (
+                <div style={{ padding: '12px 16px 14px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+                    This win changed <strong>{c.name}</strong>. Who writes what they became?
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <button
+                      onClick={() => setEvolveFlow({ stage: 'writing', combatantId: c.id })}
+                      style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '8px' }}
+                    >
+                      I'll write it
+                    </button>
+                    <button
+                      onClick={() => pushEvolutionToOwner(c.id, c.ownerId)}
+                      style={{ ...btn(), flex: 1, fontSize: 13, padding: '8px' }}
+                    >
+                      Let {owner?.name || 'them'} write it
+                    </button>
+                  </div>
+                  <button onClick={() => setEvolveFlow(null)} style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Evolve: writing form (host writes) */}
+              {isHost && isEvolving && evolveFlow.stage === 'writing' && (
+                <EvolutionForm
+                  winner={c}
+                  onSubmit={(name, bio) => handleEvolution(c.id, name, bio, playerId)}
+                  onCancel={() => setEvolveFlow(null)}
+                />
               )}
             </div>
           )
         })}
       </div>
 
-      {!isHost && myPick && <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>Pick registered — waiting for host to confirm.</p>}
-      {isHost && !myPick && <p style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>Tap a combatant to select, then confirm to finalise.</p>}
+      {/* ── Host: waiting for owner to write ──────────────────────────────── */}
+      {waitingOwnerName && (
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            ⚡ Waiting for <strong>{waitingOwnerName}</strong> to write the evolution…
+          </p>
+          <button
+            onClick={() => skipEvolution(evolutionPending.winnerId)}
+            style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-tertiary)' }}
+          >
+            Skip — just confirm the win
+          </button>
+        </div>
+      )}
 
+      {/* ── Owner: prompted to write their combatant's evolution ──────────── */}
+      {ownerPromptWinner && (
+        <div style={{ marginBottom: '1.5rem', border: '1.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', background: 'var(--color-background-info)' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-info)' }}>⚡ Your combatant just won</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>The host wants to know — how did this change <strong>{ownerPromptWinner.name}</strong>?</div>
+          </div>
+          <EvolutionForm
+            winner={ownerPromptWinner}
+            onSubmit={(name, bio) => handleEvolution(evolutionPending.winnerId, name, bio, playerId)}
+            onCancel={() => skipEvolution(evolutionPending.winnerId)}
+          />
+        </div>
+      )}
+
+      {/* ── Status lines ─────────────────────────────────────────────────── */}
+      {!isHost && myPick && !ownerPromptWinner && (
+        <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>Pick registered — waiting for host to confirm.</p>
+      )}
+      {isHost && !myPick && !evolveFlow && !evolutionPending && (
+        <p style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>Tap a combatant to select, then confirm to finalise.</p>
+      )}
+
+      {/* ── Round chat ────────────────────────────────────────────────────── */}
       <div style={{ marginTop: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
         <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>Round chat</h3>
         <RoundChat messages={round.chat} onSend={sendChat} />
