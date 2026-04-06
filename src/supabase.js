@@ -26,6 +26,14 @@ export async function sset(key, val) {
   } catch (e) { console.error('sset exception', e) }
 }
 
+export async function sdelete(roomId) {
+  try {
+    const id = roomId.replace(/^room:/, '')
+    const { error } = await supabase.from('rooms').delete().eq('id', id)
+    if (error) console.error('sdelete error', error)
+  } catch (e) { console.error('sdelete exception', e) }
+}
+
 // Fetch specific rooms by id array (for lobby tracking)
 export async function getRoomsByIds(ids) {
   if (!ids.length) return []
