@@ -8,12 +8,14 @@ import { sset, subscribeToRoom } from '../supabase.js'
 
 export default function LobbyScreen({ room: init, playerId, setRoom, onStart, onBack, onViewPlayer }) {
   const [room, setLocal] = useState(init)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const isHost = room.host === playerId
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
       setLocal(r); setRoom(r)
       if (r.phase === 'draft') onStart()
+      if (r.phase === 'ended') onBack()
     })
   }, [room.id])
 
@@ -21,6 +23,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, onStart, on
     const updated = { ...room, phase: 'draft' }
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); onStart()
+  }
+
+  async function cancelRoom() {
+    const updated = { ...room, phase: 'ended', cancelledAt: Date.now() }
+    await sset('room:' + room.id, updated)
+    onBack()
   }
 
   return (
@@ -39,9 +47,21 @@ export default function LobbyScreen({ room: init, playerId, setRoom, onStart, on
           </div>
         ))}
       </div>
-      {isHost
-        ? <button style={btn('primary')} onClick={startGame} disabled={room.players.length < 2}>Start game →</button>
-        : <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Waiting for host to start…</p>}
+      {isHost ? (
+        <>
+          <button style={btn('primary')} onClick={startGame} disabled={room.players.length < 2}>Start game →</button>
+          {!confirmCancel
+            ? <button style={{ ...btn('ghost'), marginTop: 10, width: '100%', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)', fontSize: 13 }} onClick={() => setConfirmCancel(true)}>Cancel room</button>
+            : <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-danger)' }}>Remove this room?</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={{ ...btn('ghost'), fontSize: 13, padding: '4px 12px' }} onClick={() => setConfirmCancel(false)}>Never mind</button>
+                  <button style={{ ...btn('ghost'), fontSize: 13, padding: '4px 12px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }} onClick={cancelRoom}>Yes, cancel</button>
+                </div>
+              </div>
+          }
+        </>
+      ) : <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Waiting for host to start…</p>}
     </Screen>
   )
 }
