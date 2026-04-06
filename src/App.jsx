@@ -106,7 +106,7 @@ export default function App() {
     const me = { id: playerId, name: myName, color: playerColor(0), ready: false }
     const allPlayers = [me, ...bots]
     const combatants = {}
-    bots.forEach((b, i) => { combatants[b.id] = makeBotCombatants(i, b.id, b.name) })
+    bots.forEach((b, i) => { combatants[b.id] = makeBotCombatants(i, b.id, b.name, { rosterSize: 8 }) })
     const newRoom = {
       id: roomCode, code: roomCode, host: playerId,
       phase: 'draft', devMode: true,

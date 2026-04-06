@@ -12,6 +12,24 @@ export function initials(name) {
 export const COLORS = ['#7F77DD','#1D9E75','#D85A30','#378ADD','#D4537E','#639922','#BA7517','#E24B4A']
 export function playerColor(idx) { return COLORS[idx % COLORS.length] }
 
+// ─── Room settings ───────────────────────────────────────────────────────────
+
+/**
+ * Returns a settings object with all defaults applied.
+ * Call this whenever you need to read settings from a room — handles rooms
+ * created before any given setting existed.
+ */
+export function normalizeRoomSettings(settings) {
+  return {
+    rosterSize:           8,
+    spectatorsAllowed:    true,
+    anonymousCombatants:  false,
+    blindVoting:          false,
+    biosRequired:         false,
+    ...settings,
+  }
+}
+
 // ─── Dev helpers ─────────────────────────────────────────────────────────────
 
 // Instant dummy roster for dev mode draft screen
@@ -19,6 +37,7 @@ export const DEV_ROSTER_NAMES = [
   'Dumpster Fire', 'Spreadsheet Phantom', 'Generic Protagonist',
   'Tuesday', 'Partially Hydrated Raisin', 'Sentient Parking Ticket',
   'Discount Wizard', 'A Strongly Worded Email',
+  'Cursed Footnote', 'Mild Inconvenience', 'Unlicensed Philosopher', 'The Concept Of Monday',
 ]
 export const DEV_ROSTER_BIOS = [
   'Moves fast and breaks things. Mostly themselves.',
@@ -29,6 +48,10 @@ export const DEV_ROSTER_BIOS = [
   'Cannot be appealed. Cannot be ignored.',
   'Studied the blade. Briefly.',
   'Will not be cc\'d on the outcome.',
+  'Found in the appendix. Should have stayed there.',
+  'Not a threat. Somehow always a threat.',
+  'Has opinions. Too many opinions.',
+  'Responsible for everything. Accountable to no one.',
 ]
 
 /**
@@ -108,12 +131,13 @@ export const BOT_BIOS = [
 ]
 
 /**
- * Creates 8 combatant objects for a bot player from the predefined template lists.
+ * Creates combatant objects for a bot player from the predefined template lists.
+ * rosterSize controls how many are created (default 8).
  * idFn is injectable so tests can use deterministic IDs.
  */
-export function makeBotCombatants(botIdx, botId, botName, idFn = uid) {
-  return BOT_COMBATANTS[botIdx % 2].map((name, i) => ({
-    id: idFn(), name, bio: BOT_BIOS[i],
+export function makeBotCombatants(botIdx, botId, botName, { rosterSize = 8, idFn = uid } = {}) {
+  return BOT_COMBATANTS[botIdx % 2].slice(0, rosterSize).map((name, i) => ({
+    id: idFn(), name, bio: BOT_BIOS[i % BOT_BIOS.length],
     ownerId: botId, ownerName: botName,
     isBot: true, wins: 0, losses: 0, draws: 0, battles: [],
   }))
@@ -177,16 +201,16 @@ export function buildCombatantFromDraft(name, bio, globalId, ownerId, ownerName,
 }
 
 /**
- * Returns true when every real (non-bot) player has exactly 8 combatants submitted.
+ * Returns true when every real (non-bot) player has exactly rosterSize combatants submitted.
  * combatants map must already include the current player's freshly submitted list.
  */
-export function isDraftComplete(players, combatants) {
-  return players.filter(p => !p.isBot).every(p => (combatants[p.id] || []).length === 8)
+export function isDraftComplete(players, combatants, rosterSize = 8) {
+  return players.filter(p => !p.isBot).every(p => (combatants[p.id] || []).length === rosterSize)
 }
 
-/** How many real players have submitted their full 8-combatant roster. */
-export function getReadyPlayerCount(players, combatants) {
-  return players.filter(p => !p.isBot && (combatants[p.id] || []).length === 8).length
+/** How many real players have submitted their full roster. */
+export function getReadyPlayerCount(players, combatants, rosterSize = 8) {
+  return players.filter(p => !p.isBot && (combatants[p.id] || []).length === rosterSize).length
 }
 
 /**
@@ -270,7 +294,7 @@ export function applyWinner(room, round, winnerId) {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
       const isWin = winner.id === c.id
-      return {
+      const updated = {
         ...c,
         wins:   c.wins   + (isWin ? 1 : 0),
         losses: c.losses + (isWin ? 0 : 1),
@@ -283,6 +307,12 @@ export function applyWinner(room, round, winnerId) {
           },
         ],
       }
+      // Mark trap as sprung if this combatant's trap target appeared in the same round
+      if (c.trapTarget) {
+        const targetInRound = round.combatants.some(rc => rc.id === c.trapTarget.targetId)
+        if (targetInRound) updated.trapTriggered = true
+      }
+      return updated
     })
   })
   return combatants

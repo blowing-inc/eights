@@ -14,6 +14,7 @@ import {
   getReadyPlayerCount, canForceStart,
   canUndoLastRound, canEditCombatant,
   extractPreviousWinners,
+  normalizeRoomSettings,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -465,30 +466,35 @@ describe('makeBotCombatants', () => {
   const seqId = () => 'id' + (++n)
   beforeEach(() => { n = 0 })
 
-  it('returns 8 combatants', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+  it('returns 8 combatants by default', () => {
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     expect(result).toHaveLength(8)
   })
 
+  it('respects rosterSize option', () => {
+    expect(makeBotCombatants(0, 'b', 'B', { rosterSize: 4, idFn: seqId })).toHaveLength(4)
+    expect(makeBotCombatants(0, 'b', 'B', { rosterSize: 6, idFn: seqId })).toHaveLength(6)
+  })
+
   it('uses the first template list for botIdx 0 or even', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     expect(result[0].name).toBe(BOT_COMBATANTS[0][0])
   })
 
   it('uses the second template list for botIdx 1 or odd', () => {
-    const result = makeBotCombatants(1, 'bot_1', 'Bot Beta', seqId)
+    const result = makeBotCombatants(1, 'bot_1', 'Bot Beta', { idFn: seqId })
     expect(result[0].name).toBe(BOT_COMBATANTS[1][0])
   })
 
   it('wraps template list selection (botIdx 2 → list 0)', () => {
-    const r0 = makeBotCombatants(0, 'b', 'B', seqId)
+    const r0 = makeBotCombatants(0, 'b', 'B', { idFn: seqId })
     n = 0
-    const r2 = makeBotCombatants(2, 'b', 'B', seqId)
+    const r2 = makeBotCombatants(2, 'b', 'B', { idFn: seqId })
     expect(r2.map(c => c.name)).toEqual(r0.map(c => c.name))
   })
 
   it('assigns ownerId and ownerName correctly', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     result.forEach(c => {
       expect(c.ownerId).toBe('bot_0')
       expect(c.ownerName).toBe('Bot Alpha')
@@ -496,7 +502,7 @@ describe('makeBotCombatants', () => {
   })
 
   it('marks all combatants as bots with zero stats', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     result.forEach(c => {
       expect(c.isBot).toBe(true)
       expect(c.wins).toBe(0)
@@ -506,13 +512,13 @@ describe('makeBotCombatants', () => {
   })
 
   it('assigns a unique id per combatant via idFn', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     const ids = result.map(c => c.id)
     expect(new Set(ids).size).toBe(8)
   })
 
   it('uses BOT_BIOS in order', () => {
-    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', seqId)
+    const result = makeBotCombatants(0, 'bot_0', 'Bot Alpha', { idFn: seqId })
     result.forEach((c, i) => expect(c.bio).toBe(BOT_BIOS[i]))
   })
 })
@@ -685,26 +691,32 @@ describe('isDraftComplete', () => {
   const p1 = { id: 'p1', isBot: false }
   const p2 = { id: 'p2', isBot: false }
   const bot = { id: 'bot_0', isBot: true }
-  const full = Array(8).fill({ id: 'c', name: 'F', bio: '' })
+  const full8 = Array(8).fill({ id: 'c', name: 'F', bio: '' })
 
-  it('returns true when all real players have 8 combatants', () => {
-    expect(isDraftComplete([p1, p2], { p1: full, p2: full })).toBe(true)
+  it('returns true when all real players have 8 combatants (default rosterSize)', () => {
+    expect(isDraftComplete([p1, p2], { p1: full8, p2: full8 })).toBe(true)
   })
 
-  it('returns false when any real player has fewer than 8', () => {
-    expect(isDraftComplete([p1, p2], { p1: full, p2: full.slice(0, 7) })).toBe(false)
+  it('returns false when any real player has fewer than rosterSize', () => {
+    expect(isDraftComplete([p1, p2], { p1: full8, p2: full8.slice(0, 7) })).toBe(false)
   })
 
   it('returns false when a player has no combatants yet', () => {
-    expect(isDraftComplete([p1, p2], { p1: full })).toBe(false)
+    expect(isDraftComplete([p1, p2], { p1: full8 })).toBe(false)
   })
 
   it('ignores bots', () => {
-    expect(isDraftComplete([p1, bot], { p1: full, bot_0: [] })).toBe(true)
+    expect(isDraftComplete([p1, bot], { p1: full8, bot_0: [] })).toBe(true)
   })
 
   it('returns true for a single real player who is done', () => {
-    expect(isDraftComplete([p1], { p1: full })).toBe(true)
+    expect(isDraftComplete([p1], { p1: full8 })).toBe(true)
+  })
+
+  it('respects a custom rosterSize', () => {
+    const full5 = Array(5).fill({ id: 'c', name: 'F', bio: '' })
+    expect(isDraftComplete([p1], { p1: full5 }, 5)).toBe(true)
+    expect(isDraftComplete([p1], { p1: full5 }, 8)).toBe(false)
   })
 })
 
@@ -714,22 +726,28 @@ describe('getReadyPlayerCount', () => {
   const p1 = { id: 'p1', isBot: false }
   const p2 = { id: 'p2', isBot: false }
   const bot = { id: 'bot_0', isBot: true }
-  const full = Array(8).fill({ id: 'c' })
+  const full8 = Array(8).fill({ id: 'c' })
 
-  it('counts players with exactly 8 combatants', () => {
-    expect(getReadyPlayerCount([p1, p2], { p1: full, p2: full })).toBe(2)
+  it('counts players with exactly rosterSize combatants (default 8)', () => {
+    expect(getReadyPlayerCount([p1, p2], { p1: full8, p2: full8 })).toBe(2)
   })
 
-  it('does not count players with fewer than 8', () => {
-    expect(getReadyPlayerCount([p1, p2], { p1: full, p2: [] })).toBe(1)
+  it('does not count players with fewer than rosterSize', () => {
+    expect(getReadyPlayerCount([p1, p2], { p1: full8, p2: [] })).toBe(1)
   })
 
   it('does not count bots', () => {
-    expect(getReadyPlayerCount([p1, bot], { p1: full, bot_0: full })).toBe(1)
+    expect(getReadyPlayerCount([p1, bot], { p1: full8, bot_0: full8 })).toBe(1)
   })
 
   it('returns 0 when nobody is ready', () => {
     expect(getReadyPlayerCount([p1, p2], {})).toBe(0)
+  })
+
+  it('respects a custom rosterSize', () => {
+    const full5 = Array(5).fill({ id: 'c' })
+    expect(getReadyPlayerCount([p1, p2], { p1: full5, p2: full5 }, 5)).toBe(2)
+    expect(getReadyPlayerCount([p1, p2], { p1: full5, p2: full5 }, 8)).toBe(0)
   })
 })
 
@@ -852,5 +870,89 @@ describe('extractPreviousWinners', () => {
     const result = extractPreviousWinners([makeRound(w)])
     const entry = result.p1[0]
     expect(Object.keys(entry).sort()).toEqual(['bio', 'id', 'name'])
+  })
+})
+
+// ─── normalizeRoomSettings ────────────────────────────────────────────────────
+
+describe('normalizeRoomSettings', () => {
+  it('fills all defaults when passed undefined', () => {
+    const s = normalizeRoomSettings(undefined)
+    expect(s.rosterSize).toBe(8)
+    expect(s.spectatorsAllowed).toBe(true)
+    expect(s.anonymousCombatants).toBe(false)
+    expect(s.blindVoting).toBe(false)
+    expect(s.biosRequired).toBe(false)
+  })
+
+  it('fills all defaults when passed an empty object', () => {
+    const s = normalizeRoomSettings({})
+    expect(s.rosterSize).toBe(8)
+    expect(s.spectatorsAllowed).toBe(true)
+  })
+
+  it('preserves explicit values', () => {
+    const s = normalizeRoomSettings({ rosterSize: 5, blindVoting: true })
+    expect(s.rosterSize).toBe(5)
+    expect(s.blindVoting).toBe(true)
+    expect(s.biosRequired).toBe(false) // still defaulted
+  })
+
+  it('preserves false explicitly set', () => {
+    const s = normalizeRoomSettings({ spectatorsAllowed: false })
+    expect(s.spectatorsAllowed).toBe(false)
+  })
+
+  it('is non-destructive — does not mutate the input', () => {
+    const input = { rosterSize: 6 }
+    const result = normalizeRoomSettings(input)
+    expect(result).not.toBe(input)
+    expect(input.biosRequired).toBeUndefined()
+  })
+})
+
+// ─── applyWinner — trap detection ────────────────────────────────────────────
+
+describe('applyWinner trap detection', () => {
+  function makeRoomWithCombatants(c1, c2) {
+    return {
+      combatants: { p1: [c1], p2: [c2] },
+    }
+  }
+
+  it('sets trapTriggered when trap target is in the same round', () => {
+    const trapper = { id: 'c1', ownerId: 'p1', wins: 0, losses: 0, battles: [], trapTarget: { targetId: 'c2' } }
+    const target  = { id: 'c2', ownerId: 'p2', wins: 0, losses: 0, battles: [] }
+    const round   = { id: 'r1', combatants: [trapper, target], winner: trapper }
+    const room    = makeRoomWithCombatants(trapper, target)
+    const result  = applyWinner(room, round, 'c1')
+    expect(result.p1[0].trapTriggered).toBe(true)
+  })
+
+  it('does not set trapTriggered when trap target is not in the round', () => {
+    const trapper = { id: 'c1', ownerId: 'p1', wins: 0, losses: 0, battles: [], trapTarget: { targetId: 'c99' } }
+    const other   = { id: 'c2', ownerId: 'p2', wins: 0, losses: 0, battles: [] }
+    const round   = { id: 'r1', combatants: [trapper, other], winner: trapper }
+    const room    = makeRoomWithCombatants(trapper, other)
+    const result  = applyWinner(room, round, 'c1')
+    expect(result.p1[0].trapTriggered).toBeUndefined()
+  })
+
+  it('does not set trapTriggered on combatants with no trapTarget', () => {
+    const c1 = { id: 'c1', ownerId: 'p1', wins: 0, losses: 0, battles: [] }
+    const c2 = { id: 'c2', ownerId: 'p2', wins: 0, losses: 0, battles: [] }
+    const round = { id: 'r1', combatants: [c1, c2], winner: c1 }
+    const result = applyWinner(makeRoomWithCombatants(c1, c2), round, 'c1')
+    expect(result.p1[0].trapTriggered).toBeUndefined()
+    expect(result.p2[0].trapTriggered).toBeUndefined()
+  })
+
+  it('does not mutate the original room', () => {
+    const c1 = { id: 'c1', ownerId: 'p1', wins: 0, losses: 0, battles: [] }
+    const c2 = { id: 'c2', ownerId: 'p2', wins: 0, losses: 0, battles: [] }
+    const room = makeRoomWithCombatants(c1, c2)
+    const original = JSON.parse(JSON.stringify(room))
+    applyWinner(room, { id: 'r1', combatants: [c1, c2], winner: c1 }, 'c1')
+    expect(room).toEqual(original)
   })
 })

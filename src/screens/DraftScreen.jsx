@@ -11,19 +11,21 @@ import {
   ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
+  normalizeRoomSettings,
 } from '../gameLogic.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack }) {
   const [room, setLocal] = useState(init)
+  const { rosterSize } = normalizeRoomSettings(init.settings)
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
   const savedDraft = existing.length === 0 ? (room.drafts?.[playerId] ?? null) : null
-  const [names, setNames] = useState(() => Array(8).fill('').map((_, i) => existing[i]?.name || savedDraft?.names?.[i] || ''))
-  const [bios,  setBios]  = useState(() => Array(8).fill('').map((_, i) => existing[i]?.bio  || savedDraft?.bios?.[i]  || ''))
-  const [globalIds, setGlobalIds] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.id || savedDraft?.globalIds?.[i] || null))
-  const [traps, setTraps] = useState(() => Array(8).fill(null).map((_, i) => existing[i]?.trapTarget || savedDraft?.traps?.[i] || null))
+  const [names, setNames] = useState(() => Array(rosterSize).fill('').map((_, i) => existing[i]?.name || savedDraft?.names?.[i] || ''))
+  const [bios,  setBios]  = useState(() => Array(rosterSize).fill('').map((_, i) => existing[i]?.bio  || savedDraft?.bios?.[i]  || ''))
+  const [globalIds, setGlobalIds] = useState(() => Array(rosterSize).fill(null).map((_, i) => existing[i]?.id || savedDraft?.globalIds?.[i] || null))
+  const [traps, setTraps] = useState(() => Array(rosterSize).fill(null).map((_, i) => existing[i]?.trapTarget || savedDraft?.traps?.[i] || null))
   const [trapPickerFor, setTrapPickerFor] = useState(null) // slot index with picker open, or null
-  const [submitted, setSubmitted] = useState(existing.length === 8)
+  const [submitted, setSubmitted] = useState(existing.length === rosterSize)
   const [forceStarting, setForceStarting] = useState(false)
   const isHost = room.host === playerId
 
@@ -62,7 +64,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     })
   }, [room.id])
 
-  const biosRequired = room.settings?.biosRequired || false
+  const biosRequired = normalizeRoomSettings(room.settings).biosRequired
   const myPrevWinners = room.prevWinners?.[playerId] || []
   const allPrevWinnersPlaced = areAllPrevWinnersPlaced(myPrevWinners, names, globalIds)
   const unplacedWinners      = getUnplacedWinners(myPrevWinners, names, globalIds)
@@ -80,7 +82,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     myList.forEach(c => upsertGlobalCombatant({ id: c.id, name: c.name, bio: c.bio, ownerId: playerId, ownerName }))
     const { [playerId]: _removed, ...remainingDrafts } = (room.drafts || {})
     const updated = { ...room, combatants: { ...room.combatants, [playerId]: myList }, drafts: remainingDrafts }
-    if (isDraftComplete(room.players, updated.combatants)) updated.phase = 'battle'
+    if (isDraftComplete(room.players, updated.combatants, rosterSize)) updated.phase = 'battle'
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); setSubmitted(true)
     if (updated.phase === 'battle') onDone()
@@ -97,7 +99,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
   if (submitted) {
     const realPlayers = room.players.filter(p => !p.isBot)
-    const readyCount  = getReadyPlayerCount(room.players, room.combatants)
+    const readyCount  = getReadyPlayerCount(room.players, room.combatants, rosterSize)
     const canForce    = canForceStart(isHost, readyCount, realPlayers.length)
 
     return (
@@ -106,7 +108,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 2rem' }}>Your combatants are locked in. Waiting for others…</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: canForce ? '1.5rem' : 0 }}>
           {room.players.map(p => {
-            const done = p.isBot || (room.combatants[p.id] || []).length === 8
+            const done = p.isBot || (room.combatants[p.id] || []).length === rosterSize
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
                 <AvatarWithHover player={p} onViewProfile={null} />
@@ -136,7 +138,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       {room.devMode && <DevBanner />}
       <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, marginBottom: '1rem' }}>← Back</button>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: '0.25rem' }}>
-        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Your 8 combatants</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Your {rosterSize} combatants</h2>
         {saveStatus === 'saving'   && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Saving…</span>}
         {saveStatus === 'saved'    && <span style={{ fontSize: 11, color: 'var(--color-text-success)' }}>Draft saved ✓</span>}
         {saveStatus === 'restored' && <span style={{ fontSize: 11, color: 'var(--color-text-info)' }}>Draft restored ↩</span>}
@@ -148,7 +150,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
       {room.devMode && (
         <button
-          onClick={() => { setNames([...DEV_ROSTER_NAMES]); setBios([...DEV_ROSTER_BIOS]); setGlobalIds(Array(8).fill(null)) }}
+          onClick={() => { setNames(DEV_ROSTER_NAMES.slice(0, rosterSize)); setBios(DEV_ROSTER_BIOS.slice(0, rosterSize)); setGlobalIds(Array(rosterSize).fill(null)) }}
           style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: '1.25rem', color: 'var(--color-text-warning)' }}
         >
           🧪 Fill dummy roster
@@ -179,7 +181,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         </div>
       )}
 
-      {Array(8).fill(0).map((_, i) => {
+      {Array(rosterSize).fill(0).map((_, i) => {
         const isPrevWinnerSlot = myPrevWinners.some(w => slotMatchesPrevWinner(names, globalIds, i, w))
         const isNewCombatant   = names[i].trim() && !isPrevWinnerSlot && !globalIds[i]
         const trap             = traps[i]
@@ -270,7 +272,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
           </div>
         )
       })}
-      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my 8 →</button>
+      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my {rosterSize} →</button>
     </div>
   )
 }

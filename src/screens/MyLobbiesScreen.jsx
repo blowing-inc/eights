@@ -1,5 +1,6 @@
 import Screen from '../components/Screen.jsx'
 import { btn } from '../styles.js'
+import { normalizeRoomSettings } from '../gameLogic.js'
 
 export default function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) {
   return (
@@ -10,8 +11,9 @@ export default function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) 
       {lobbies.map(r => {
         const host = r.players.find(p => p.id === r.host)
         const realPlayers = r.players.filter(p => !p.isBot)
-        const submitted = realPlayers.filter(p => (r.combatants[p.id] || []).length === 8)
-        const isMyTurn  = r.phase === 'draft' && (r.combatants[playerId] || []).length < 8
+        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const submitted = realPlayers.filter(p => (r.combatants[p.id] || []).length === rosterSize)
+        const isMyTurn  = r.phase === 'draft' && (r.combatants[playerId] || []).length < rosterSize
         const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : r.phase === 'draft' ? 'Drafting combatants' : r.phase === 'vote' ? 'Voting in progress' : 'Battle in progress'
 
         return (
@@ -26,7 +28,7 @@ export default function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) 
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
               {realPlayers.map(p => {
-                const ready = (r.combatants[p.id] || []).length === 8
+                const ready = (r.combatants[p.id] || []).length === rosterSize
                 const isMe  = p.id === playerId
                 return (
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>

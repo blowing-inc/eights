@@ -6,7 +6,7 @@ import RoundChat from '../components/RoundChat.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
-import { canEditCombatant, simulateBattleToEnd } from '../gameLogic.js'
+import { canEditCombatant, simulateBattleToEnd, applyWinner, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -35,12 +35,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     const r = await sget('room:' + room.id)
     if (!r) return
     const rd = { ...r.rounds[r.currentRound - 1] }
-    const playerReactions = { ...(rd.playerReactions || {}) }
-    const mine = { ...(playerReactions[playerId] || {}) }
-    if (mine[combatantId] === emoji) delete mine[combatantId]
-    else mine[combatantId] = emoji
-    playerReactions[playerId] = mine
-    rd.playerReactions = playerReactions
+    rd.playerReactions = toggleReaction(rd.playerReactions, playerId, combatantId, emoji)
     const rounds = [...r.rounds]; rounds[r.currentRound - 1] = rd
     const updated = { ...r, rounds }
     await sset('room:' + r.id, updated)
@@ -61,46 +56,36 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   async function confirmWinner(combatantId) {
     const r = await sget('room:' + room.id)
     if (!r) return
-    const rd = { ...r.rounds[r.currentRound - 1] }
+
+    // 1. Identify the round and winner
+    const rdIdx  = r.currentRound - 1
+    const rd     = r.rounds[rdIdx]
     const winner = rd.combatants.find(c => c.id === combatantId)
     if (!winner) return
-    rd.winner = winner
-    rd.picks = { ...(rd.picks || {}), [playerId]: combatantId }
-    const rounds = [...r.rounds]; rounds[r.currentRound - 1] = rd
-    const combatants = JSON.parse(JSON.stringify(r.combatants))
-    Object.keys(combatants).forEach(pid => {
-      combatants[pid] = combatants[pid].map(c => {
-        if (!rd.combatants.find(rc => rc.id === c.id)) return c
-        const isWin = winner.id === c.id
-        const updates = {
-          wins: c.wins + (isWin ? 1 : 0),
-          losses: c.losses + (isWin ? 0 : 1),
-          battles: [...(c.battles || []), { roundId: rd.id, opponent: rd.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '), result: isWin ? 'win' : 'loss' }],
-        }
-        // Record whether the trap was sprung (target appeared in the same round)
-        if (c.trapTarget) {
-          const targetInRound = rd.combatants.some(rc => rc.id === c.trapTarget.targetId)
-          if (targetInRound) updates.trapTriggered = true
-        }
-        return { ...c, ...updates }
-      })
-    })
+
+    // 2. Stamp winner and host's pick onto the round
+    const updatedRound = { ...rd, winner, picks: { ...(rd.picks || {}), [playerId]: combatantId } }
+    const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
+
+    // 3. Apply win/loss/trap stats to in-room combatant records (pure)
+    const combatants = applyWinner(r, updatedRound, combatantId)
+
+    // 4. Persist and transition to battle phase
     const updated = { ...r, rounds, combatants, phase: 'battle' }
     await sset('room:' + r.id, updated)
     setRoom(updated); onResult()
+
+    // 5. Fire-and-forget: update global combatant stats + publish if final round
     ;(async () => {
-      for (const c of rd.combatants) {
+      for (const c of updatedRound.combatants) {
         const isWin = winner.id === c.id
-        const pr = rd.playerReactions || {}
-        const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
-        const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
-        const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+        const { heart, angry, cry } = tallyReactions(updatedRound.playerReactions, c.id)
         await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
       }
-      const totalRounds = Math.min(...r.players.map(p => (r.combatants[p.id] || []).length))
-      if (r.currentRound >= totalRounds) {
+      if (isFinalRound(r)) {
+        const { rosterSize } = normalizeRoomSettings(r.settings)
         const allIds = Object.values(r.combatants)
-          .filter(list => list.length === 8)
+          .filter(list => list.length === rosterSize)
           .flat().map(c => c.id)
         await publishCombatants(allIds)
       }
@@ -261,9 +246,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
               {(() => {
                 const pr = round.playerReactions || {}
                 const myReaction = (pr[playerId] || {})[c.id]
-                const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
-                const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
-                const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+                const { heart, angry, cry } = tallyReactions(pr, c.id)
                 return (
                   <div onClick={e => e.stopPropagation()} style={{ padding: '6px 12px 10px', borderTop: '0.5px solid var(--color-border-tertiary)', display: 'flex', gap: 6 }}>
                     {[['heart','❤️',heart],['angry','😡',angry],['cry','😂',cry]].map(([key,icon,count]) => (

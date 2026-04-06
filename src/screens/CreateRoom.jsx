@@ -31,7 +31,7 @@ const SETTINGS = [
 export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState({ spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false })
+  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false })
 
   function toggle(key) { setSettings(s => ({ ...s, [key]: !s[key] })) }
 

@@ -3,6 +3,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import SpectatorList from '../components/SpectatorList.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, subscribeToRoom } from '../supabase.js'
+import { normalizeRoomSettings, toggleReaction, tallyReactions } from '../gameLogic.js'
 
 export default function SpectateScreen({ room: init, playerId, setRoom, onHome }) {
   const [room, setLocal] = useState(init)
@@ -22,12 +23,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
     const r = await sget('room:' + room.id)
     if (!r) return
     const rd = { ...r.rounds[r.currentRound - 1] }
-    const playerReactions = { ...(rd.playerReactions || {}) }
-    const mine = { ...(playerReactions[playerId] || {}) }
-    if (mine[combatantId] === emoji) delete mine[combatantId]
-    else mine[combatantId] = emoji
-    playerReactions[playerId] = mine
-    rd.playerReactions = playerReactions
+    rd.playerReactions = toggleReaction(rd.playerReactions, playerId, combatantId, emoji)
     const rounds = [...r.rounds]; rounds[r.currentRound - 1] = rd
     const updated = { ...r, rounds }
     await sset('room:' + r.id, updated)
@@ -70,7 +66,8 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
 
   // Draft
   if (room.phase === 'draft') {
-    const readyCount = realPlayers.filter(p => (room.combatants[p.id] || []).length === 8).length
+    const { rosterSize } = normalizeRoomSettings(room.settings)
+    const readyCount = realPlayers.filter(p => (room.combatants[p.id] || []).length === rosterSize).length
     return (
       <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
         <Header title="Drafting" />
@@ -78,7 +75,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.25rem' }}>Players are selecting their combatants. Sit tight.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {realPlayers.map(p => {
-            const ready = (room.combatants[p.id] || []).length === 8
+            const ready = (room.combatants[p.id] || []).length === rosterSize
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: ready ? 'var(--color-text-success)' : 'var(--color-text-tertiary)', flexShrink: 0 }} />
@@ -184,9 +181,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
             const owner = room.players.find(p => p.id === c.ownerId)
             const pr = round.playerReactions || {}
             const myReaction = (pr[playerId] || {})[c.id]
-            const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
-            const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
-            const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+            const { heart, angry, cry } = tallyReactions(pr, c.id)
 
             const voters = realPlayers.filter(p => picks[p.id] === c.id).map(p => p.name)
 

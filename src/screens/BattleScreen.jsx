@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom } from '../supabase.js'
-import { uid, canUndoLastRound } from '../gameLogic.js'
+import { uid, canUndoLastRound, undoRound } from '../gameLogic.js'
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
   const [room, setLocal] = useState(init)
@@ -48,17 +48,14 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     if (!r || r.currentRound === 0) return
     const last = r.rounds[r.currentRound - 1]
     if (!last?.winner) return
-    const combatants = JSON.parse(JSON.stringify(r.combatants))
-    Object.keys(combatants).forEach(pid => {
-      combatants[pid] = combatants[pid].map(c => {
-        if (!last.combatants.find(rc => rc.id === c.id)) return c
-        const wasWin = last.winner?.id === c.id
-        return { ...c, wins: Math.max(0, c.wins - (wasWin ? 1 : 0)), losses: Math.max(0, c.losses - (wasWin ? 0 : 1)), battles: (c.battles || []).filter(b => b.roundId !== last.id) }
-      })
-    })
+
+    // Reverse in-room stats using pure function
+    const combatants = undoRound(r, last)
     const updated = { ...r, rounds: r.rounds.slice(0, r.currentRound - 1), combatants, currentRound: r.currentRound - 1, phase: 'battle' }
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setConfirmUndo(false)
+
+    // Fire-and-forget: reverse global combatant stats
     ;(async () => {
       for (const c of last.combatants) {
         const wasWin = last.winner?.id === c.id
@@ -142,7 +139,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All 8 rounds fought. Check the history for full results.</p>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought. Check the history for full results.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
               {isHost && <button style={btn('primary')} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>}
               {!isHost && <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next battle…</p>}
