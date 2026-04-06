@@ -205,7 +205,39 @@ export async function getPlayerCombatants({ ownerId, query = '', sort = 'wins', 
   } catch (e) { console.error('getPlayerCombatants exception', e); return { items: [], total: 0 } }
 }
 
-// Aggregate stats for a player from all rooms they participated in
+// Aggregate head-to-head records for a global combatant across all rooms.
+// Full table scan — acceptable for current scale (see getPlayerRoomStats note below).
+// Returns rows sorted by total matchups descending.
+export async function getCombatantBattleHistory(combatantId) {
+  try {
+    const { data, error } = await supabase.from('rooms').select('data')
+    if (error) { console.error('getCombatantBattleHistory error', error); return [] }
+    const record = {}  // { [opponentId]: { opponentName, wins, losses, draws } }
+    ;(data || []).forEach(row => {
+      const r = row.data
+      if (!r || r.devMode) return
+      ;(r.rounds || []).forEach(round => {
+        const mine = (round.combatants || []).find(c => c.id === combatantId)
+        if (!mine) return
+        const opponents = (round.combatants || []).filter(c => c.id !== combatantId)
+        opponents.forEach(opp => {
+          if (!record[opp.id]) record[opp.id] = { opponentName: opp.name, wins: 0, losses: 0, draws: 0 }
+          if (round.draw) {
+            record[opp.id].draws++
+          } else if (round.winner) {
+            if (round.winner.id === combatantId) record[opp.id].wins++
+            else record[opp.id].losses++
+          }
+        })
+      })
+    })
+    return Object.values(record)
+      .sort((a, b) => (b.wins + b.losses + b.draws) - (a.wins + a.losses + a.draws))
+  } catch (e) { console.error('getCombatantBattleHistory exception', e); return [] }
+}
+
+// Aggregate stats for a player from all rooms they participated in.
+// NOTE: Full table scan — fine for hundreds of rooms, revisit if rooms table exceeds ~10k rows.
 export async function getPlayerRoomStats(playerId) {
   try {
     const { data, error } = await supabase.from('rooms').select('data')
@@ -245,10 +277,10 @@ export async function upsertGlobalCombatant({ id, name, bio, ownerId, ownerName 
 }
 
 // Atomic increment (pass negative values to undo)
-export async function incrementCombatantStats(id, { wins = 0, losses = 0, heart = 0, angry = 0, cry = 0 } = {}) {
+export async function incrementCombatantStats(id, { wins = 0, losses = 0, draws = 0, heart = 0, angry = 0, cry = 0 } = {}) {
   try {
     const { error } = await supabase.rpc('increment_combatant_stats', {
-      p_id: id, p_wins: wins, p_losses: losses, p_heart: heart, p_angry: angry, p_cry: cry,
+      p_id: id, p_wins: wins, p_losses: losses, p_draws: draws, p_heart: heart, p_angry: angry, p_cry: cry,
     })
     if (error) console.error('incrementCombatantStats error', error)
   } catch (e) { console.error('incrementCombatantStats exception', e) }
@@ -370,16 +402,38 @@ export async function getCombatantsByIds(ids) {
   } catch (e) { console.error('getCombatantsByIds exception', e); return [] }
 }
 
-// Walks the prevRoomId chain from startRoomId backwards, returning all ancestor
-// rooms oldest-first. Used in DraftScreen to build the active-form substitution
-// map for heritage games.
+// Walks the heritage chain from startRoomId, returning all rooms oldest-first.
+// Used in DraftScreen to build the active-form substitution map for heritage games.
+//
+// Fast path: if the start room has a seriesId, fetches all series rooms in one
+// query and sorts by seriesIndex. Falls back to sequential prevRoomId walking
+// for legacy rooms created before seriesId was introduced.
 export async function getHeritageChain(startRoomId) {
-  const rooms = []
-  let currentId = startRoomId
+  const startRoom = await sget('room:' + startRoomId)
+  if (!startRoom) return []
+
+  if (startRoom.seriesId) {
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('data')
+        .filter('data->>seriesId', 'eq', startRoom.seriesId)
+      if (!error && data?.length) {
+        return data
+          .map(r => r.data)
+          .filter(Boolean)
+          .sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
+      }
+    } catch { /* fall through to sequential walk */ }
+  }
+
+  // Legacy fallback: walk prevRoomId chain sequentially.
+  const rooms = [startRoom]
+  let currentId = startRoom.prevRoomId
   while (currentId) {
     const room = await sget('room:' + currentId)
     if (!room) break
-    rooms.unshift(room) // prepend so oldest is first for buildActiveFormMap
+    rooms.unshift(room)
     currentId = room.prevRoomId || null
   }
   return rooms

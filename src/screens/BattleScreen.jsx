@@ -47,7 +47,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     const r = await sget('room:' + room.id)
     if (!r || r.currentRound === 0) return
     const last = r.rounds[r.currentRound - 1]
-    if (!last?.winner) return
+    if (!last?.winner && !last?.draw) return
 
     // Reverse in-room stats using pure function
     const combatants = undoRound(r, last)
@@ -58,9 +58,13 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     // Fire-and-forget: reverse global combatant stats including reactions
     ;(async () => {
       for (const c of last.combatants) {
-        const wasWin = last.winner?.id === c.id
         const { heart, angry, cry } = tallyReactions(last.playerReactions, c.id)
-        await incrementCombatantStats(c.id, { wins: wasWin ? -1 : 0, losses: wasWin ? 0 : -1, heart: -heart, angry: -angry, cry: -cry })
+        if (last.draw) {
+          await incrementCombatantStats(c.id, { draws: -1, heart: -heart, angry: -angry, cry: -cry })
+        } else {
+          const wasWin = last.winner?.id === c.id
+          await incrementCombatantStats(c.id, { wins: wasWin ? -1 : 0, losses: wasWin ? 0 : -1, heart: -heart, angry: -angry, cry: -cry })
+        }
       }
     })()
   }
@@ -89,8 +93,13 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
               <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {r.number}</span>
               <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>{r.combatants.map(c => c.name).join(' vs ')}</span>
               {r.winner
-                ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)', flexShrink: 0 }}>🏆 {r.winner.name}</span>
-                : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
+                ? <>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)', flexShrink: 0 }}>🏆 {r.winner.name}</span>
+                    {r.evolution && <span style={{ fontSize: 11, color: 'var(--color-text-info)', flexShrink: 0 }}>⚡ → {r.evolution.toName}</span>}
+                  </>
+                : r.draw
+                  ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>🤝 Draw</span>
+                  : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
             </div>
           ))}
         </div>
@@ -103,7 +112,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         {confirmUndo && (
           <div style={{ padding: '12px 14px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)', marginBottom: 12 }}>
             <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>
-              Undo Round {room.currentRound}? This will reverse {round.winner?.name}'s win and remove that round from the record.
+              Undo Round {room.currentRound}? This will reverse {round?.draw ? 'the draw' : `${round?.winner?.name}'s win`} and remove that round from the record.
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={undoLastRound} style={{ ...btn('primary'), flex: 1, background: 'var(--color-text-danger)', fontSize: 13, padding: '8px' }}>Yes, undo it</button>
@@ -112,7 +121,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           </div>
         )}
 
-        {isHost && room.currentRound < totalRounds && round?.winner && (
+        {isHost && room.currentRound < totalRounds && (round?.winner || round?.draw) && (
           <button style={btn('primary')} onClick={startRound}>Round {room.currentRound + 1} ⚔️</button>
         )}
 
@@ -136,7 +145,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         {!isHost && room.phase === 'voting' && (
           <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Deliberating — waiting for host to confirm…</p>
         )}
-        {room.currentRound >= totalRounds && round?.winner && (
+        {room.currentRound >= totalRounds && (round?.winner || round?.draw) && (
           <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>

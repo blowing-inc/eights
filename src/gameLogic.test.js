@@ -23,6 +23,8 @@ import {
   applyActiveFormMap,
   groupRoomsForHistory,
   prepareNextBattle,
+  computeSeriesStandings,
+  applyDraw,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1491,5 +1493,172 @@ describe('applyActiveFormMap', () => {
     const original = JSON.parse(JSON.stringify(pw))
     applyActiveFormMap(pw, map, byId)
     expect(pw).toEqual(original)
+  })
+})
+
+// ─── computeSeriesStandings ───────────────────────────────────────────────────
+
+describe('computeSeriesStandings', () => {
+  const p1 = { id: 'p1', name: 'Alice', isBot: false }
+  const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+  const bot = { id: 'bot1', name: 'Bot', isBot: true }
+
+  function makeRoom(players, rounds, opts = {}) {
+    return { id: 'r' + Math.random(), players, rounds, devMode: false, ...opts }
+  }
+
+  it('returns empty array for no rooms', () => {
+    expect(computeSeriesStandings([])).toEqual([])
+    expect(computeSeriesStandings(null)).toEqual([])
+  })
+
+  it('counts wins and losses across a single room', () => {
+    const rounds = [
+      { winner: { id: 'c1', ownerId: 'p1' }, combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'c2', ownerId: 'p2' }] },
+      { winner: { id: 'c3', ownerId: 'p2' }, combatants: [{ id: 'c3', ownerId: 'p2' }, { id: 'c4', ownerId: 'p1' }] },
+    ]
+    const rows = computeSeriesStandings([makeRoom([p1, p2], rounds)])
+    const alice = rows.find(r => r.playerId === 'p1')
+    const bob   = rows.find(r => r.playerId === 'p2')
+    expect(alice).toMatchObject({ wins: 1, losses: 1, games: 1 })
+    expect(bob).toMatchObject({ wins: 1, losses: 1, games: 1 })
+  })
+
+  it('accumulates across multiple rooms', () => {
+    const winRound = (winnerId, loserId) => ({
+      winner: { id: 'c-' + winnerId, ownerId: winnerId },
+      combatants: [{ id: 'c-' + winnerId, ownerId: winnerId }, { id: 'c-' + loserId, ownerId: loserId }],
+    })
+    const room1 = makeRoom([p1, p2], [winRound('p1', 'p2'), winRound('p1', 'p2')])
+    const room2 = makeRoom([p1, p2], [winRound('p2', 'p1')])
+    const rows = computeSeriesStandings([room1, room2])
+    const alice = rows.find(r => r.playerId === 'p1')
+    const bob   = rows.find(r => r.playerId === 'p2')
+    expect(alice).toMatchObject({ wins: 2, losses: 1, games: 2 })
+    expect(bob).toMatchObject({ wins: 1, losses: 2, games: 2 })
+  })
+
+  it('sorts by wins descending, losses ascending as tiebreak', () => {
+    const winRound = (winnerId, loserId) => ({
+      winner: { id: 'c-' + winnerId, ownerId: winnerId },
+      combatants: [{ id: 'c-' + winnerId, ownerId: winnerId }, { id: 'c-' + loserId, ownerId: loserId }],
+    })
+    const room = makeRoom([p1, p2], [winRound('p1', 'p2'), winRound('p1', 'p2'), winRound('p2', 'p1')])
+    const rows = computeSeriesStandings([room])
+    expect(rows[0].playerId).toBe('p1')
+    expect(rows[1].playerId).toBe('p2')
+  })
+
+  it('counts draws for both combatant owners', () => {
+    const drawRound = {
+      draw: true,
+      combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'c2', ownerId: 'p2' }],
+    }
+    const rows = computeSeriesStandings([makeRoom([p1, p2], [drawRound])])
+    const alice = rows.find(r => r.playerId === 'p1')
+    const bob   = rows.find(r => r.playerId === 'p2')
+    expect(alice).toMatchObject({ wins: 0, losses: 0, draws: 1 })
+    expect(bob).toMatchObject({ wins: 0, losses: 0, draws: 1 })
+  })
+
+  it('skips devMode rooms', () => {
+    const round = { winner: { id: 'c1', ownerId: 'p1' }, combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'c2', ownerId: 'p2' }] }
+    const rows = computeSeriesStandings([makeRoom([p1, p2], [round], { devMode: true })])
+    expect(rows).toEqual([])
+  })
+
+  it('excludes bots from standings', () => {
+    const round = { winner: { id: 'c1', ownerId: 'p1' }, combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'c2', ownerId: 'bot1' }] }
+    const rows = computeSeriesStandings([makeRoom([p1, bot], [round])])
+    expect(rows.find(r => r.playerId === 'bot1')).toBeUndefined()
+    expect(rows.find(r => r.playerId === 'p1')).toMatchObject({ wins: 1, games: 1 })
+  })
+
+  it('handles rooms with no completed rounds', () => {
+    const rows = computeSeriesStandings([makeRoom([p1, p2], [])])
+    expect(rows.find(r => r.playerId === 'p1')).toMatchObject({ wins: 0, losses: 0, draws: 0, games: 1 })
+  })
+})
+
+// ─── applyDraw / undoRound (draw) ─────────────────────────────────────────────
+
+describe('applyDraw', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', name: 'A', wins: 1, losses: 0, draws: 0, battles: [] }],
+      p2: [{ id: 'c2', name: 'B', wins: 0, losses: 1, draws: 0, battles: [] }],
+    },
+  }
+  const round = { id: 'r1', combatants: [{ id: 'c1', name: 'A', ownerId: 'p1' }, { id: 'c2', name: 'B', ownerId: 'p2' }] }
+
+  it('increments draws for both combatants', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].draws).toBe(1)
+    expect(result.p2[0].draws).toBe(1)
+  })
+
+  it('does not increment wins or losses', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].wins).toBe(1)
+    expect(result.p1[0].losses).toBe(0)
+    expect(result.p2[0].wins).toBe(0)
+    expect(result.p2[0].losses).toBe(1)
+  })
+
+  it('appends draw battle records for both', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].battles).toHaveLength(1)
+    expect(result.p1[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'draw', opponent: 'B' })
+    expect(result.p2[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'draw', opponent: 'A' })
+  })
+
+  it('does not mutate input', () => {
+    const original = JSON.parse(JSON.stringify(room))
+    applyDraw(room, round)
+    expect(room).toEqual(original)
+  })
+})
+
+describe('undoRound (draw)', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', name: 'A', wins: 0, losses: 0, draws: 1, battles: [{ roundId: 'r1', result: 'draw' }] }],
+      p2: [{ id: 'c2', name: 'B', wins: 0, losses: 0, draws: 1, battles: [{ roundId: 'r1', result: 'draw' }] }],
+    },
+  }
+  const round = { id: 'r1', draw: true, combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'c2', ownerId: 'p2' }] }
+
+  it('decrements draws for both combatants', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].draws).toBe(0)
+    expect(result.p2[0].draws).toBe(0)
+  })
+
+  it('removes battle records for that round', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].battles).toHaveLength(0)
+    expect(result.p2[0].battles).toHaveLength(0)
+  })
+
+  it('clamps draws to 0, never negative', () => {
+    const noDraws = { combatants: { p1: [{ id: 'c1', draws: 0, battles: [] }], p2: [{ id: 'c2', draws: 0, battles: [] }] } }
+    const result = undoRound(noDraws, round)
+    expect(result.p1[0].draws).toBe(0)
+  })
+
+  it('returns unchanged combatants when round is not resolved', () => {
+    const unresolved = { id: 'r9', combatants: round.combatants }
+    const result = undoRound(room, unresolved)
+    expect(result).toEqual(room.combatants)
+  })
+})
+
+describe('canUndoLastRound (draw)', () => {
+  it('allows undo of a draw round', () => {
+    expect(canUndoLastRound(true, 1, { draw: true, combatants: [] })).toBe(true)
+  })
+
+  it('disallows undo when round has no winner and no draw', () => {
+    expect(canUndoLastRound(true, 1, { combatants: [] })).toBe(false)
   })
 })

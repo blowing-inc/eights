@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
 import { btn, tab } from '../styles.js'
+import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '../gameLogic.js'
 import { slist } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
-import { groupRoomsForHistory } from '../gameLogic.js'
 
 function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
@@ -77,6 +77,10 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>
                   {new Date(rd.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  {rd.resolvedAt && (() => {
+                    const mins = Math.round((rd.resolvedAt - rd.createdAt) / 60000)
+                    return mins > 0 ? ` · ${mins}m` : null
+                  })()}
                 </span>
                 {rd.winner
                   ? <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
@@ -90,10 +94,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
                   const voters = Object.entries(rd.picks || {})
                     .filter(([, cid]) => cid === c.id)
                     .map(([pid]) => (room.players || []).find(p => p.id === pid)?.name || '?')
-                  const pr = rd.playerReactions || {}
-                  const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
-                  const angry = Object.values(pr).filter(m => m[c.id] === 'angry').length
-                  const cry   = Object.values(pr).filter(m => m[c.id] === 'cry').length
+                  const { heart, angry, cry } = tallyReactions(rd.playerReactions, c.id)
 
                   return (
                     <div key={c.id} style={{ padding: '10px 12px', background: isWinner ? 'var(--color-background-success)' : 'var(--color-background-tertiary)', borderRadius: 'var(--border-radius-md)', border: isWinner ? '0.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
@@ -237,6 +238,36 @@ function RoomRow({ room, onSelect }) {
   )
 }
 
+function StandingsTable({ rooms }) {
+  const rows = computeSeriesStandings(rooms)
+  if (rows.length === 0) return null
+  return (
+    <div style={{ padding: '12px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 8 }}>Series standings</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>Player</th>
+            <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>W</th>
+            <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>L</th>
+            <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4 }}>G</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.playerId} style={{ borderTop: i > 0 ? '0.5px solid var(--color-border-tertiary)' : 'none' }}>
+              <td style={{ paddingTop: 5, paddingBottom: 5, paddingRight: 8, color: 'var(--color-text-primary)' }}>{r.playerName}</td>
+              <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-success)', fontWeight: 500 }}>{r.wins}</td>
+              <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-tertiary)' }}>{r.losses}</td>
+              <td style={{ textAlign: 'right', color: 'var(--color-text-tertiary)' }}>{r.games}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function SeriesRow({ item, onSelect }) {
   const [expanded, setExpanded] = useState(false)
   const { rooms, seriesId } = item
@@ -283,8 +314,11 @@ function SeriesRow({ item, onSelect }) {
         </div>
       </div>
       {expanded && (
-        <div style={{ padding: '8px 12px 4px', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-info)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-lg) var(--border-radius-lg)' }}>
-          {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} />)}
+        <div style={{ background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-info)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-lg) var(--border-radius-lg)', overflow: 'hidden' }}>
+          <StandingsTable rooms={rooms} />
+          <div style={{ padding: '0 12px 4px' }}>
+            {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} />)}
+          </div>
         </div>
       )}
     </div>

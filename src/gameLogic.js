@@ -225,10 +225,10 @@ export function canForceStart(isHost, readyCount, totalRealPlayers) {
 
 /**
  * Whether the host can undo the last round.
- * Requires: is host, at least one round has been played, and that round has a winner.
+ * Requires: is host, at least one round has been played, and that round is resolved (winner or draw).
  */
 export function canUndoLastRound(isHost, currentRound, round) {
-  return isHost && currentRound > 0 && Boolean(round?.winner)
+  return isHost && currentRound > 0 && Boolean(round?.winner || round?.draw)
 }
 
 /**
@@ -278,7 +278,7 @@ export function matchupForRound(room, roundNum) {
     .filter(Boolean)
 }
 
-// ─── confirmWinner stat mutation ──────────────────────────────────────────────
+// ─── Round outcome stat mutations ─────────────────────────────────────────────
 
 /**
  * Given the full room object and a winning combatant id, returns updated
@@ -318,20 +318,52 @@ export function applyWinner(room, round, winnerId) {
   return combatants
 }
 
-// ─── undoLastRound stat mutation ──────────────────────────────────────────────
-
 /**
- * Reverses the stat changes from the last completed round.
- * Returns a new combatants map with wins/losses decremented and the round's
- * battle record entries removed.  Clamps to 0 (never goes negative).
+ * Both combatants drew — increments draws for each and appends battle records.
+ * Does NOT mutate the input — returns a new deep-copied map.
  */
-export function undoRound(room, round) {
+export function applyDraw(room, round) {
   const combatants = JSON.parse(JSON.stringify(room.combatants))
-  if (!round?.winner) return combatants
 
   Object.keys(combatants).forEach(pid => {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
+      return {
+        ...c,
+        draws: (c.draws || 0) + 1,
+        battles: [
+          ...(c.battles || []),
+          {
+            roundId:  round.id,
+            opponent: round.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '),
+            result:   'draw',
+          },
+        ],
+      }
+    })
+  })
+  return combatants
+}
+
+/**
+ * Reverses the stat changes from the last completed round (win or draw).
+ * Returns a new combatants map with stats decremented and the round's
+ * battle record entries removed.  Clamps to 0 (never goes negative).
+ */
+export function undoRound(room, round) {
+  const combatants = JSON.parse(JSON.stringify(room.combatants))
+  if (!round?.winner && !round?.draw) return combatants
+
+  Object.keys(combatants).forEach(pid => {
+    combatants[pid] = combatants[pid].map(c => {
+      if (!round.combatants.find(rc => rc.id === c.id)) return c
+      if (round.draw) {
+        return {
+          ...c,
+          draws:   Math.max(0, (c.draws || 0) - 1),
+          battles: (c.battles || []).filter(b => b.roundId !== round.id),
+        }
+      }
       const wasWin = round.winner.id === c.id
       return {
         ...c,
@@ -730,6 +762,45 @@ export function prepareNextBattle(completedRoom, { newRoomCode, hostId, now = Da
   }
 
   return { newRoom, updatedCompletedRoom }
+}
+
+// ─── Series standings ─────────────────────────────────────────────────────────
+
+/**
+ * Computes cumulative round-win counts per player across all games in a series.
+ * Returns rows sorted by wins descending.
+ *
+ * @param {object[]} rooms  All rooms in the series (any order)
+ * @returns {{ playerId: string, playerName: string, wins: number, losses: number, draws: number, games: number }[]}
+ */
+export function computeSeriesStandings(rooms) {
+  const standings = {}  // { [playerId]: { playerName, wins, losses, draws, games } }
+
+  for (const room of (rooms || [])) {
+    if (room.devMode) continue
+    // Register every real player who participated
+    for (const p of (room.players || []).filter(p => !p.isBot)) {
+      if (!standings[p.id]) standings[p.id] = { playerName: p.name, wins: 0, losses: 0, draws: 0, games: 0 }
+      standings[p.id].games++
+    }
+    // Tally round outcomes
+    for (const round of (room.rounds || [])) {
+      if (round.draw) {
+        for (const c of (round.combatants || [])) {
+          if (standings[c.ownerId]) standings[c.ownerId].draws++
+        }
+      } else if (round.winner) {
+        if (standings[round.winner.ownerId]) standings[round.winner.ownerId].wins++
+        for (const c of (round.combatants || []).filter(c => c.id !== round.winner.id)) {
+          if (standings[c.ownerId]) standings[c.ownerId].losses++
+        }
+      }
+    }
+  }
+
+  return Object.entries(standings)
+    .map(([playerId, s]) => ({ playerId, ...s }))
+    .sort((a, b) => b.wins - a.wins || a.losses - b.losses)
 }
 
 // ─── History grouping ─────────────────────────────────────────────────────────

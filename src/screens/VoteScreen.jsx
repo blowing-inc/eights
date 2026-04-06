@@ -7,7 +7,7 @@ import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
-import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
   const [room, setLocal] = useState(init)
@@ -31,7 +31,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
       const rd = r.rounds[r.currentRound - 1]
-      if (rd?.winner) {
+      if (rd?.winner || rd?.draw) {
         const updated = { ...r, phase: 'battle' }
         await sset('room:' + r.id, updated)
         setRoom(updated); onResult(); return
@@ -75,7 +75,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     const winner = rd.combatants.find(c => c.id === combatantId)
     if (!winner) return
 
-    const updatedRound = { ...rd, winner, picks: { ...(rd.picks || {}), [playerId]: combatantId } }
+    const updatedRound = { ...rd, winner, resolvedAt: Date.now(), picks: { ...(rd.picks || {}), [playerId]: combatantId } }
     // Clear any pending evolution state that may have been set
     delete updatedRound.evolutionPending
     const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
@@ -116,6 +116,35 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated)
     setEvolveFlow(null)
+  }
+
+  async function declareDraw() {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rdIdx = r.currentRound - 1
+    const rd = r.rounds[rdIdx]
+    const updatedRound = { ...rd, draw: true, winner: null, resolvedAt: Date.now() }
+    delete updatedRound.evolutionPending
+    const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
+    const combatants = applyDraw(r, updatedRound)
+    const updated = { ...r, rounds, combatants, phase: 'battle' }
+    await sset('room:' + r.id, updated)
+    setRoom(updated); onResult()
+
+    ;(async () => {
+      for (const c of updatedRound.combatants) {
+        const { heart, angry, cry } = tallyReactions(updatedRound.playerReactions, c.id)
+        await incrementCombatantStats(c.id, { draws: 1, heart, angry, cry })
+      }
+      if (isFinalRound(r)) {
+        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const rosterIds  = Object.values(combatants)
+          .filter(list => list.length === rosterSize)
+          .flat().map(c => c.id)
+        const variantIds = rounds.filter(rd => rd.evolution).map(rd => rd.evolution.toId)
+        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
+      }
+    })()
   }
 
   // Host skips evolution — clears pending state and confirms win normally.
@@ -192,6 +221,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       ...rd,
       winner,
       evolution,
+      resolvedAt: Date.now(),
       picks: { ...(rd.picks || {}), [playerId]: winnerId },
     }
     delete finalRound.evolutionPending
@@ -513,6 +543,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       )}
       {isHost && !myPick && !evolveFlow && !evolutionPending && (
         <p style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>Tap a combatant to select, then confirm to finalise.</p>
+      )}
+
+      {/* ── Declare draw (host only, no evolution in progress) ───────────── */}
+      {isHost && !evolveFlow && !evolutionPending && (
+        <button onClick={declareDraw} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginTop: 8, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}>
+          🤝 Declare draw
+        </button>
       )}
 
       {/* ── Round chat ────────────────────────────────────────────────────── */}

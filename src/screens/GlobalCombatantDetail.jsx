@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantBattleHistory } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 
@@ -94,6 +94,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [lineageTree,   setLineageTree]   = useState([])  // raw tree data for heritage — needed for branching child map + navigation
   const [ownChainStory, setOwnChainStory] = useState([])  // standalone tree (variants produced from this combatant as root)
   const [ownChainTree,  setOwnChainTree]  = useState([])  // raw tree data for own chain — needed for navigation
+  const [h2hOpen,  setH2hOpen]  = useState(false)
+  const [h2hRows,  setH2hRows]  = useState(null)  // null = not yet loaded
 
   const canEdit    = c.owner_id === playerId
   const totalBattles = (c.wins || 0) + (c.losses || 0)
@@ -134,6 +136,13 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
       ? { heritage, ownChain: own }
       : heritage
     downloadFile(`eights-combatant-${nameSlug()}.json`, JSON.stringify(payload, null, 2), 'application/json')
+  }
+
+  function toggleH2h() {
+    if (!h2hOpen && h2hRows === null) {
+      getCombatantBattleHistory(c.id).then(setH2hRows)
+    }
+    setH2hOpen(o => !o)
   }
 
   async function saveEdit() {
@@ -230,6 +239,43 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           <p style={{ color: c.bio ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontSize: 14, margin: 0 }}>{c.bio || 'No bio yet.'}</p>
         )}
       </div>
+
+      {/* ── Head-to-head ─────────────────────────────────────────────────── */}
+      {totalBattles > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <button onClick={toggleH2h}
+            style={{ ...btn('ghost'), width: '100%', textAlign: 'left', fontSize: 13, marginBottom: h2hOpen ? 8 : 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Head-to-head</span>
+            <span>{h2hOpen ? '↑' : '↓'}</span>
+          </button>
+          {h2hOpen && (
+            h2hRows === null
+              ? <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading…</p>
+              : h2hRows.length === 0
+                ? <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>No recorded matchups.</p>
+                : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>Opponent</th>
+                        <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>W</th>
+                        <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4 }}>L</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {h2hRows.map((row, i) => (
+                        <tr key={row.opponentName + i} style={{ borderTop: i > 0 ? '0.5px solid var(--color-border-tertiary)' : 'none' }}>
+                          <td style={{ paddingTop: 5, paddingBottom: 5, paddingRight: 8, color: 'var(--color-text-primary)' }}>{row.opponentName}</td>
+                          <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-success)', fontWeight: 500 }}>{row.wins}</td>
+                          <td style={{ textAlign: 'right', color: 'var(--color-text-tertiary)' }}>{row.losses}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+          )}
+        </div>
+      )}
 
       {/* ── Bio history ──────────────────────────────────────────────────── */}
       {history.length > 0 && (

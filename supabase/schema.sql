@@ -1,5 +1,10 @@
 -- Run this in your Supabase project → SQL Editor
 -- Full schema for a fresh deployment. Safe to re-run (all statements are idempotent).
+--
+-- Migration note for existing deployments: if upgrading from a version without draws,
+-- run the following first to add the column and re-create the RPC:
+--   alter table combatants add column if not exists draws int not null default 0;
+-- Then re-run the create or replace function block below.
 
 -- ─── Rooms ───────────────────────────────────────────────────────────────────
 -- Each room is a single JSON blob. All game state lives in rooms.data.
@@ -92,6 +97,7 @@ create table if not exists combatants (
   owner_name       text        not null default '',
   wins             int         not null default 0,
   losses           int         not null default 0,
+  draws            int         not null default 0,
   reactions_heart  int         not null default 0,
   reactions_angry  int         not null default 0,
   reactions_cry    int         not null default 0,
@@ -128,12 +134,13 @@ create policy "public update combatants" on combatants for update using (true);
 
 grant select, insert, update on table combatants to anon, authenticated;
 
--- Atomic stat increment used by confirmWinner and undoLastRound.
+-- Atomic stat increment used by confirmWinner, declareDraw, and undoLastRound.
 -- Pass negative values to decrement (undo).
 create or replace function increment_combatant_stats(
   p_id     text,
   p_wins   int,
   p_losses int,
+  p_draws  int,
   p_heart  int,
   p_angry  int,
   p_cry    int
@@ -141,6 +148,7 @@ create or replace function increment_combatant_stats(
   update combatants set
     wins            = greatest(0, wins            + p_wins),
     losses          = greatest(0, losses          + p_losses),
+    draws           = greatest(0, draws           + p_draws),
     reactions_heart = greatest(0, reactions_heart + p_heart),
     reactions_angry = greatest(0, reactions_angry + p_angry),
     reactions_cry   = greatest(0, reactions_cry   + p_cry),
@@ -148,7 +156,7 @@ create or replace function increment_combatant_stats(
   where id = p_id;
 $$;
 
-grant execute on function increment_combatant_stats(text, int, int, int, int, int) to anon, authenticated;
+grant execute on function increment_combatant_stats(text, int, int, int, int, int, int) to anon, authenticated;
 
 -- Optional: auto-clean rooms older than 7 days via a Supabase scheduled function.
 -- Uncomment and run separately if you want automatic cleanup:
