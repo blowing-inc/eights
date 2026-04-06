@@ -91,10 +91,11 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
-        const allIds = Object.values(r.combatants)
+        const rosterIds  = Object.values(r.combatants)
           .filter(list => list.length === rosterSize)
           .flat().map(c => c.id)
-        await publishCombatants(allIds)
+        const variantIds = (r.rounds || []).filter(rd => rd.evolution).map(rd => rd.evolution.toId)
+        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
       }
     })()
   }
@@ -158,26 +159,24 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       ownerId, ownerName: winner.ownerName, lineage,
     })
 
-    // The in-room snapshot for the variant (lightweight, same shape as roster entries)
-    const variantSnapshot = {
-      id: newId, name: newName, bio: newBio,
-      ownerId, ownerName: winner.ownerName,
-      wins: 0, losses: 0, battles: [], lineage,
+    // Apply win/loss to the original. The draft roster is immutable — the variant
+    // does not replace the original in any future round of this game. It enters
+    // play only in a heritage "next battle" draft as a prevWinner prerequisite.
+    const finalCombatants = applyWinner(r, { ...rd, winner }, winnerId)
+
+    // Evolution record is fully self-contained so downstream consumers (App.jsx
+    // handleHostNextBattle, DraftScreen substitutions) don't need to dig into
+    // room.combatants to find variant data.
+    const evolution = {
+      fromId:    winnerId,
+      fromName:  winner.name,
+      toId:      newId,
+      toName:    newName,
+      toBio:     newBio,
+      ownerId,
+      ownerName: winner.ownerName,
+      authorId,
     }
-
-    // 1. Apply win/loss to the original first (while it's still in the roster)
-    const combatantsAfterWin = applyWinner(r, { ...rd, winner }, winnerId)
-
-    // 2. Replace the original with the variant for all future round slots
-    const finalCombatants = { ...combatantsAfterWin }
-    if (finalCombatants[ownerId]) {
-      finalCombatants[ownerId] = finalCombatants[ownerId].map((c, idx) =>
-        idx >= r.currentRound && c.id === winnerId ? variantSnapshot : c
-      )
-    }
-
-    // 3. Build the final round record: winner set, evolution recorded, pending cleared
-    const evolution = { fromId: winnerId, fromName: winner.name, toId: newId, toName: newName, authorId }
     const finalRound = {
       ...rd,
       winner,
@@ -203,10 +202,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
-        const allIds = Object.values(finalCombatants)
+        const rosterIds  = Object.values(finalCombatants)
           .filter(list => list.length === rosterSize)
           .flat().map(c => c.id)
-        await publishCombatants([...new Set(allIds)])
+        // Also publish any variants created during this game — they were never
+        // in the roster so they won't appear in rosterIds
+        const variantIds = rounds.filter(rd => rd.evolution).map(rd => rd.evolution.toId)
+        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
       }
     })()
   }

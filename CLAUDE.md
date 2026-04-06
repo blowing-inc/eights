@@ -88,6 +88,23 @@ The codebase should be readable by someone who didn't write it — including fut
 
 ---
 
+## Draft Roster is Immutable
+
+Once a draft is locked in, the roster for that tournament is fixed for every round.
+
+- An evolution is a **record and a heritage signal** — it documents what happened and carries the variant forward into the next battle's draft. It is not a mid-game roster change.
+- The evolved variant does **not** enter play until the next heritage "next battle" draft, where it becomes a prerequisite combatant for the owner.
+- In a standalone game with no next battle, the evolution is still recorded — it becomes part of the round's story and the combatant's permanent history.
+- No round outcome may alter the combatants fighting in any other round of the same tournament.
+
+| Situation | Principle in action |
+|---|---|
+| Host confirms evolution mid-game | Record it on the round; do not replace original in future round slots |
+| Heritage next battle draft | Variant appears as prevWinner prerequisite via `applyActiveFormMap` |
+| Standalone game with evolution | Evolution narrative appears in history; variant exists in Bestiary but never fought in that game |
+
+---
+
 ## What this app is
 
 A lightweight, offline-assisted tournament tool for friends. Not a platform. Not a product. A shared artifact — the kind of thing you open years later and it still makes sense.

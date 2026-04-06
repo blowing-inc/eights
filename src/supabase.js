@@ -341,6 +341,19 @@ export async function getEligibleCombatants(ownerId) {
   } catch (e) { console.error('getEligibleCombatants exception', e); return [] }
 }
 
+// Fetch a specific set of combatants by id — used to resolve variant data for
+// heritage-game substitutions without relying on room.combatants snapshots.
+export async function getCombatantsByIds(ids) {
+  if (!ids.length) return []
+  try {
+    const { data, error } = await supabase
+      .from('combatants').select('id, name, bio, wins, losses, owner_name')
+      .in('id', ids)
+    if (error) { console.error('getCombatantsByIds error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getCombatantsByIds exception', e); return [] }
+}
+
 // Walks the prevRoomId chain from startRoomId backwards, returning all ancestor
 // rooms oldest-first. Used in DraftScreen to build the active-form substitution
 // map for heritage games.

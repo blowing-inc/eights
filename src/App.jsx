@@ -131,12 +131,22 @@ export default function App() {
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
     let prevWinners = extractPreviousWinners(completedRoom.rounds)
 
-    // Ticket 16: if any winner evolved during this game, carry forward the variant
+    // Ticket 16: translate any evolved winners to their current active form.
+    // Variant data comes from round.evolution records — the variant is NOT in
+    // room.combatants (draft is immutable; variant only enters the next battle).
     const activeFormMap = buildActiveFormMap([completedRoom])
     if (Object.keys(activeFormMap).length > 0) {
-      const allCombatants = Object.values(completedRoom.combatants || {}).flat()
-      const combatantsById = Object.fromEntries(allCombatants.map(c => [c.id, c]))
-      prevWinners = applyActiveFormMap(prevWinners, activeFormMap, combatantsById)
+      const variantById = {}
+      for (const rd of (completedRoom.rounds || [])) {
+        if (rd.evolution) {
+          variantById[rd.evolution.toId] = {
+            id:   rd.evolution.toId,
+            name: rd.evolution.toName,
+            bio:  rd.evolution.toBio || '',
+          }
+        }
+      }
+      prevWinners = applyActiveFormMap(prevWinners, activeFormMap, variantById)
     }
 
     const newRoom = {

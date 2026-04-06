@@ -6,7 +6,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds } from '../supabase.js'
 import {
   ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
@@ -68,20 +68,22 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
   // Heritage game: load the ancestry chain and build active-form substitutions
   // so the autocomplete shows evolved forms instead of their superseded originals.
+  // Variant data is fetched from the DB — variants are not in room.combatants
+  // (draft is immutable; variant only enters play in the next battle).
   useEffect(() => {
     if (!init.prevRoomId) return
-    getHeritageChain(init.prevRoomId).then(chain => {
+    getHeritageChain(init.prevRoomId).then(async chain => {
       const activeFormMap = buildActiveFormMap(chain)
       if (!Object.keys(activeFormMap).length) return
-      const allCombatants = chain.flatMap(r => Object.values(r.combatants || {}).flat())
-      const combatantsById = Object.fromEntries(allCombatants.map(c => [c.id, c]))
+      const variantIds = Object.values(activeFormMap)
+      const variants   = await getCombatantsByIds(variantIds)
       const subs = {}
-      for (const [origId, varId] of Object.entries(activeFormMap)) {
-        const v = combatantsById[varId]
-        if (v) subs[origId] = {
+      for (const v of variants) {
+        const origId = Object.keys(activeFormMap).find(k => activeFormMap[k] === v.id)
+        if (origId) subs[origId] = {
           id: v.id, name: v.name, bio: v.bio || '',
           wins: v.wins || 0, losses: v.losses || 0,
-          owner_name: v.ownerName || v.owner_name || '',
+          owner_name: v.owner_name || '',
         }
       }
       setSubstitutions(subs)

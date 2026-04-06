@@ -77,18 +77,9 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
                 <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>
                   {new Date(rd.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                {rd.winner ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
-                    {rd.evolution && (
-                      <span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
-                        ⚡ → {rd.evolution.toName}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>
-                )}
+                {rd.winner
+                  ? <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
+                  : <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
@@ -132,6 +123,31 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
                   )
                 })}
               </div>
+
+              {rd.evolution && (
+                <div style={{ borderTop: '0.5px solid var(--color-border-info)', paddingTop: 12, marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-info)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>⚡ Evolution</div>
+                  {(() => {
+                    const ev  = rd.evolution
+                    const opponents = (rd.combatants || []).filter(c => c.id !== ev.fromId).map(c => c.name)
+                    const fightDesc = opponents.length
+                      ? `after the fight with ${opponents.join(' and ')}`
+                      : 'after this fight'
+                    return (
+                      <>
+                        <p style={{ fontSize: 13, color: 'var(--color-text-primary)', margin: '0 0 6px', lineHeight: 1.5 }}>
+                          <strong>{ev.fromName}</strong> evolved to <strong>{ev.toName}</strong> {fightDesc}.
+                        </p>
+                        {ev.toBio && (
+                          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4, fontStyle: 'italic' }}>
+                            "{ev.toBio}"
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
 
               {(rd.chat || []).length > 0 && (
                 <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 10 }}>
