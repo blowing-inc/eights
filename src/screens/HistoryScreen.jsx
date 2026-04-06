@@ -41,8 +41,15 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
               <button key={r.id} onClick={() => setRoundIdx(allRounds.indexOf(r))}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0', textAlign: 'left' }}>
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 56 }}>Round {r.number}</span>
-                <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
+                  {r.evolution && (
+                    <span style={{ fontSize: 11, color: 'var(--color-text-info)', whiteSpace: 'nowrap' }}>
+                      → {r.evolution.toName}
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
                   by {(room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'}
                 </span>
               </button>
@@ -70,9 +77,18 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
                 <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>
                   {new Date(rd.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                {rd.winner
-                  ? <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
-                  : <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>}
+                {rd.winner ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-success)' }}>🏆 {rd.winner.name}</span>
+                    {rd.evolution && (
+                      <span style={{ fontSize: 11, padding: '1px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
+                        ⚡ → {rd.evolution.toName}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>

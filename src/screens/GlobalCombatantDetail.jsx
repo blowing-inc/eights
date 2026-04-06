@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree } from '../supabase.js'
+import { buildStoryFromLineageTree } from '../gameLogic.js'
 
 export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack }) {
   const [c, setC] = useState(init)
@@ -10,10 +11,21 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [editBio,  setEditBio]  = useState(init.bio || '')
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [lineageStory, setLineageStory] = useState([])
 
-  const canEdit = c.owner_id === playerId
+  const canEdit    = c.owner_id === playerId
   const totalBattles = (c.wins || 0) + (c.losses || 0)
-  const history = c.bio_history || []
+  const history    = c.bio_history || []
+  const isVariant  = !!c.lineage
+  const rootId     = c.lineage?.rootId || c.id
+
+  // Load the full lineage tree and build the story
+  useEffect(() => {
+    getLineageTree(rootId).then(tree => {
+      const story = buildStoryFromLineageTree(tree)
+      if (story.length > 1) setLineageStory(story)
+    })
+  }, [rootId])
 
   async function saveEdit() {
     if (!editName.trim()) return
@@ -29,14 +41,68 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
 
   return (
     <Screen title={c.name} onBack={onBack}>
+
+      {/* ── Identity ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: '1.5rem' }}>
-        <div style={{ width: 56, height: 56, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⚔️</div>
+        <div style={{ width: 56, height: 56, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+          {isVariant ? '⚡' : '⚔️'}
+        </div>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>{c.name}</h2>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>Created by {c.owner_name || 'unknown'}</p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+            Created by {c.owner_name || 'unknown'}
+            {isVariant && <span style={{ color: 'var(--color-text-info)', marginLeft: 6 }}>· gen {c.lineage.generation}</span>}
+          </p>
         </div>
       </div>
 
+      {/* ── Lineage story — story first ───────────────────────────────────── */}
+      {lineageStory.length > 1 && (
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Evolution
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {lineageStory.map((node, i) => {
+              const isCurrent = node.combatantId === c.id
+              const isLast    = i === lineageStory.length - 1
+              return (
+                <div key={node.combatantId}>
+                  {/* Birth event line — shown above the variant it produced */}
+                  {node.bornFrom && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0 4px 20px' }}>
+                      <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--color-border-tertiary)', marginRight: 7, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                        beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
+                        {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>}
+                      </span>
+                    </div>
+                  )}
+                  {/* Combatant node */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: isCurrent ? 'var(--color-text-info)' : 'var(--color-border-secondary)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+                      {node.name}
+                    </span>
+                    {isCurrent && (
+                      <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
+                        this form
+                      </span>
+                    )}
+                    {isLast && !isCurrent && (
+                      <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
+                        latest
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Stats ────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
         {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Battles', totalBattles, 'var(--color-text-secondary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: 12, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
@@ -56,6 +122,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
         </div>
       )}
 
+      {/* ── Bio ──────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: 0 }}>Bio</h3>
@@ -77,6 +144,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
         )}
       </div>
 
+      {/* ── Bio history ──────────────────────────────────────────────────── */}
       {history.length > 0 && (
         <div>
           <button onClick={() => setHistoryOpen(o => !o)}

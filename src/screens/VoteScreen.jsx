@@ -136,10 +136,20 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
 
     const newId   = uid()
     const ownerId = winner.ownerId
+    const opponent = rd.combatants.find(c => c.id !== winnerId)
     const lineage = {
       rootId:     winner.lineage?.rootId || winner.id,
       parentId:   winner.id,
       generation: (winner.lineage?.generation || 0) + 1,
+      // bornFrom is the permanent record of what caused this evolution.
+      // Stored on the combatant so the story is self-contained in the DB.
+      bornFrom: {
+        opponentName: opponent?.name  || null,
+        opponentId:   opponent?.id    || null,
+        roundNumber:  rd.number,
+        gameCode:     r.code,
+        parentName:   winner.name,
+      },
     }
 
     // Create the global combatant record for the variant

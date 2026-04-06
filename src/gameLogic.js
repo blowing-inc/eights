@@ -557,6 +557,33 @@ export function buildActiveFormMap(rooms) {
 }
 
 /**
+ * Builds the ordered evolution story from a lineage tree — the array returned
+ * by getLineageTree(rootId) — which contains the root combatant plus all of
+ * its variants in DB insertion order.
+ *
+ * Produces the same { combatantId, name, generation, bornFrom } shape as
+ * buildChainEvolutionStory so display code is interchangeable between the two.
+ * Use this when you have combatant data (Bestiary, detail pages). Use
+ * buildChainEvolutionStory when you have room history (HistoryScreen).
+ *
+ * Requires that each variant's lineage.bornFrom was populated at creation time
+ * (VoteScreen handleEvolution, Tier 4+).
+ *
+ * @param {object[]} combatants  Root + all variant combatants for one character
+ * @returns {{ combatantId: string, name: string, generation: number, bornFrom: object|null }[]}
+ */
+export function buildStoryFromLineageTree(combatants) {
+  return [...(combatants || [])]
+    .sort((a, b) => (a.lineage?.generation ?? 0) - (b.lineage?.generation ?? 0))
+    .map(c => ({
+      combatantId: c.id,
+      name:        c.name,
+      generation:  c.lineage?.generation ?? 0,
+      bornFrom:    c.lineage?.bornFrom   ?? null,
+    }))
+}
+
+/**
  * Translates a prevWinners map so that any winner who has since evolved is
  * replaced by their current active form.
  *

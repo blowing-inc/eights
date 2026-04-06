@@ -19,6 +19,7 @@ import {
   getLineageStats,
   buildActiveFormMap,
   buildChainEvolutionStory,
+  buildStoryFromLineageTree,
   applyActiveFormMap,
 } from './gameLogic.js'
 
@@ -1244,6 +1245,58 @@ describe('buildChainEvolutionStory', () => {
     const room3 = makeEvolvedRoom('C', [{ fromId: 'c3', fromName: 'C', toId: 'c4', toName: 'D', roundNumber: 1 }])
     const story = buildChainEvolutionStory([room1, room2, room3], 'c1')
     expect(story.map(s => s.generation)).toEqual([0, 1, 2, 3])
+  })
+})
+
+// ─── buildStoryFromLineageTree ────────────────────────────────────────────────
+
+describe('buildStoryFromLineageTree', () => {
+  const root = { id: 'c1', name: 'MJ', lineage: null }
+  const v1   = { id: 'c2', name: 'MJ scuffed', lineage: { generation: 1, rootId: 'c1', parentId: 'c1', bornFrom: { opponentName: 'Stick', roundNumber: 2, gameCode: 'XKQT', parentName: 'MJ' } } }
+  const v2   = { id: 'c3', name: 'MJ magic carpet', lineage: { generation: 2, rootId: 'c1', parentId: 'c2', bornFrom: { opponentName: 'Goat', roundNumber: 5, gameCode: 'BPMZ', parentName: 'MJ scuffed' } } }
+
+  it('returns empty array for null/empty input', () => {
+    expect(buildStoryFromLineageTree(null)).toEqual([])
+    expect(buildStoryFromLineageTree([])).toEqual([])
+  })
+
+  it('returns a single entry for a root with no variants', () => {
+    const story = buildStoryFromLineageTree([root])
+    expect(story).toHaveLength(1)
+    expect(story[0]).toEqual({ combatantId: 'c1', name: 'MJ', generation: 0, bornFrom: null })
+  })
+
+  it('returns root then variants ordered by generation', () => {
+    const story = buildStoryFromLineageTree([v1, root, v2]) // intentionally shuffled
+    expect(story.map(s => s.generation)).toEqual([0, 1, 2])
+    expect(story.map(s => s.name)).toEqual(['MJ', 'MJ scuffed', 'MJ magic carpet'])
+  })
+
+  it('includes bornFrom context on variants', () => {
+    const story = buildStoryFromLineageTree([root, v1])
+    expect(story[1].bornFrom).toEqual({ opponentName: 'Stick', roundNumber: 2, gameCode: 'XKQT', parentName: 'MJ' })
+  })
+
+  it('root always has bornFrom null', () => {
+    const story = buildStoryFromLineageTree([root, v1])
+    expect(story[0].bornFrom).toBeNull()
+  })
+
+  it('produces same shape as buildChainEvolutionStory', () => {
+    const story = buildStoryFromLineageTree([root, v1])
+    story.forEach(node => {
+      expect(node).toHaveProperty('combatantId')
+      expect(node).toHaveProperty('name')
+      expect(node).toHaveProperty('generation')
+      expect(node).toHaveProperty('bornFrom')
+    })
+  })
+
+  it('does not mutate input array', () => {
+    const input = [v2, root, v1]
+    const copy  = [...input]
+    buildStoryFromLineageTree(input)
+    expect(input).toEqual(copy)
   })
 })
 
