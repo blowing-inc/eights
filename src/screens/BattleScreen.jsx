@@ -7,6 +7,7 @@ import { uid, canUndoLastRound } from '../gameLogic.js'
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
+  const [confirmEnd, setConfirmEnd] = useState(false)
 
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
@@ -31,6 +32,15 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     const updated = { ...room, phase: 'voting', currentRound: roundNum, rounds: [...room.rounds, newRound] }
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); onVote()
+  }
+
+  async function endGameEarly() {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const updated = { ...r, phase: 'ended', endedEarly: true }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated); setConfirmEnd(false)
+    onHome()
   }
 
   async function undoLastRound() {
@@ -106,6 +116,24 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
 
         {isHost && room.currentRound < totalRounds && round?.winner && (
           <button style={btn('primary')} onClick={startRound}>Round {room.currentRound + 1} ⚔️</button>
+        )}
+
+        {isHost && !confirmEnd && room.currentRound < totalRounds && (
+          <button onClick={() => setConfirmEnd(true)} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginTop: 12, color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>
+            End game early
+          </button>
+        )}
+        {confirmEnd && (
+          <div style={{ padding: '12px 14px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)', marginTop: 12 }}>
+            <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>End the game early?</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>
+              The game will end as no-contest. Unpublished combatants stay unpublished. This can't be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={endGameEarly} style={{ ...btn('primary'), flex: 1, background: 'var(--color-text-danger)', fontSize: 13, padding: '8px' }}>Yes, end it</button>
+              <button onClick={() => setConfirmEnd(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '8px' }}>Cancel</button>
+            </div>
+          </div>
         )}
         {!isHost && room.phase === 'voting' && (
           <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Deliberating — waiting for host to confirm…</p>
