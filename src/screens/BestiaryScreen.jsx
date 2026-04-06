@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
-import { btn } from '../styles.js'
+import { btn, tab } from '../styles.js'
 import { listCombatants } from '../supabase.js'
 
 const BESTIARY_SORTS = [
@@ -50,20 +50,14 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
       {/* View toggle */}
       <div style={{ display: 'flex', gap: 6, marginBottom: '1rem' }}>
         {[['characters', 'Characters'], ['all', 'All forms']].map(([key, label]) => (
-          <button key={key} onClick={() => setView(key)}
-            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: view === key ? 'var(--color-background-info)' : 'transparent', color: view === key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: view === key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-            {label}
-          </button>
+          <button key={key} onClick={() => setView(key)} style={tab(view === key)}>{label}</button>
         ))}
       </div>
 
       {/* Sort bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.25rem' }}>
         {BESTIARY_SORTS.map(s => (
-          <button key={s.key} onClick={() => changeSort(s.key)}
-            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-            {s.label}
-          </button>
+          <button key={s.key} onClick={() => changeSort(s.key)} style={tab(sort === s.key)}>{s.label}</button>
         ))}
       </div>
 
@@ -86,7 +80,7 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 24 }}>#{page * PAGE_SIZE + idx + 1}</span>
                 <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
                 {isVariant && (
-                  <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99, whiteSpace: 'nowrap' }}>
                     ⚡ gen {c.lineage.generation}
                   </span>
                 )}

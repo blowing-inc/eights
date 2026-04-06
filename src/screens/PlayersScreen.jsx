@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
-import { btn, inp } from '../styles.js'
+import { btn, inp, tab } from '../styles.js'
 import { searchUsers } from '../supabase.js'
 
 const PLAYERS_PAGE_SIZE = 20
@@ -40,10 +40,7 @@ export default function PlayersScreen({ playerId, onBack, onViewPlayer }) {
       <input style={{ ...inp(), marginBottom: 12 }} value={query} onChange={e => handleQuery(e.target.value)} placeholder="Search by username…" />
       <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {PLAYERS_SORTS.map(s => (
-          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }}
-            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-            {s.label}
-          </button>
+          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }} style={tab(sort === s.key)}>{s.label}</button>
         ))}
       </div>
 

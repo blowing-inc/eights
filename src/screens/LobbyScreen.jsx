@@ -35,7 +35,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, onStart, on
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
             <AvatarWithHover player={p} onViewProfile={!p.isBot ? onViewPlayer : null} />
             <span style={{ color: 'var(--color-text-primary)', fontSize: 15 }}>{p.name}</span>
-            {p.id === room.host && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-secondary)', background: 'var(--color-background-tertiary)', padding: '2px 8px', borderRadius: 99 }}>host</span>}
+            {p.id === room.host && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-tertiary)', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-tertiary)', padding: '2px 6px', borderRadius: 99 }}>host</span>}
           </div>
         ))}
       </div>

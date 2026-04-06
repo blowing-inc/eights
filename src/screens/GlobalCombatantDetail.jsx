@@ -55,12 +55,12 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
             {node.name}
           </span>
           {isCurrent && (
-            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
+            <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
               this form
             </span>
           )}
           {!isCurrent && children.length === 0 && (
-            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
+            <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
               latest
             </span>
           )}

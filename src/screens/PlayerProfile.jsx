@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import PlayerStatsBlurb from '../components/PlayerStatsBlurb.jsx'
-import { btn, inp } from '../styles.js'
+import { btn, inp, tab } from '../styles.js'
 import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, setFavoriteCombatant } from '../supabase.js'
 
 const PROFILE_SORTS = [
@@ -68,10 +68,7 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
       <input style={{ ...inp(), marginBottom: 10 }} value={query} onChange={e => handleQuery(e.target.value)} placeholder="Search combatants…" />
       <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
         {PROFILE_SORTS.map(s => (
-          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }}
-            style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: sort === s.key ? 'var(--color-background-info)' : 'transparent', color: sort === s.key ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: sort === s.key ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-            {s.label}
-          </button>
+          <button key={s.key} onClick={() => { setSort(s.key); setPage(0) }} style={tab(sort === s.key)}>{s.label}</button>
         ))}
       </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
-import { btn } from '../styles.js'
+import { btn, tab } from '../styles.js'
 import { slist } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 import { groupRoomsForHistory } from '../gameLogic.js'
@@ -165,15 +165,9 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
 
         {rosterPlayers.length > 1 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            <button onClick={() => setRosterPlayer(null)}
-              style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: rosterPlayer === null ? 'var(--color-background-info)' : 'transparent', color: rosterPlayer === null ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: rosterPlayer === null ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-              All
-            </button>
+            <button onClick={() => setRosterPlayer(null)} style={tab(rosterPlayer === null)}>All</button>
             {rosterPlayers.map(p => (
-              <button key={p.id} onClick={() => setRosterPlayer(p.id)}
-                style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, background: rosterPlayer === p.id ? 'var(--color-background-info)' : 'transparent', color: rosterPlayer === p.id ? 'var(--color-text-info)' : 'var(--color-text-secondary)', borderColor: rosterPlayer === p.id ? 'var(--color-border-info)' : 'var(--color-border-tertiary)' }}>
-                {p.name}
-              </button>
+              <button key={p.id} onClick={() => setRosterPlayer(p.id)} style={tab(rosterPlayer === p.id)}>{p.name}</button>
             ))}
           </div>
         )}
@@ -237,7 +231,7 @@ function RoomRow({ room, onSelect }) {
       <div style={{ display: 'flex', gap: 8 }}>
         <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{completedRounds.length} round{completedRounds.length !== 1 ? 's' : ''} played</span>
         {room.seriesIndex && <span style={{ fontSize: 12, color: 'var(--color-text-info)' }}>Game {room.seriesIndex}</span>}
-        {room.devMode && <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>dev</span>}
+        {room.devMode && <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>dev</span>}
       </div>
     </button>
   )
@@ -269,7 +263,7 @@ function SeriesRow({ item, onSelect }) {
       <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-info)', borderRadius: expanded ? 'var(--border-radius-lg) var(--border-radius-lg) 0 0' : 'var(--border-radius-lg)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)', fontWeight: 500 }}>Series</span>
+            <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)', fontWeight: 500 }}>Series</span>
             <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)' }}>{rooms.length} games</span>
           </div>
           <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
