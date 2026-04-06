@@ -58,6 +58,23 @@ Re-engagement is the top priority. A player who loses their session should alway
 
 ---
 
+## The Bestiary is a Story, Not a Leaderboard
+
+The Bestiary is the public face of the game's accumulated culture. A stranger who never played should be able to land on a combatant, read its story, and understand why it's funny.
+
+- Every evolution node must show the moment that caused it — not just "they became this" but **"they beat [opponent] and became this."** The cause is the joke. Without it the result is just a name change.
+- The story has to be readable without context. No prior knowledge of the players, the game, or the series should be required to appreciate it.
+- Popularity (reactions, win record, appearances) tells you *what* people love. Lineage tells you *why*. Both must be present.
+- Display order: story first, stats second. The narrative is the reason anyone cares about the numbers.
+- When building any Bestiary or combatant display feature, ask: *could someone who found this by accident piece together what happened and laugh?* If not, something is missing.
+
+**What this means for implementation:**
+- `round.evolution` must always store `opponentName` (or be joinable to `round.combatants` to retrieve it) — the opponent is half the story.
+- `buildChainEvolutionStory` is the canonical function for producing this narrative. Use it. Don't re-derive the story inline in a component.
+- A combatant detail page with no lineage context is incomplete for variants. Always show where they came from.
+
+---
+
 ## Dev Practices
 
 The codebase should be readable by someone who didn't write it — including future contributors with no prior context.
