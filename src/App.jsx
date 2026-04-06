@@ -228,9 +228,9 @@ export default function App() {
   else if (viewPlayers)
     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant)
-    content = <GlobalCombatantDetail combatant={viewGlobalCombatant} playerId={playerId} playerName={effectiveName} onBack={() => setViewGlobalCombatant(null)} onViewCombatant={setViewGlobalCombatant} />
+    content = <GlobalCombatantDetail key={viewGlobalCombatant?.id} combatant={viewGlobalCombatant} playerId={playerId} playerName={effectiveName} onBack={() => setViewGlobalCombatant(null)} onViewCombatant={setViewGlobalCombatant} />
   else if (viewBestiary)
-    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
+    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => setViewGlobalCombatant(c)} />
   else if (viewHistory)
     content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} playerId={playerId} onNextBattle={r => { setViewHistory(false); handleHostNextBattle(r) }} />
   else if (viewCombatant)
