@@ -213,7 +213,7 @@ export default function App() {
   else if (viewBestiary)
     content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => { setViewGlobalCombatant(c); setViewBestiary(false) }} />
   else if (viewHistory)
-    content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} />
+    content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} playerId={playerId} onNextBattle={r => { setViewHistory(false); handleHostNextBattle(r) }} />
   else if (viewCombatant)
     content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} onViewCombatant={setViewCombatant} />
   else if (screen === 'auth')

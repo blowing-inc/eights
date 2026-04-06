@@ -43,6 +43,15 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     onHome()
   }
 
+  async function completeTournament() {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const updated = { ...r, phase: 'ended' }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    onHome()
+  }
+
   async function undoLastRound() {
     const r = await sget('room:' + room.id)
     if (!r || r.currentRound === 0) return
@@ -161,11 +170,21 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought. Check the history for full results.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
               {isHost && <button style={btn('primary')} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>}
-              {!isHost && <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next battle…</p>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button style={btn()} onClick={onHistory}>View full history</button>
-                <button style={btn()} onClick={onHome}>Back to home</button>
-              </div>
+              {isHost && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={btn()} onClick={onHistory}>View history</button>
+                  <button style={btn()} onClick={completeTournament}>Complete tournament</button>
+                </div>
+              )}
+              {!isHost && (
+                <>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next battle…</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button style={btn()} onClick={onHistory}>View history</button>
+                    <button style={btn()} onClick={onHome}>Back to home</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

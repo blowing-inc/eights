@@ -5,7 +5,7 @@ import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '..
 import { slist } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 
-function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
+function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBattle }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
   const allRounds = room.rounds || []
   const players = (room.players || []).filter(p => !p.isBot)
@@ -13,6 +13,14 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const [roundIdx, setRoundIdx] = useState(0)
   const [rosterPlayer, setRosterPlayer] = useState(null)
+
+  const totalRounds = room.players?.length > 0
+    ? Math.min(...room.players.map(p => (room.combatants?.[p.id] || []).length))
+    : 0
+  const resolvedRounds = allRounds.filter(rd => rd.winner || rd.draw).length
+  const isNaturallyComplete = (room.phase === 'ended' && !room.endedEarly) ||
+    (room.phase === 'battle' && totalRounds > 0 && resolvedRounds >= totalRounds)
+  const canReopen = playerId && room.host === playerId && isNaturallyComplete && !room.nextRoomId
 
   const rd = allRounds[roundIdx]
   const rosterPlayers = (room.players || []).filter(p => !p.isBot && (room.combatants?.[p.id] || []).length > 0)
@@ -27,12 +35,19 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: canReopen ? '1rem' : '1.5rem' }}>
         <button onClick={() => downloadFile(`eights-${room.code}-${new Date(room.createdAt).toISOString().slice(0,10)}.json`, JSON.stringify(room, null, 2), 'application/json')}
           style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ JSON</button>
         <button onClick={() => downloadFile(`eights-${room.code}-${new Date(room.createdAt).toISOString().slice(0,10)}.txt`, formatRoomAsText(room))}
           style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ Plain text</button>
       </div>
+
+      {canReopen && (
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: 0 }}>You hosted this tournament. Start a next battle with the same players.</p>
+          <button onClick={() => onNextBattle(room)} style={{ ...btn('primary'), padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>Next Battle ⚔️</button>
+        </div>
+      )}
 
       {completedRounds.length > 0 && (
         <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)', marginBottom: '1.5rem' }}>
@@ -216,14 +231,18 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   )
 }
 
-function RoomRow({ room, onSelect }) {
+function RoomRow({ room, onSelect, playerId }) {
   const completedRounds = (room.rounds || []).filter(rd => rd.winner)
   const players = (room.players || []).filter(p => !p.isBot).map(p => p.name)
   const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const isHost = playerId && room.host === playerId
   return (
     <button onClick={() => onSelect(room)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 10, cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: 1 }}>{room.code}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: 1 }}>{room.code}</span>
+          {isHost && <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-tertiary)', color: 'var(--color-text-tertiary)', borderRadius: 99, border: '0.5px solid var(--color-border-tertiary)' }}>host</span>}
+        </div>
         <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{dateStr}</span>
       </div>
       <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
@@ -268,7 +287,7 @@ function StandingsTable({ rooms }) {
   )
 }
 
-function SeriesRow({ item, onSelect }) {
+function SeriesRow({ item, onSelect, playerId }) {
   const [expanded, setExpanded] = useState(false)
   const { rooms, seriesId } = item
 
@@ -317,7 +336,7 @@ function SeriesRow({ item, onSelect }) {
         <div style={{ background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-info)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-lg) var(--border-radius-lg)', overflow: 'hidden' }}>
           <StandingsTable rooms={rooms} />
           <div style={{ padding: '0 12px 4px' }}>
-            {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} />)}
+            {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} playerId={playerId} />)}
           </div>
         </div>
       )}
@@ -325,7 +344,7 @@ function SeriesRow({ item, onSelect }) {
   )
 }
 
-export default function HistoryScreen({ onBack, setViewCombatant }) {
+export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNextBattle }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
 
@@ -337,7 +356,7 @@ export default function HistoryScreen({ onBack, setViewCombatant }) {
   }, [])
 
   if (selected) {
-    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} />
+    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} playerId={playerId} onNextBattle={onNextBattle} />
   }
 
   const items = rooms ? groupRoomsForHistory(rooms) : []
@@ -355,8 +374,8 @@ export default function HistoryScreen({ onBack, setViewCombatant }) {
       )}
       {items.map(item =>
         item.type === 'series'
-          ? <SeriesRow key={item.seriesId} item={item} onSelect={setSelected} />
-          : <RoomRow   key={item.room.id}  room={item.room} onSelect={setSelected} />
+          ? <SeriesRow key={item.seriesId} item={item} onSelect={setSelected} playerId={playerId} />
+          : <RoomRow   key={item.room.id}  room={item.room} onSelect={setSelected} playerId={playerId} />
       )}
     </div>
   )
