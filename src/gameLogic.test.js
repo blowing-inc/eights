@@ -21,6 +21,7 @@ import {
   buildChainEvolutionStory,
   buildStoryFromLineageTree,
   applyActiveFormMap,
+  groupRoomsForHistory,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -754,6 +755,81 @@ describe('getReadyPlayerCount', () => {
     const full5 = Array(5).fill({ id: 'c' })
     expect(getReadyPlayerCount([p1, p2], { p1: full5, p2: full5 }, 5)).toBe(2)
     expect(getReadyPlayerCount([p1, p2], { p1: full5, p2: full5 }, 8)).toBe(0)
+  })
+})
+
+// ─── groupRoomsForHistory ─────────────────────────────────────────────────────
+
+describe('groupRoomsForHistory', () => {
+  function room(id, overrides = {}) {
+    return { id, code: id.toUpperCase(), createdAt: Date.now(), rounds: [], players: [], ...overrides }
+  }
+
+  it('returns empty array for no rooms', () => {
+    expect(groupRoomsForHistory([])).toEqual([])
+  })
+
+  it('returns standalone items for unlinked rooms', () => {
+    const rooms = [room('a'), room('b')]
+    const result = groupRoomsForHistory(rooms)
+    expect(result).toHaveLength(2)
+    expect(result.every(i => i.type === 'standalone')).toBe(true)
+  })
+
+  it('groups rooms sharing a seriesId into one series item', () => {
+    const sid = 'series1'
+    const rooms = [
+      room('a', { seriesId: sid, seriesIndex: 1 }),
+      room('b', { seriesId: sid, seriesIndex: 2 }),
+      room('c', { seriesId: sid, seriesIndex: 3 }),
+    ]
+    const result = groupRoomsForHistory(rooms)
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('series')
+    expect(result[0].rooms).toHaveLength(3)
+    expect(result[0].seriesId).toBe(sid)
+  })
+
+  it('sorts rooms within a series by seriesIndex', () => {
+    const sid = 'sid'
+    const rooms = [
+      room('c', { seriesId: sid, seriesIndex: 3 }),
+      room('a', { seriesId: sid, seriesIndex: 1 }),
+      room('b', { seriesId: sid, seriesIndex: 2 }),
+    ]
+    const result = groupRoomsForHistory(rooms)
+    expect(result[0].rooms.map(r => r.seriesIndex)).toEqual([1, 2, 3])
+  })
+
+  it('groups legacy linked rooms (prevRoomId/nextRoomId, no seriesId) into a series', () => {
+    const r1 = room('g1', { nextRoomId: 'g2' })
+    const r2 = room('g2', { prevRoomId: 'g1', nextRoomId: 'g3' })
+    const r3 = room('g3', { prevRoomId: 'g2' })
+    const result = groupRoomsForHistory([r1, r2, r3])
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('series')
+    expect(result[0].rooms).toHaveLength(3)
+  })
+
+  it('sorts items newest-first by latestAt', () => {
+    const older = room('x', { createdAt: 1000 })
+    const newer = room('y', { createdAt: 2000 })
+    const result = groupRoomsForHistory([older, newer])
+    expect(result[0].room.id).toBe('y')
+    expect(result[1].room.id).toBe('x')
+  })
+
+  it('mixed: series and standalone both appear', () => {
+    const sid = 'sX'
+    const rooms = [
+      room('a', { seriesId: sid, seriesIndex: 1 }),
+      room('b', { seriesId: sid, seriesIndex: 2 }),
+      room('standalone'),
+    ]
+    const result = groupRoomsForHistory(rooms)
+    expect(result).toHaveLength(2)
+    const types = result.map(i => i.type).sort()
+    expect(types).toEqual(['series', 'standalone'])
   })
 })
 

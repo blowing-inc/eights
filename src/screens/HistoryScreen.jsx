@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
 import { btn } from '../styles.js'
 import { slist } from '../supabase.js'
-import { downloadFile, formatRoomAsText } from '../export.js'
+import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
+import { groupRoomsForHistory } from '../gameLogic.js'
 
 function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
@@ -220,6 +221,82 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant }) {
   )
 }
 
+function RoomRow({ room, onSelect }) {
+  const completedRounds = (room.rounds || []).filter(rd => rd.winner)
+  const players = (room.players || []).filter(p => !p.isBot).map(p => p.name)
+  const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return (
+    <button onClick={() => onSelect(room)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 10, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+        <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: 1 }}>{room.code}</span>
+        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{dateStr}</span>
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+        {players.join(', ') || 'Unknown players'}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{completedRounds.length} round{completedRounds.length !== 1 ? 's' : ''} played</span>
+        {room.seriesIndex && <span style={{ fontSize: 12, color: 'var(--color-text-info)' }}>Game {room.seriesIndex}</span>}
+        {room.devMode && <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>dev</span>}
+      </div>
+    </button>
+  )
+}
+
+function SeriesRow({ item, onSelect }) {
+  const [expanded, setExpanded] = useState(false)
+  const { rooms, seriesId } = item
+
+  const allPlayers = [...new Map(
+    rooms.flatMap(r => (r.players || []).filter(p => !p.isBot).map(p => [p.id, p]))
+  ).values()]
+
+  const firstDate = new Date(rooms[0].createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const lastDate  = rooms.length > 1
+    ? new Date(rooms[rooms.length - 1].createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
+
+  const totalRounds = rooms.reduce((n, r) => n + (r.rounds || []).filter(rd => rd.winner).length, 0)
+
+  function exportSeries() {
+    const sorted = [...rooms].sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
+    const slug   = seriesId.slice(0, 6).toUpperCase()
+    downloadFile(`eights-series-${slug}.txt`, formatSeriesAsText(sorted))
+  }
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-info)', borderRadius: expanded ? 'var(--border-radius-lg) var(--border-radius-lg) 0 0' : 'var(--border-radius-lg)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)', fontWeight: 500 }}>Series</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)' }}>{rooms.length} games</span>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+            {lastDate ? `${firstDate} – ${lastDate}` : firstDate}
+          </span>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+          {allPlayers.map(p => p.name).join(', ') || 'Unknown players'}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{totalRounds} rounds total</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={exportSeries} style={{ ...btn('ghost'), padding: '3px 10px', fontSize: 11 }}>⬇ Export series</button>
+          <button onClick={() => setExpanded(e => !e)} style={{ ...btn('ghost'), padding: '3px 10px', fontSize: 11 }}>
+            {expanded ? 'Collapse ▲' : 'Expand ▼'}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ padding: '8px 12px 4px', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-info)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-lg) var(--border-radius-lg)' }}>
+          {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function HistoryScreen({ onBack, setViewCombatant }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -235,6 +312,8 @@ export default function HistoryScreen({ onBack, setViewCombatant }) {
     return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} />
   }
 
+  const items = rooms ? groupRoomsForHistory(rooms) : []
+
   return (
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
@@ -246,26 +325,11 @@ export default function HistoryScreen({ onBack, setViewCombatant }) {
       {rooms !== null && rooms.length === 0 && (
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>No games found. Play a session first!</p>
       )}
-      {rooms !== null && rooms.map(r => {
-        const completedRounds = (r.rounds || []).filter(rd => rd.winner)
-        const players = (r.players || []).filter(p => !p.isBot).map(p => p.name)
-        const dateStr = new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-        return (
-          <button key={r.id} onClick={() => setSelected(r)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 10, cursor: 'pointer' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-              <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: 1 }}>{r.code}</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{dateStr}</span>
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-              {players.join(', ') || 'Unknown players'}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{completedRounds.length} round{completedRounds.length !== 1 ? 's' : ''} played</span>
-              {r.devMode && <span style={{ fontSize: 11, padding: '1px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', borderRadius: 99, border: '0.5px solid var(--color-border-warning)' }}>dev</span>}
-            </div>
-          </button>
-        )
-      })}
+      {items.map(item =>
+        item.type === 'series'
+          ? <SeriesRow key={item.seriesId} item={item} onSelect={setSelected} />
+          : <RoomRow   key={item.room.id}  room={item.room} onSelect={setSelected} />
+      )}
     </div>
   )
 }

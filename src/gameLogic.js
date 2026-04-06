@@ -675,3 +675,72 @@ export function buildChainEvolutionStory(rooms, rootId) {
 
   return story
 }
+
+// ─── History grouping ─────────────────────────────────────────────────────────
+
+/**
+ * Groups a flat list of rooms into display items for HistoryScreen.
+ *
+ * Returns an array sorted newest-first, each item either:
+ *   { type: 'series',     seriesId, rooms: Room[], latestAt: number }
+ *   { type: 'standalone', room: Room,              latestAt: number }
+ *
+ * Rooms that share a seriesId are grouped together. Rooms without seriesId
+ * but linked via prevRoomId/nextRoomId are grouped by walking the in-memory
+ * chain to find the oldest ancestor (backward compat for pre-series rooms).
+ */
+export function groupRoomsForHistory(rooms) {
+  // Build a quick lookup
+  const byId = {}
+  rooms.forEach(r => { byId[r.id] = r })
+
+  // Find the oldest ancestor in a prevRoomId chain for rooms without seriesId
+  function chainRoot(room) {
+    let current = room
+    const visited = new Set()
+    while (current.prevRoomId && !visited.has(current.id)) {
+      visited.add(current.id)
+      const prev = byId[current.prevRoomId]
+      if (!prev) break
+      current = prev
+    }
+    return current.id
+  }
+
+  const seriesMap = {}   // seriesId → Room[]
+
+  rooms.forEach(r => {
+    // Determine the canonical series key
+    let key
+    if (r.seriesId) {
+      key = r.seriesId
+    } else if (r.prevRoomId || r.nextRoomId) {
+      key = chainRoot(r)
+    } else {
+      key = null  // truly standalone
+    }
+
+    if (key) {
+      if (!seriesMap[key]) seriesMap[key] = []
+      seriesMap[key].push(r)
+    }
+  })
+
+  const items = []
+
+  // Series items
+  Object.entries(seriesMap).forEach(([seriesId, seriesRooms]) => {
+    const sorted = [...seriesRooms].sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
+    const latestAt = Math.max(...seriesRooms.map(r => r.createdAt))
+    items.push({ type: 'series', seriesId, rooms: sorted, latestAt })
+  })
+
+  // Standalone items
+  rooms.forEach(r => {
+    if (!r.seriesId && !r.prevRoomId && !r.nextRoomId) {
+      items.push({ type: 'standalone', room: r, latestAt: r.createdAt })
+    }
+  })
+
+  return items.sort((a, b) => b.latestAt - a.latestAt)
+}

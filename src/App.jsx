@@ -149,15 +149,27 @@ export default function App() {
       prevWinners = applyActiveFormMap(prevWinners, activeFormMap, variantById)
     }
 
+    // Carry forward or initialise the series identifier. The first time a host
+    // creates "Next Battle", the completed room becomes Game 1 of the series.
+    const seriesId    = completedRoom.seriesId    || completedRoom.id
+    const seriesIndex = (completedRoom.seriesIndex || 1) + 1
+
     const newRoom = {
       id: roomCode, code: roomCode, host: playerId, phase: 'draft',
       players: completedRoom.players,
       combatants: {}, rounds: [], currentRound: 0,
-      prevRoomId: completedRoom.id, // Ticket 14: heritage chain anchor
+      prevRoomId: completedRoom.id,
+      seriesId, seriesIndex,
       createdAt: Date.now(), prevWinners,
     }
     await sset('room:' + roomCode, newRoom)
-    await sset('room:' + completedRoom.id, { ...completedRoom, nextRoomId: roomCode })
+    // Retroactively stamp the completed room if this is the first "next battle"
+    await sset('room:' + completedRoom.id, {
+      ...completedRoom,
+      nextRoomId: roomCode,
+      seriesId,
+      seriesIndex: completedRoom.seriesIndex || 1,
+    })
     removeLobbyCode(completedRoom.id)
     addLobbyCode(roomCode)
     setRoom(newRoom)

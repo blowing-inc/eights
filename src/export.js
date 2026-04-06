@@ -1,4 +1,5 @@
 // File download helpers used by AdminScreen and HistoryRoomDetail.
+import { buildChainEvolutionStory } from './gameLogic.js'
 
 export function downloadFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mimeType })
@@ -9,36 +10,40 @@ export function downloadFile(filename, content, mimeType = 'text/plain;charset=u
   document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 
+// ─── Single-tournament export ─────────────────────────────────────────────────
+
 export function formatRoomAsText(room) {
-  const players        = (room.players || []).filter(p => !p.isBot)
-  const allRounds      = room.rounds || []
+  const players         = (room.players || []).filter(p => !p.isBot)
+  const allRounds       = room.rounds || []
   const completedRounds = allRounds.filter(r => r.winner)
   const date = new Date(room.createdAt).toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
   const lines = []
 
-  // ── Header ──────────────────────────────────────────────────────────────────
-  lines.push(`EIGHTS — ROOM ${room.code}`)
+  // Header
+  const seriesPart = room.seriesId
+    ? ` · Game ${room.seriesIndex || 1} of series ${room.seriesId}`
+    : ''
+  lines.push(`EIGHTS — ROOM ${room.code}${seriesPart}`)
   lines.push(`Date:    ${date}`)
   lines.push(`Players: ${players.map(p => p.name).join(', ')}`)
 
   const s = room.settings || {}
   const settingParts = [
     `${s.rosterSize ?? 8} combatants`,
-    s.biosRequired        ? 'bios required'         : null,
-    s.anonymousCombatants ? 'anonymous combatants'  : null,
-    s.blindVoting         ? 'blind voting'           : null,
-    s.allowSpectators     ? 'spectators allowed'     : null,
+    s.biosRequired        ? 'bios required'        : null,
+    s.anonymousCombatants ? 'anonymous combatants' : null,
+    s.blindVoting         ? 'blind voting'          : null,
+    s.allowSpectators     ? 'spectators allowed'    : null,
   ].filter(Boolean)
   lines.push(`Settings: ${settingParts.join(', ')}`)
-
-  if (room.prevRoomId) lines.push(`Heritage: follows room ${room.prevRoomId}`)
+  if (room.prevRoomId) lines.push(`Follows:  room ${room.prevRoomId}`)
   if (room.nextRoomId) lines.push(`Continued as: room ${room.nextRoomId}`)
   if (room.devMode)    lines.push('(Dev mode)')
   lines.push('')
 
-  // ── Winners summary ─────────────────────────────────────────────────────────
+  // Results summary
   if (completedRounds.length > 0) {
     lines.push('=== RESULTS ===')
     completedRounds.forEach(r => {
@@ -49,22 +54,18 @@ export function formatRoomAsText(room) {
     lines.push('')
   }
 
-  // ── Per-round detail ────────────────────────────────────────────────────────
+  // Per-round detail
   allRounds.forEach(r => {
     lines.push(`=== ROUND ${r.number} ===`)
-
-    // Combatants with bios
     ;(r.combatants || []).forEach(c => {
       const ownerName = players.find(p => p.id === c.ownerId)?.name || c.ownerName || '?'
       lines.push(`  ${c.name} (by ${ownerName})`)
       if (c.bio) lines.push(`    "${c.bio}"`)
     })
     lines.push('')
-
     lines.push(r.winner ? `  Winner: ${r.winner.name}` : '  No result recorded')
     lines.push('')
 
-    // Votes
     const picks     = r.picks || {}
     const voteLines = Object.entries(picks).map(([pid, cid]) => {
       const pname = players.find(p => p.id === pid)?.name || '?'
@@ -77,7 +78,6 @@ export function formatRoomAsText(room) {
       lines.push('')
     }
 
-    // Reactions
     const pr = r.playerReactions || {}
     const reactionLines = (r.combatants || []).flatMap(c => {
       const heart = Object.values(pr).filter(m => m[c.id] === 'heart').length
@@ -93,20 +93,16 @@ export function formatRoomAsText(room) {
       lines.push('')
     }
 
-    // Evolution narrative
     if (r.evolution) {
       const ev        = r.evolution
       const opponents = (r.combatants || []).filter(c => c.id !== ev.fromId).map(c => c.name)
-      const fightDesc = opponents.length
-        ? `after the fight with ${opponents.join(' and ')}`
-        : 'after this fight'
+      const fightDesc = opponents.length ? `after the fight with ${opponents.join(' and ')}` : 'after this fight'
       lines.push('  ⚡ Evolution:')
       lines.push(`    ${ev.fromName} evolved to ${ev.toName} ${fightDesc}.`)
       if (ev.toBio) lines.push(`    "${ev.toBio}"`)
       lines.push('')
     }
 
-    // Chat
     const chat = r.chat || []
     if (chat.length) {
       lines.push('  Chat:')
@@ -117,16 +113,12 @@ export function formatRoomAsText(room) {
     lines.push('')
   })
 
-  // ── Combatant roster ────────────────────────────────────────────────────────
+  // Combatant roster
   const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
   if (allCombatants.length) {
     lines.push('=== COMBATANT ROSTER ===')
-
-    // Build a map of which combatants evolved and into what, for annotation
     const evolvedTo = {}
-    allRounds.forEach(r => {
-      if (r.evolution) evolvedTo[r.evolution.fromId] = r.evolution
-    })
+    allRounds.forEach(r => { if (r.evolution) evolvedTo[r.evolution.fromId] = r.evolution })
 
     allCombatants.sort((a, b) => b.wins - a.wins).forEach(c => {
       const owner = players.find(p => p.id === c.ownerId)
@@ -139,27 +131,146 @@ export function formatRoomAsText(room) {
       }
       const evo = evolvedTo[c.id]
       if (evo) {
-        const opponents = (allRounds.find(r => r.evolution?.fromId === c.id)?.combatants || [])
-          .filter(x => x.id !== c.id).map(x => x.name)
-        const fightPart = opponents.length ? ` after beating ${opponents.join(' and ')}` : ''
-        lines.push(`    ⚡ Evolved to: ${evo.toName}${fightPart} (round ${allRounds.find(r => r.evolution?.fromId === c.id)?.number ?? '?'})`)
+        const evoRound   = allRounds.find(r => r.evolution?.fromId === c.id)
+        const opponents  = (evoRound?.combatants || []).filter(x => x.id !== c.id).map(x => x.name)
+        const fightPart  = opponents.length ? ` after beating ${opponents.join(' and ')}` : ''
+        lines.push(`    ⚡ Evolved to: ${evo.toName}${fightPart} (round ${evoRound?.number ?? '?'})`)
         if (evo.toBio) lines.push(`       New bio: "${evo.toBio}"`)
       }
     })
     lines.push('')
   }
 
-  // ── Evolutions this game ────────────────────────────────────────────────────
-  const evolutionRounds = allRounds.filter(r => r.evolution)
-  if (evolutionRounds.length) {
+  // Evolutions summary
+  const evoRounds = allRounds.filter(r => r.evolution)
+  if (evoRounds.length) {
     lines.push('=== EVOLUTIONS ===')
-    evolutionRounds.forEach(r => {
-      const ev        = r.evolution
-      const opponents = (r.combatants || []).filter(c => c.id !== ev.fromId).map(c => c.name)
-      const vs        = opponents.length ? ` (beat ${opponents.join(', ')})` : ''
+    evoRounds.forEach(r => {
+      const ev  = r.evolution
+      const opp = (r.combatants || []).filter(c => c.id !== ev.fromId).map(c => c.name)
+      const vs  = opp.length ? ` (beat ${opp.join(', ')})` : ''
       lines.push(`  Round ${r.number}: ${ev.fromName} → ${ev.toName}${vs}`)
       if (ev.toBio) lines.push(`    New bio: "${ev.toBio}"`)
     })
+  }
+
+  return lines.join('\n')
+}
+
+// ─── Series export ────────────────────────────────────────────────────────────
+
+// Accepts all rooms in a series sorted by seriesIndex (oldest first).
+export function formatSeriesAsText(rooms) {
+  if (!rooms.length) return ''
+
+  const seriesId  = rooms[0].seriesId || rooms[0].id
+  const allPlayers = [...new Map(
+    rooms.flatMap(r => (r.players || []).filter(p => !p.isBot).map(p => [p.id, p]))
+  ).values()]
+
+  const firstDate = new Date(rooms[0].createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+  const lastDate  = rooms.length > 1
+    ? new Date(rooms[rooms.length - 1].createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+    : null
+
+  const lines = []
+
+  // ── Series header ──────────────────────────────────────────────────────────
+  lines.push(`EIGHTS — SERIES ${seriesId}`)
+  lines.push(`Games:   ${rooms.length}`)
+  lines.push(`Players: ${allPlayers.map(p => p.name).join(', ')}`)
+  lines.push(`Dates:   ${lastDate ? `${firstDate} – ${lastDate}` : firstDate}`)
+  lines.push('')
+
+  // ── Per-game summaries ─────────────────────────────────────────────────────
+  rooms.forEach((room, i) => {
+    const gameNum   = room.seriesIndex || i + 1
+    const players   = (room.players || []).filter(p => !p.isBot)
+    const completed = (room.rounds || []).filter(r => r.winner)
+    const evoRounds = (room.rounds || []).filter(r => r.evolution)
+    const date = new Date(room.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+
+    lines.push(`${'─'.repeat(60)}`)
+    lines.push(`GAME ${gameNum} — ROOM ${room.code} — ${date}`)
+    lines.push(`${'─'.repeat(60)}`)
+
+    // Winners per round
+    if (completed.length) {
+      completed.forEach(r => {
+        const ownerName = players.find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'
+        const evoPart   = r.evolution ? ` → evolved to ${r.evolution.toName}` : ''
+        lines.push(`  Round ${r.number}: 🏆 ${r.winner.name} (${ownerName})${evoPart}`)
+      })
+    } else {
+      lines.push('  No rounds completed.')
+    }
+
+    // Evolution callouts for this game
+    if (evoRounds.length) {
+      lines.push('')
+      evoRounds.forEach(r => {
+        const ev  = r.evolution
+        const opp = (r.combatants || []).filter(c => c.id !== ev.fromId).map(c => c.name)
+        const vs  = opp.length ? ` after beating ${opp.join(' and ')}` : ''
+        lines.push(`  ⚡ ${ev.fromName} → ${ev.toName}${vs}`)
+        if (ev.toBio) lines.push(`     "${ev.toBio}"`)
+      })
+    }
+
+    lines.push('')
+  })
+
+  // ── Combatant lineage across the series ───────────────────────────────────
+  // Find all lineage roots: combatants that evolved but were never themselves
+  // the product of an evolution (i.e. fromId not in any toId set).
+  const allEvolutions = rooms.flatMap(r =>
+    (r.rounds || []).filter(rd => rd.evolution).map(rd => rd.evolution)
+  )
+
+  if (allEvolutions.length) {
+    const toIds   = new Set(allEvolutions.map(e => e.toId))
+    const rootIds = [...new Set(allEvolutions.map(e => e.fromId).filter(id => !toIds.has(id)))]
+
+    lines.push(`${'─'.repeat(60)}`)
+    lines.push('COMBATANT LINEAGE')
+    lines.push(`${'─'.repeat(60)}`)
+
+    rootIds.forEach(rootId => {
+      const story = buildChainEvolutionStory(rooms, rootId)
+      if (!story.length) return
+
+      // Find the owner name from the roster of the first game
+      const ownerName = (() => {
+        for (const room of rooms) {
+          const flat = Object.values(room.combatants || {}).flat()
+          const c = flat.find(x => x.id === rootId)
+          if (c) return c.ownerName || (room.players || []).find(p => p.id === c.ownerId)?.name || '?'
+        }
+        return '?'
+      })()
+
+      lines.push('')
+      lines.push(`  ${story[0].name}  (by ${ownerName})`)
+
+      story.forEach((node, i) => {
+        const indent = '    ' + '  '.repeat(i)
+        if (i === 0) {
+          lines.push(`${indent}Gen 0: ${node.name}`)
+        } else {
+          const bf = node.bornFrom
+          if (bf) {
+            const gameLabel = (() => {
+              const room = rooms.find(r => r.code === bf.gameCode)
+              return room ? `Game ${room.seriesIndex || '?'}` : bf.gameCode
+            })()
+            lines.push(`${indent.slice(2)}    ⚡ Beat ${bf.opponentName || 'opponent'} in ${gameLabel} R${bf.roundNumber} →`)
+          }
+          lines.push(`${indent}Gen ${node.generation}: ${node.name}`)
+        }
+      })
+    })
+
+    lines.push('')
   }
 
   return lines.join('\n')
