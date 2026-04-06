@@ -362,7 +362,14 @@ export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNe
 
   useEffect(() => {
     slist().then(all => {
-      const valid = all.filter(r => r && r.id && r.createdAt).sort((a, b) => b.createdAt - a.createdAt)
+      const valid = all
+        .filter(r => {
+          if (!r || !r.id || !r.createdAt) return false
+          const hasRounds = (r.rounds || []).some(rd => rd.winner || rd.draw)
+          const hasCombatants = Object.values(r.combatants || {}).flat().length > 0
+          return hasRounds || hasCombatants
+        })
+        .sort((a, b) => b.createdAt - a.createdAt)
       setRooms(valid)
     })
   }, [])
