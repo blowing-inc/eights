@@ -245,6 +245,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 placeholder={`Combatant ${i + 1}`}
                 playerId={playerId}
                 substitutions={substitutions}
+                pinnedItems={myPrevWinners.map(w => ({ ...w, wins: w.wins || 0, losses: w.losses || 0, owner_name: myPlayer?.name || '' }))}
               />
               {isPrevWinnerSlot && globalIds[i] && (
                 <CombatantStatsPill globalId={globalIds[i]} label="🏆 champion" pillStyle={{ background: 'var(--color-background-success)', color: 'var(--color-text-success)', border: '0.5px solid var(--color-border-success)' }} />
