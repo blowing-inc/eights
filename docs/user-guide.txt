@@ -335,10 +335,113 @@ TICKET 8 — No confirmation when host navigates away mid-round
   host has effectively abandoned it. Low severity for in-person play, higher
   for remote.
 
-TICKET 9 — Duplicate combatants in the draft not prevented
-  Nothing stops a player from entering the same combatant name (or selecting
-  the same global combatant via autocomplete) in multiple slots. This produces
-  duplicate entries in the roster and round matchups. The draft should warn or
-  block when the same name or global ID appears more than once across a
-  player's slots. The same applies to required champions — a player should not
-  be able to place the same champion in two slots to satisfy the requirement.
+================================================================================
+TICKETS — ORGANIZED BY CATEGORY
+================================================================================
+
+Priority key: [P1] = fix or ship soon  [P2] = important, next wave  [P3] = nice-to-have
+
+
+--- ARCHITECTURE / NAVIGATION ---
+
+[P1] TICKET 10 — Combatant stat viewer (modal / slide-up sheet)
+  Wherever a combatant pill or card appears — draft slots, battle history room
+  screens, voting round cards — there should be a 📊 icon that opens a slide-up
+  sheet showing the same content as the GlobalCombatantDetail page: stats grid,
+  bio, head-to-head breakdown, lineage/heritage, bio history, reactions.
+
+  The sheet has an X to close and is fully scrollable. If the combatant has no
+  global record yet (unpublished, in-progress game) show in-room stats only
+  (wins/losses from room.combatants) with a note that the full record is
+  available after the game completes.
+
+  Screens this touches: DraftScreen (submitted waiting view + slot rows),
+  BattleScreen (round list), VoteScreen (combatant cards), HistoryScreen
+  (combatant roster section and round detail cards).
+
+  This is a prerequisite for Ticket 11 (back-stack inside the sheet) and
+  Ticket 12 (stats icon in history roster).
+
+[P1] TICKET 11 — Heritage nodes should be tappable links
+  In GlobalCombatantDetail, the LineageSection renders the evolution chain
+  but the nodes are display-only. Each node should be tappable.
+
+  Two contexts:
+  a) Bestiary flow: tapping calls onViewCombatant, replacing the current detail
+     view. Back returns to the list. The prop already exists — just needs wiring
+     into the LineageSection node buttons.
+  b) Inside the stat viewer sheet (Ticket 10): tapping updates the sheet to
+     show the tapped combatant, keeping it open. The sheet maintains a small
+     back-stack so the user can return to the previous combatant without closing.
+
+[P2] TICKET 12 — Stats icon on history screen combatant roster
+  In HistoryScreen's combatant roster (per-player view and "All" view), tapping
+  a combatant currently opens the in-room CombatantScreen (local stats only).
+  Keep that behavior, but add a 📊 icon on each row that opens the stat viewer
+  sheet (Ticket 10) for that combatant's global Bestiary record.
+
+  Back from the in-room view returns to the history room detail. The sheet
+  closes with X, also returning to history room detail.
+
+
+--- GAMEPLAY ---
+
+[P1] TICKET 9 — Duplicate combatants in the draft not prevented
+  Nothing stops a player from entering the same name or selecting the same
+  global combatant ID in multiple slots. This produces duplicate entries in the
+  roster and round matchups. The draft should warn or block when the same name
+  or global ID appears more than once. Champions placed twice should not count
+  as satisfying the requirement twice.
+
+[P2] TICKET 4 — Force-start interaction with "bios required"
+  If "bios required" is on and the host force-starts, players who were skipped
+  had incomplete drafts. Their combatants may be submitted without bios or not
+  submitted at all. The exact behavior should be verified and documented. If
+  their combatants are silently dropped, the host should see a clear warning
+  before confirming the force-start.
+
+[P2] TICKET 7 — "Complete tournament" prompt not obvious enough
+  When all rounds finish the room phase stays 'battle' and can reappear in
+  open lobbies until the host taps "Complete tournament." First-time hosts may
+  not realize this step is required. Consider a more prominent prompt or
+  auto-advancing to 'ended' once all rounds are resolved.
+
+[P3] TICKET 8 — No warning when host navigates away mid-round
+  If a host taps "← Home" during an active voting round, other players are left
+  waiting with no indication the host has left. Low severity for in-person play,
+  higher for remote. A confirm dialog ("Players are waiting — leave anyway?")
+  would cover this.
+
+
+--- DATA / INTEGRITY ---
+
+[P1] TICKET 3 — Evolution name uniqueness only checks published combatants
+  checkCombatantNameExists queries only published rows. An unpublished combatant
+  in a currently-running game could share a name with a proposed evolution and
+  pass validation — both then get published with the same name. Low probability
+  but worth closing. The check should also scan unpublished combatants, or at
+  minimum the current room's combatant names.
+
+[P2] TICKET 6 — Series standings missing Draws column
+  computeSeriesStandings tracks wins/losses/games but the standings table
+  displays only W/L/G. Draws are recorded on combatants. If draws are
+  meaningful to the series narrative, add a D column. Low effort, low risk.
+
+
+--- FEATURES ---
+
+[P2] TICKET 5 — Guest open-lobby persistence
+  Guest lobbies are tracked in localStorage by room ID. Clearing storage or
+  switching browsers loses them. Consider a "You may have active games — enter
+  a code to rejoin" prompt on the Join screen for guests, or expose a manual
+  rejoin flow.
+
+[P2] TICKET 2 — No non-host feedback when a round is undone
+  When the host undoes a round, the round list just changes for other players
+  with no indication. A brief status line ("Host undid round X") on the
+  non-host battle screen would improve clarity.
+
+[P3] TICKET 1 — Spectators can't react or chat
+  Spectators observe only. Allowing spectators to react (but not vote or chat)
+  could add energy to in-person sessions without giving them meaningful influence
+  over outcomes. Worth discussing as an opt-in room setting.
