@@ -334,3 +334,11 @@ TICKET 8 — No confirmation when host navigates away mid-round
   that players are waiting. The vote screen persists for other players but the
   host has effectively abandoned it. Low severity for in-person play, higher
   for remote.
+
+TICKET 9 — Duplicate combatants in the draft not prevented
+  Nothing stops a player from entering the same combatant name (or selecting
+  the same global combatant via autocomplete) in multiple slots. This produces
+  duplicate entries in the roster and round matchups. The draft should warn or
+  block when the same name or global ID appears more than once across a
+  player's slots. The same applies to required champions — a player should not
+  be able to place the same champion in two slots to satisfy the requirement.
