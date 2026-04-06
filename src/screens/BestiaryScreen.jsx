@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
-import { btn, tab } from '../styles.js'
-import { listCombatants } from '../supabase.js'
+import { btn, tab, inp } from '../styles.js'
+import { listCombatants, searchBestiary } from '../supabase.js'
 
 const BESTIARY_SORTS = [
   { key: 'wins',            label: 'Wins',   asc: false },
@@ -19,6 +19,8 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
   const [page, setPage] = useState(0)
   const [sort, setSort] = useState('wins')
   const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+  const debounceRef = useRef(null)
   // "characters" hides variants (combatants with lineage set) so each character
   // appears once — story-first, not form-first. "all" shows every published form.
   const [view, setView] = useState('characters')
@@ -26,14 +28,21 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
   useEffect(() => {
     setLoading(true)
     const sortDef = BESTIARY_SORTS.find(s => s.key === sort)
-    listCombatants({ sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE }).then(({ items, total }) => {
-      setItems(items); setTotal(total); setLoading(false)
-    })
-  }, [sort, page])
+    const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE }
+    const fn = query.trim()
+      ? searchBestiary(query.trim(), opts)
+      : listCombatants(opts)
+    fn.then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
+  }, [sort, page, query])
 
   function changeSort(key) {
     if (sort === key) return
     setSort(key); setPage(0)
+  }
+
+  function handleSearch(val) {
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { setQuery(val); setPage(0) }, 280)
   }
 
   // In "characters" mode, hide variants — they're surfaced inside GlobalCombatantDetail.
@@ -46,6 +55,12 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
   return (
     <Screen title="Bestiary" onBack={onBack}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '-0.75rem 0 1rem' }}>Every fighter ever entered, across all games.</p>
+
+      <input
+        style={{ ...inp(), margin: '0 0 1rem' }}
+        placeholder="Search by name, bio, or player…"
+        onChange={e => handleSearch(e.target.value)}
+      />
 
       {/* View toggle */}
       <div style={{ display: 'flex', gap: 6, marginBottom: '1rem' }}>
@@ -64,9 +79,11 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
       {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
       {!loading && displayItems.length === 0 && (
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-          {view === 'characters' && items.length > 0
-            ? 'No base characters on this page — switch to "All forms" to see evolved variants.'
-            : 'No combatants yet — play some games first!'}
+          {query.trim()
+            ? `No results for "${query.trim()}".`
+            : view === 'characters' && items.length > 0
+              ? 'No base characters on this page — switch to "All forms" to see evolved variants.'
+              : 'No combatants yet — play some games first!'}
         </p>
       )}
 

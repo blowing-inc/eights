@@ -522,6 +522,22 @@ export async function listCombatants({ sort = 'wins', ascending = false, page = 
   } catch (e) { console.error('listCombatants exception', e); return { items: [], total: 0 } }
 }
 
+// Full-field name/bio search across published combatants — used by BestiaryScreen
+export async function searchBestiary(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
+  try {
+    const from = page * pageSize
+    const to   = from + pageSize - 1
+    const { data, error, count } = await supabase
+      .from('combatants').select('*', { count: 'exact' })
+      .eq('published', true)
+      .or(`name.ilike.%${query}%,bio.ilike.%${query}%,owner_name.ilike.%${query}%`)
+      .order(sort, { ascending })
+      .range(from, to)
+    if (error) { console.error('searchBestiary error', error); return { items: [], total: 0 } }
+    return { items: data || [], total: count || 0 }
+  } catch (e) { console.error('searchBestiary exception', e); return { items: [], total: 0 } }
+}
+
 // Called once when the last round of a game is confirmed
 export async function publishCombatants(ids) {
   if (!ids.length) return
