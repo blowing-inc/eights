@@ -133,3 +133,21 @@ grant execute on function increment_combatant_stats(text, int, int, int, int, in
 -- If adding published column to an existing combatants table, run:
 -- alter table combatants add column if not exists published boolean not null default false;
 -- create index if not exists combatants_published_idx on combatants (published) where published = true;
+
+-- ─── Lineage (combatant evolution) ───────────────────────────────────────────
+-- lineage is null for original combatants (generation 0).
+-- Variants carry: { rootId, parentId, generation }
+--   rootId     — id of the original combatant at the start of the lineage
+--   parentId   — id of the immediate predecessor (the form that was evolved)
+--   generation — integer depth: 0 = original, 1 = first variant, etc.
+--
+-- round.evolution (stored in rooms.data JSON, no separate table needed):
+--   { fromId, fromName, toId, toName, authorId }
+--   Written to the round object when a variant is created from that round.
+
+alter table combatants add column if not exists lineage jsonb null;
+
+-- Fast lookup: "give me all variants whose root is X"
+create index if not exists combatants_lineage_root_idx
+  on combatants ((lineage->>'rootId'))
+  where lineage is not null;

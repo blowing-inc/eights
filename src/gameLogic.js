@@ -485,3 +485,134 @@ export function buildTickerMessages(rooms) {
 
   return msgs.sort(() => Math.random() - 0.5)
 }
+
+// ─── Lineage / evolution ──────────────────────────────────────────────────────
+
+/**
+ * round.evolution shape — written to a round object when a variant is created.
+ * Stored inside rooms.data JSON; no separate DB table needed.
+ *
+ * {
+ *   fromId:    string  — global combatant ID that was evolved
+ *   fromName:  string  — name at the time of evolution (snapshot)
+ *   toId:      string  — global combatant ID of the new variant
+ *   toName:    string  — name the variant was given
+ *   authorId:  string  — playerId of whoever wrote the variant (host or owner)
+ * }
+ *
+ * combatant.lineage shape (stored on the global combatants table):
+ * null for generation-0 originals.
+ *
+ * {
+ *   rootId:     string  — id of the original combatant at the start of the tree
+ *   parentId:   string  — id of the immediate predecessor
+ *   generation: number  — 0 = original, 1 = first variant, etc.
+ * }
+ */
+
+/**
+ * Aggregate wins/losses/reactions across an entire lineage tree.
+ * Pass the root combatant's id and all global combatant records.
+ * allCombatants entries use the DB column names (reactions_heart etc.).
+ *
+ * @param {string}   rootId
+ * @param {object[]} allCombatants
+ * @returns {{ wins, losses, heart, angry, cry, forms }}
+ */
+export function getLineageStats(rootId, allCombatants) {
+  const family = (allCombatants || []).filter(c =>
+    c.id === rootId || c.lineage?.rootId === rootId
+  )
+  return family.reduce((acc, c) => ({
+    wins:   acc.wins   + (c.wins             || 0),
+    losses: acc.losses + (c.losses           || 0),
+    heart:  acc.heart  + (c.reactions_heart  || 0),
+    angry:  acc.angry  + (c.reactions_angry  || 0),
+    cry:    acc.cry    + (c.reactions_cry     || 0),
+    forms:  acc.forms  + 1,
+  }), { wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
+}
+
+/**
+ * Walk a heritage chain's rooms and return a map of
+ * { [ancestorId]: currentTipId } for every combatant evolved in that chain.
+ * Returns an empty object for standalone games or chains with no evolutions.
+ * Pass rooms in chronological order (oldest first).
+ *
+ * @param {object[]} rooms  Array of room data objects
+ * @returns {{ [string]: string }}
+ */
+export function buildActiveFormMap(rooms) {
+  const map = {}
+  for (const room of (rooms || [])) {
+    for (const round of (room.rounds || [])) {
+      if (!round.evolution) continue
+      const { fromId, toId } = round.evolution
+      // If fromId is already a replacement in the map, update the root key
+      const root = Object.keys(map).find(k => map[k] === fromId) || fromId
+      map[root] = toId
+    }
+  }
+  return map
+}
+
+/**
+ * Build the ordered evolution story for one character through a heritage chain.
+ * Returns an empty array if the rootId was never evolved in these rooms.
+ *
+ * Each entry:
+ *   { combatantId, name, generation, bornFrom }
+ *
+ * bornFrom is null for the original (generation 0), otherwise:
+ *   { roundNumber, gameCode, opponentName, parentId, parentName }
+ *
+ * @param {object[]} rooms   Array of room data objects (chronological)
+ * @param {string}   rootId  The generation-0 combatant id
+ * @returns {object[]}
+ */
+export function buildChainEvolutionStory(rooms, rootId) {
+  const events = []
+  const knownIds = new Set([rootId])
+
+  for (const room of (rooms || [])) {
+    for (const round of (room.rounds || [])) {
+      if (!round.evolution) continue
+      const { fromId, fromName, toId, toName } = round.evolution
+      if (!knownIds.has(fromId)) continue
+      const opponent = (round.combatants || []).find(c => c.id !== fromId)
+      events.push({
+        fromId, fromName, toId, toName,
+        roundNumber:  round.number,
+        gameCode:     room.code,
+        opponentName: opponent?.name || null,
+      })
+      knownIds.add(toId)
+    }
+  }
+
+  if (events.length === 0) return []
+
+  const story = [{
+    combatantId: rootId,
+    name:        events[0].fromName,
+    generation:  0,
+    bornFrom:    null,
+  }]
+
+  events.forEach((e, i) => {
+    story.push({
+      combatantId: e.toId,
+      name:        e.toName,
+      generation:  i + 1,
+      bornFrom: {
+        roundNumber:  e.roundNumber,
+        gameCode:     e.gameCode,
+        opponentName: e.opponentName,
+        parentId:     e.fromId,
+        parentName:   e.fromName,
+      },
+    })
+  })
+
+  return story
+}

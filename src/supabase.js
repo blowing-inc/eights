@@ -298,6 +298,49 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   } catch (e) { console.error('getPlayerRecentCombatants exception', e); return [] }
 }
 
+// ─── Lineage / variant combatants ────────────────────────────────────────────
+
+// Insert a new variant combatant. lineage = { rootId, parentId, generation }.
+// Published starts false — same lifecycle as any new combatant.
+export async function createVariantCombatant({ id, name, bio, ownerId, ownerName, lineage }) {
+  try {
+    const { error } = await supabase.from('combatants').insert({
+      id, name, bio: bio || '', owner_id: ownerId, owner_name: ownerName,
+      lineage, published: false, updated_at: new Date().toISOString(),
+    })
+    if (error) console.error('createVariantCombatant error', error)
+  } catch (e) { console.error('createVariantCombatant exception', e) }
+}
+
+// Returns the full lineage tree for a character: root + all variants, oldest first.
+// Includes unpublished — lineage display shouldn't hide in-progress forms.
+export async function getLineageTree(rootId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants')
+      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, lineage, owner_id, owner_name, published')
+      .or(`id.eq.${rootId},lineage->>rootId.eq.${rootId}`)
+      .order('created_at', { ascending: true })
+    if (error) { console.error('getLineageTree error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getLineageTree exception', e); return [] }
+}
+
+// All published combatants owned by a player — base version for autocomplete.
+// Heritage-chain filtering (buildActiveFormMap) is applied in DraftScreen (Tier 3).
+export async function getEligibleCombatants(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants')
+      .select('id, name, bio, wins, losses, lineage, owner_name')
+      .eq('owner_id', ownerId)
+      .eq('published', true)
+      .order('updated_at', { ascending: false })
+    if (error) { console.error('getEligibleCombatants error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getEligibleCombatants exception', e); return [] }
+}
+
 // ─── Admin combatant operations ──────────────────────────────────────────────
 
 // Search all combatants including unpublished — admin only

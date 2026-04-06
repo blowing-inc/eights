@@ -16,6 +16,9 @@ import {
   extractPreviousWinners,
   normalizeRoomSettings,
   simulateBattleToEnd,
+  getLineageStats,
+  buildActiveFormMap,
+  buildChainEvolutionStory,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1050,5 +1053,195 @@ describe('simulateBattleToEnd', () => {
       const ids = r.combatants.map(c => c.id)
       expect(ids).toContain(r.winner.id)
     })
+  })
+})
+
+// ─── getLineageStats ──────────────────────────────────────────────────────────
+
+describe('getLineageStats', () => {
+  const root    = { id: 'c1', wins: 3, losses: 1, reactions_heart: 2, reactions_angry: 0, reactions_cry: 1 }
+  const variant = { id: 'c2', wins: 2, losses: 0, reactions_heart: 1, reactions_angry: 1, reactions_cry: 0, lineage: { rootId: 'c1', parentId: 'c1', generation: 1 } }
+  const other   = { id: 'c3', wins: 10, losses: 5, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+
+  it('returns zeros with no matching combatants', () => {
+    expect(getLineageStats('c1', [])).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
+  })
+
+  it('counts root own stats when it is the only form', () => {
+    const result = getLineageStats('c1', [root])
+    expect(result).toEqual({ wins: 3, losses: 1, heart: 2, angry: 0, cry: 1, forms: 1 })
+  })
+
+  it('sums root and all variants', () => {
+    const result = getLineageStats('c1', [root, variant, other])
+    expect(result.wins).toBe(5)
+    expect(result.losses).toBe(1)
+    expect(result.heart).toBe(3)
+    expect(result.angry).toBe(1)
+    expect(result.cry).toBe(1)
+    expect(result.forms).toBe(2)
+  })
+
+  it('ignores combatants from a different lineage', () => {
+    const result = getLineageStats('c1', [root, other])
+    expect(result.wins).toBe(3)
+    expect(result.forms).toBe(1)
+  })
+
+  it('handles null/undefined allCombatants', () => {
+    expect(getLineageStats('c1', null)).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
+    expect(getLineageStats('c1', undefined)).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
+  })
+
+  it('handles missing stat fields on combatant', () => {
+    const sparse = { id: 'c1' }
+    const result = getLineageStats('c1', [sparse])
+    expect(result).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 1 })
+  })
+})
+
+// ─── buildActiveFormMap ───────────────────────────────────────────────────────
+
+describe('buildActiveFormMap', () => {
+  function makeEvolvedRoom(code, fromId, fromName, toId, toName, roundNumber = 1) {
+    return {
+      code,
+      rounds: [{
+        id: 'rd1', number: roundNumber,
+        combatants: [{ id: fromId, name: fromName }, { id: 'opp', name: 'Opponent' }],
+        winner: { id: fromId },
+        evolution: { fromId, fromName, toId, toName, authorId: 'p1' },
+      }],
+    }
+  }
+
+  it('returns empty map for rooms with no evolutions', () => {
+    const room = { code: 'A', rounds: [{ id: 'r1', number: 1, combatants: [], winner: null }] }
+    expect(buildActiveFormMap([room])).toEqual({})
+  })
+
+  it('maps a single evolution', () => {
+    const room = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ scuffed')
+    expect(buildActiveFormMap([room])).toEqual({ c1: 'c2' })
+  })
+
+  it('chains: A→B then B→C collapses to A→C', () => {
+    const room1 = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ scuffed')
+    const room2 = makeEvolvedRoom('B', 'c2', 'MJ scuffed', 'c3', 'MJ magic carpet')
+    expect(buildActiveFormMap([room1, room2])).toEqual({ c1: 'c3' })
+  })
+
+  it('handles multiple independent lineages in the same chain', () => {
+    const room = {
+      code: 'A',
+      rounds: [
+        { id: 'r1', number: 1, combatants: [], winner: null, evolution: { fromId: 'c1', fromName: 'A', toId: 'c2', toName: 'A2', authorId: 'p1' } },
+        { id: 'r2', number: 2, combatants: [], winner: null, evolution: { fromId: 'd1', fromName: 'B', toId: 'd2', toName: 'B2', authorId: 'p1' } },
+      ],
+    }
+    const result = buildActiveFormMap([room])
+    expect(result).toEqual({ c1: 'c2', d1: 'd2' })
+  })
+
+  it('handles null/empty rooms', () => {
+    expect(buildActiveFormMap([])).toEqual({})
+    expect(buildActiveFormMap(null)).toEqual({})
+  })
+
+  it('does not mutate inputs', () => {
+    const room = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ2')
+    const original = JSON.parse(JSON.stringify(room))
+    buildActiveFormMap([room])
+    expect(room).toEqual(original)
+  })
+})
+
+// ─── buildChainEvolutionStory ─────────────────────────────────────────────────
+
+describe('buildChainEvolutionStory', () => {
+  function makeEvolvedRoom(code, evolutions) {
+    // evolutions: [{ fromId, fromName, toId, toName, roundNumber, opponentId, opponentName }]
+    return {
+      code,
+      rounds: evolutions.map(e => ({
+        id:         'rd' + e.roundNumber,
+        number:     e.roundNumber,
+        combatants: [
+          { id: e.fromId, name: e.fromName },
+          { id: e.opponentId || 'opp', name: e.opponentName || 'Opponent' },
+        ],
+        winner:    { id: e.fromId },
+        evolution: { fromId: e.fromId, fromName: e.fromName, toId: e.toId, toName: e.toName, authorId: 'p1' },
+      })),
+    }
+  }
+
+  it('returns empty array when rootId was never evolved', () => {
+    const room = { code: 'A', rounds: [{ id: 'r1', number: 1, combatants: [], winner: null }] }
+    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
+  })
+
+  it('returns empty array for null/empty rooms', () => {
+    expect(buildChainEvolutionStory([], 'c1')).toEqual([])
+    expect(buildChainEvolutionStory(null, 'c1')).toEqual([])
+  })
+
+  it('single evolution produces two entries: original + variant', () => {
+    const room = makeEvolvedRoom('XKQT', [
+      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2, opponentName: 'Stick in Road' },
+    ])
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story).toHaveLength(2)
+    expect(story[0]).toEqual({ combatantId: 'c1', name: 'MJ', generation: 0, bornFrom: null })
+    expect(story[1].combatantId).toBe('c2')
+    expect(story[1].name).toBe('MJ scuffed')
+    expect(story[1].generation).toBe(1)
+  })
+
+  it('captures bornFrom context: roundNumber, gameCode, opponentName, parentId, parentName', () => {
+    const room = makeEvolvedRoom('XKQT', [
+      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2, opponentName: 'Stick in Road' },
+    ])
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story[1].bornFrom).toEqual({
+      roundNumber:  2,
+      gameCode:     'XKQT',
+      opponentName: 'Stick in Road',
+      parentId:     'c1',
+      parentName:   'MJ',
+    })
+  })
+
+  it('chains across multiple rooms: A→B (room1), B→C (room2)', () => {
+    const room1 = makeEvolvedRoom('XKQT', [
+      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2 },
+    ])
+    const room2 = makeEvolvedRoom('BPMZ', [
+      { fromId: 'c2', fromName: 'MJ scuffed', toId: 'c3', toName: 'MJ magic carpet', roundNumber: 4 },
+    ])
+    const story = buildChainEvolutionStory([room1, room2], 'c1')
+    expect(story).toHaveLength(3)
+    expect(story[2].name).toBe('MJ magic carpet')
+    expect(story[2].generation).toBe(2)
+    expect(story[2].bornFrom.gameCode).toBe('BPMZ')
+  })
+
+  it('ignores evolutions belonging to a different lineage', () => {
+    const room = {
+      code: 'A',
+      rounds: [
+        { id: 'r1', number: 1, combatants: [{ id: 'z1', name: 'Z' }, { id: 'opp', name: 'O' }], winner: null,
+          evolution: { fromId: 'z1', fromName: 'Z', toId: 'z2', toName: 'Z2', authorId: 'p1' } },
+      ],
+    }
+    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
+  })
+
+  it('generations are sequential integers starting at 0', () => {
+    const room1 = makeEvolvedRoom('A', [{ fromId: 'c1', fromName: 'A', toId: 'c2', toName: 'B', roundNumber: 1 }])
+    const room2 = makeEvolvedRoom('B', [{ fromId: 'c2', fromName: 'B', toId: 'c3', toName: 'C', roundNumber: 1 }])
+    const room3 = makeEvolvedRoom('C', [{ fromId: 'c3', fromName: 'C', toId: 'c4', toName: 'D', roundNumber: 1 }])
+    const story = buildChainEvolutionStory([room1, room2, room3], 'c1')
+    expect(story.map(s => s.generation)).toEqual([0, 1, 2, 3])
   })
 })
