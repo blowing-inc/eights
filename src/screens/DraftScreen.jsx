@@ -14,7 +14,7 @@ import {
   normalizeRoomSettings, buildActiveFormMap,
 } from '../gameLogic.js'
 
-export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack }) {
+export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack, onEndSeries }) {
   const [room, setLocal] = useState(init)
   const { rosterSize } = normalizeRoomSettings(init.settings)
   // substitutions: { [originalId]: combatant } — active-form overrides for heritage games
@@ -29,7 +29,9 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [trapPickerFor, setTrapPickerFor] = useState(null) // slot index with picker open, or null
   const [submitted, setSubmitted] = useState(existing.length === rosterSize)
   const [forceStarting, setForceStarting] = useState(false)
+  const [confirmEndSeries, setConfirmEndSeries] = useState(false)
   const isHost = room.host === playerId
+  const isSeries = !!room.prevRoomId
 
   const saveTimer = useRef(null)
   const [saveStatus, setSaveStatus] = useState(savedDraft ? 'restored' : null)
@@ -153,6 +155,21 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
             <button onClick={forceStart} disabled={forceStarting} style={{ ...btn('primary'), background: 'var(--color-text-warning)', padding: '8px', fontSize: 13 }}>
               {forceStarting ? 'Starting…' : `Start with ${readyCount} players →`}
             </button>
+          </div>
+        )}
+        {isHost && isSeries && (
+          <div style={{ marginTop: 16 }}>
+            {!confirmEndSeries
+              ? <button onClick={() => setConfirmEndSeries(true)} style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>End series</button>
+              : <div style={{ padding: '12px 14px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)' }}>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>End the series?</p>
+                  <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>This draft will be discarded. The completed games will remain in battle history and can be continued later.</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, end it</button>
+                    <button onClick={() => setConfirmEndSeries(false)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>Cancel</button>
+                  </div>
+                </div>
+            }
           </div>
         )}
       </Screen>
@@ -300,6 +317,21 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         )
       })}
       <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my {rosterSize} →</button>
+      {isHost && isSeries && (
+        <div style={{ marginTop: 12 }}>
+          {!confirmEndSeries
+            ? <button onClick={() => setConfirmEndSeries(true)} style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>End series</button>
+            : <div style={{ padding: '12px 14px', background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-md)' }}>
+                <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>End the series?</p>
+                <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>This draft will be discarded. The completed games will remain in battle history and can be continued later.</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, end it</button>
+                  <button onClick={() => setConfirmEndSeries(false)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>Cancel</button>
+                </div>
+              </div>
+          }
+        </div>
+      )}
     </div>
   )
 }

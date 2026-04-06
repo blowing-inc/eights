@@ -199,6 +199,23 @@ export default function App() {
     nav('draft')
   }
 
+  async function handleEndSeries() {
+    if (!room) { goHome(); return }
+    // Soft-cancel the empty draft room so it's excluded from active lobbies and history
+    await sset('room:' + room.id, { ...room, phase: 'ended', cancelledAt: Date.now() })
+    removeLobbyCode(room.id)
+    // Clear nextRoomId on the completed room so it's re-openable from history,
+    // and ensure it's marked ended so it doesn't reappear in open lobbies
+    if (room.prevRoomId) {
+      const prev = await sget('room:' + room.prevRoomId)
+      if (prev) {
+        const { nextRoomId: _removed, ...restored } = prev
+        await sset('room:' + prev.id, { ...restored, phase: 'ended' })
+      }
+    }
+    goHome()
+  }
+
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
   let content = null
@@ -231,7 +248,7 @@ export default function App() {
   else if (screen === 'lobby')
     content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')
-    content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} />
+    content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} onEndSeries={handleEndSeries} />
   else if (screen === 'battle')
     content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
   else if (screen === 'vote')
