@@ -20,6 +20,7 @@ import PlayerProfile from './screens/PlayerProfile.jsx'
 import BestiaryScreen from './screens/BestiaryScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
+import HelpModal from './components/HelpModal.jsx'
 
 function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
   const [open, setOpen] = useState(false)
@@ -124,6 +125,7 @@ export default function App() {
   const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
   const [viewPlayers, setViewPlayers] = useState(false)
   const [viewPlayerProfile, setViewPlayerProfile] = useState(null)
+  const [viewHelp, setViewHelp] = useState(false)
 
   function login(user) {
     localStorage.setItem('eights_user', JSON.stringify(user))
@@ -238,7 +240,7 @@ export default function App() {
   else if (screen === 'admin')
     content = <AdminScreen onBack={() => nav('home')} />
   else if (screen === 'home')
-    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
+    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
     content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
@@ -254,5 +256,5 @@ export default function App() {
   else if (screen === 'vote')
     content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} onHome={goHome} />
 
-  return <>{userPill}{content}</>
+  return <>{userPill}{content}{viewHelp && <HelpModal onClose={() => setViewHelp(false)} />}</>
 }

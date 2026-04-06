@@ -33,9 +33,10 @@ function HomeTicker() {
   )
 }
 
-export default function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies }) {
+export default function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, onPlayers, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies, onHelp }) {
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', position: 'relative' }}>
+      <button onClick={onHelp} title="How to play" style={{ position: 'absolute', top: '1rem', left: '1rem', background: 'transparent', border: '0.5px solid var(--color-border-tertiary)', borderRadius: '50%', width: 28, height: 28, fontSize: 13, color: 'var(--color-text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>?</button>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
         <HomeTicker />
         <div style={{ fontSize: 56, marginBottom: '0.5rem' }}>⚔️</div>
