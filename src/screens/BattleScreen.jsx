@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
+import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
@@ -8,6 +9,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
+  const [sheetCombatant, setSheetCombatant] = useState(null) // { id, inRoom }
 
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
@@ -78,7 +80,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     })()
   }
 
-  return (
+  return (<>
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -112,6 +114,13 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                 : r.draw
                   ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>🤝 Draw</span>
                   : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                {r.combatants.map(c => (
+                  <button key={c.id} onClick={() => setSheetCombatant({ id: c.id, inRoom: c })}
+                    title={c.name}
+                    style={{ background: 'transparent', border: 'none', fontSize: 13, cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-tertiary)', lineHeight: 1 }}>📊</button>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -190,5 +199,14 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         )}
       </>}
     </div>
+    {sheetCombatant && (
+      <CombatantSheet
+        combatantId={sheetCombatant.id}
+        combatant={sheetCombatant.inRoom}
+        playerId={playerId}
+        onClose={() => setSheetCombatant(null)}
+      />
+    )}
+    </>
   )
 }

@@ -101,6 +101,14 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const allPrevWinnersPlaced = areAllPrevWinnersPlaced(myPrevWinners, names, globalIds)
   const unplacedWinners      = getUnplacedWinners(myPrevWinners, names, globalIds)
 
+  // Detect duplicate combatant names or globalIds across slots.
+  // A champion placed twice still counts — the prev-winner requirement only needs it placed once.
+  const filledNames = names.map(n => n.trim().toLowerCase()).filter(Boolean)
+  const duplicateNames = new Set(filledNames.filter((n, i) => filledNames.indexOf(n) !== i))
+  const filledIds = globalIds.filter(Boolean)
+  const duplicateIds = new Set(filledIds.filter((id, i) => filledIds.indexOf(id) !== i))
+  const hasDuplicates = duplicateNames.size > 0 || duplicateIds.size > 0
+
   async function submit() {
     if (names.some(n => !n.trim())) return
     if (biosRequired && bios.some(b => !b.trim())) return
@@ -233,9 +241,11 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         const isNewCombatant   = names[i].trim() && !isPrevWinnerSlot && !globalIds[i]
         const trap             = traps[i]
         const trapPickerOpen   = trapPickerFor === i
+        const isDuplicate      = (names[i].trim() && duplicateNames.has(names[i].trim().toLowerCase())) ||
+                                 (globalIds[i] && duplicateIds.has(globalIds[i]))
 
         return (
-          <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
+          <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isDuplicate ? '1.5px solid var(--color-border-danger)' : isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 20 }}>#{i + 1}</span>
               <FighterAutocomplete
@@ -321,7 +331,14 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
           </div>
         )
       })}
-      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced)}>Lock in my {rosterSize} →</button>
+      {hasDuplicates && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)' }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: 0 }}>
+            Each combatant must be unique. Remove the duplicate{duplicateNames.size + duplicateIds.size > 1 ? 's' : ''} before locking in.
+          </p>
+        </div>
+      )}
+      <button style={btn('primary')} onClick={submit} disabled={names.some(n => !n.trim()) || (biosRequired && bios.some(b => !b.trim())) || (myPrevWinners.length > 0 && !allPrevWinnersPlaced) || hasDuplicates}>Lock in my {rosterSize} →</button>
       {isHost && (
         <div style={{ marginTop: 12 }}>
           {!confirmCancel

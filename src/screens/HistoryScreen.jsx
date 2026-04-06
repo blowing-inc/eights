@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
+import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn, tab } from '../styles.js'
 import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '../gameLogic.js'
 import { slist } from '../supabase.js'
@@ -13,6 +14,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
   const dateStr = new Date(room.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const [roundIdx, setRoundIdx] = useState(0)
   const [rosterPlayer, setRosterPlayer] = useState(null)
+  const [sheetCombatant, setSheetCombatant] = useState(null)
 
   const totalRounds = room.players?.length > 0
     ? Math.min(...room.players.map(p => (room.combatants?.[p.id] || []).length))
@@ -25,7 +27,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
   const rd = allRounds[roundIdx]
   const rosterPlayers = (room.players || []).filter(p => !p.isBot && (room.combatants?.[p.id] || []).length > 0)
 
-  return (
+  return (<>
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '0.75rem' }}>
         <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
@@ -202,13 +204,17 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
             ? allCombatants.sort((a, b) => b.wins - a.wins).map(c => {
                 const owner = (room.players || []).find(p => p.id === c.ownerId)
                 return (
-                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
-                      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L{c.draws > 0 ? ` – ${c.draws}D` : ''}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
-                  </button>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
+                    <button onClick={() => setViewCombatant(c)} style={{ flex: 1, textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md) 0 0 var(--border-radius-md)', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{c.wins}W – {c.losses}L{c.draws > 0 ? ` – ${c.draws}D` : ''}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {owner?.name || c.ownerName}</div>
+                    </button>
+                    <button onClick={() => setSheetCombatant({ id: c.id, inRoom: c })} title={c.name}
+                      style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderLeft: 'none', borderRadius: '0 var(--border-radius-md) var(--border-radius-md) 0', padding: '0 10px', fontSize: 13, cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>📊</button>
+                  </div>
                 )
               })
             : (room.combatants?.[rosterPlayer] || []).map((c, i) => {
@@ -221,26 +227,38 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
                 const bg       = played ? (isWin ? 'var(--color-background-success)' : isLoss ? 'var(--color-background-danger)' : 'var(--color-background-secondary)') : 'var(--color-background-secondary)'
                 const border   = `0.5px solid ${played ? (isWin ? 'var(--color-border-success)' : isLoss ? 'var(--color-border-danger)' : 'var(--color-border-tertiary)') : 'var(--color-border-tertiary)'}`
                 return (
-                  <button key={c.id} onClick={() => setViewCombatant(c)} style={{ textAlign: 'left', padding: '12px 14px', background: bg, border, borderRadius: 'var(--border-radius-md)', cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {roundNum}</span>
-                        <span style={{ fontSize: 15, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-primary)' }}>
-                          {isWin ? '🏆 ' : isDraw ? '🤝 ' : ''}{c.name}
-                        </span>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
+                    <button onClick={() => setViewCombatant(c)} style={{ flex: 1, textAlign: 'left', padding: '12px 14px', background: bg, border, borderRadius: 'var(--border-radius-md) 0 0 var(--border-radius-md)', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {roundNum}</span>
+                          <span style={{ fontSize: 15, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-primary)' }}>
+                            {isWin ? '🏆 ' : isDraw ? '🤝 ' : ''}{c.name}
+                          </span>
+                        </div>
+                        {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : isLoss ? 'L' : 'D'}</span>}
                       </div>
-                      {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : isLoss ? 'L' : 'D'}</span>}
-                    </div>
-                    {battle?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {battle.opponent}</div>}
-                    {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 60 }}>{c.bio}</div>}
-                  </button>
+                      {battle?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {battle.opponent}</div>}
+                      {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 60 }}>{c.bio}</div>}
+                    </button>
+                    <button onClick={() => setSheetCombatant({ id: c.id, inRoom: c })} title={c.name}
+                      style={{ background: bg, border, borderLeft: 'none', borderRadius: '0 var(--border-radius-md) var(--border-radius-md) 0', padding: '0 10px', fontSize: 13, cursor: 'pointer', color: 'var(--color-text-tertiary)' }}>📊</button>
+                  </div>
                 )
               })
           }
         </div>
       </>}
     </div>
-  )
+    {sheetCombatant && (
+      <CombatantSheet
+        combatantId={sheetCombatant.id}
+        combatant={sheetCombatant.inRoom}
+        playerId={playerId}
+        onClose={() => setSheetCombatant(null)}
+      />
+    )}
+  </>)
 }
 
 function RoomRow({ room, onSelect, playerId }) {

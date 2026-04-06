@@ -376,12 +376,13 @@ export async function getEligibleCombatants(ownerId) {
 // Returns true if a published combatant with this name already exists.
 // Case-insensitive. Used to enforce the novel-entry constraint on evolution.
 export async function checkCombatantNameExists(name) {
+  // Check all combatants, not just published — an unpublished name in a running game
+  // must not be reused as an evolution target (both would publish with the same name).
   try {
     const { data, error } = await supabase
       .from('combatants')
       .select('id')
       .ilike('name', name.trim())
-      .eq('published', true)
       .limit(1)
       .maybeSingle()
     if (error) { console.error('checkCombatantNameExists error', error); return false }

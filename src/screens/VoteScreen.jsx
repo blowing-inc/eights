@@ -7,6 +7,7 @@ import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
+import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome }) {
@@ -16,6 +17,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [editBio,  setEditBio]  = useState('')
   const [saving, setSaving] = useState(false)
   const [simulating, setSimulating] = useState(false)
+  const [sheetCombatant, setSheetCombatant] = useState(null)
 
   // Evolution flow state machine.
   // null                              — no evolution in progress
@@ -352,7 +354,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  return (
+  return (<>
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       {room.devMode && (
@@ -405,6 +407,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                   <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0, marginLeft: 8 }}>
                     {owner?.isBot && <Pill>bot</Pill>}
+                    <button onClick={e => { e.stopPropagation(); setSheetCombatant({ id: c.id, inRoom: c }) }} style={{ background: 'transparent', border: 'none', fontSize: 13, cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-tertiary)', lineHeight: 1 }}>📊</button>
                     {canEdit && !isEvolving && <button onClick={e => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(c) }} style={{ fontSize: 11, padding: '2px 8px', background: 'transparent', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99, cursor: 'pointer' }}>{isEditing ? 'cancel' : 'edit'}</button>}
                   </div>
                 </div>
@@ -570,5 +573,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         <RoundChat messages={round.chat} onSend={sendChat} />
       </div>
     </div>
-  )
+    {sheetCombatant && (
+      <CombatantSheet
+        combatantId={sheetCombatant.id}
+        combatant={sheetCombatant.inRoom}
+        playerId={playerId}
+        onClose={() => setSheetCombatant(null)}
+      />
+    )}
+  </>)
 }
