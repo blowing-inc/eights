@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom } from '../supabase.js'
-import { uid, canUndoLastRound, undoRound } from '../gameLogic.js'
+import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
   const [room, setLocal] = useState(init)
@@ -55,11 +55,12 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setConfirmUndo(false)
 
-    // Fire-and-forget: reverse global combatant stats
+    // Fire-and-forget: reverse global combatant stats including reactions
     ;(async () => {
       for (const c of last.combatants) {
         const wasWin = last.winner?.id === c.id
-        await incrementCombatantStats(c.id, { wins: wasWin ? -1 : 0, losses: wasWin ? 0 : -1 })
+        const { heart, angry, cry } = tallyReactions(last.playerReactions, c.id)
+        await incrementCombatantStats(c.id, { wins: wasWin ? -1 : 0, losses: wasWin ? 0 : -1, heart: -heart, angry: -angry, cry: -cry })
       }
     })()
   }
