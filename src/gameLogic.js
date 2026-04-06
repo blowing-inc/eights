@@ -557,6 +557,38 @@ export function buildActiveFormMap(rooms) {
 }
 
 /**
+ * Translates a prevWinners map so that any winner who has since evolved is
+ * replaced by their current active form.
+ *
+ * prevWinners    — { [ownerId]: [{ id, name, bio }, ...] }
+ * activeFormMap  — { [originalId]: variantId } from buildActiveFormMap
+ * combatantsById — { [id]: { id, name, bio } } — lookup that must contain variant data
+ *
+ * Entries whose variant data is absent in combatantsById are left unchanged
+ * (safe fallback — never loses data).
+ *
+ * @param {object}  prevWinners
+ * @param {object}  activeFormMap
+ * @param {object}  combatantsById
+ * @returns {object}
+ */
+export function applyActiveFormMap(prevWinners, activeFormMap, combatantsById) {
+  if (!prevWinners || !activeFormMap || !combatantsById) return prevWinners || {}
+  return Object.fromEntries(
+    Object.entries(prevWinners).map(([ownerId, winners]) => [
+      ownerId,
+      winners.map(w => {
+        const variantId = activeFormMap[w.id]
+        if (!variantId) return w
+        const variant = combatantsById[variantId]
+        if (!variant) return w
+        return { id: variant.id, name: variant.name, bio: variant.bio || '' }
+      }),
+    ])
+  )
+}
+
+/**
  * Build the ordered evolution story for one character through a heritage chain.
  * Returns an empty array if the rootId was never evolved in these rooms.
  *

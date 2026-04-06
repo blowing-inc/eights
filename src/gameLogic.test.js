@@ -19,6 +19,7 @@ import {
   getLineageStats,
   buildActiveFormMap,
   buildChainEvolutionStory,
+  applyActiveFormMap,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1243,5 +1244,59 @@ describe('buildChainEvolutionStory', () => {
     const room3 = makeEvolvedRoom('C', [{ fromId: 'c3', fromName: 'C', toId: 'c4', toName: 'D', roundNumber: 1 }])
     const story = buildChainEvolutionStory([room1, room2, room3], 'c1')
     expect(story.map(s => s.generation)).toEqual([0, 1, 2, 3])
+  })
+})
+
+// ─── applyActiveFormMap ───────────────────────────────────────────────────────
+
+describe('applyActiveFormMap', () => {
+  const variant = { id: 'c2', name: 'MJ scuffed', bio: 'took a tumble' }
+  const byId = { c2: variant }
+
+  it('returns empty object for null/missing prevWinners', () => {
+    expect(applyActiveFormMap(null, {}, {})).toEqual({})
+    expect(applyActiveFormMap(undefined, {}, {})).toEqual({})
+  })
+
+  it('returns prevWinners unchanged when activeFormMap is empty', () => {
+    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
+    expect(applyActiveFormMap(pw, {}, byId)).toEqual(pw)
+  })
+
+  it('substitutes an evolved winner with their variant', () => {
+    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
+    const result = applyActiveFormMap(pw, { c1: 'c2' }, byId)
+    expect(result.p1[0]).toEqual({ id: 'c2', name: 'MJ scuffed', bio: 'took a tumble' })
+  })
+
+  it('leaves winner unchanged when variant is not found in combatantsById', () => {
+    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
+    const result = applyActiveFormMap(pw, { c1: 'c2' }, {})
+    expect(result.p1[0]).toEqual({ id: 'c1', name: 'MJ', bio: '' })
+  })
+
+  it('handles multiple owners with partial substitutions', () => {
+    const pw = {
+      p1: [{ id: 'c1', name: 'MJ', bio: '' }],
+      p2: [{ id: 'd1', name: 'Goat', bio: 'baa' }],
+    }
+    const result = applyActiveFormMap(pw, { c1: 'c2' }, byId)
+    expect(result.p1[0].id).toBe('c2')
+    expect(result.p2[0].id).toBe('d1') // unchanged
+  })
+
+  it('defaults bio to empty string when variant bio is absent', () => {
+    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
+    const nobio = { c2: { id: 'c2', name: 'MJ scuffed' } }
+    const result = applyActiveFormMap(pw, { c1: 'c2' }, nobio)
+    expect(result.p1[0].bio).toBe('')
+  })
+
+  it('does not mutate inputs', () => {
+    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
+    const map = { c1: 'c2' }
+    const original = JSON.parse(JSON.stringify(pw))
+    applyActiveFormMap(pw, map, byId)
+    expect(pw).toEqual(original)
   })
 })

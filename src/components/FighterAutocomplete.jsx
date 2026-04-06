@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { inp } from '../styles.js'
 import { searchCombatants, getPlayerRecentCombatants } from '../supabase.js'
 
-export default function FighterAutocomplete({ value, onChange, onSelect, placeholder, playerId }) {
+export default function FighterAutocomplete({ value, onChange, onSelect, placeholder, playerId, substitutions = {} }) {
   const [open, setOpen] = useState(false)
   const [results, setResults] = useState([])
   const [recent, setRecent] = useState([])
@@ -17,7 +17,21 @@ export default function FighterAutocomplete({ value, onChange, onSelect, placeho
     return () => clearTimeout(t)
   }, [value])
 
-  const items = value.trim() ? results : recent
+  // In heritage games, replace superseded originals with their active variant.
+  // Deduplicate by id so the variant doesn't appear twice if already in results.
+  function resolveItems(list) {
+    const seen = new Set()
+    const out = []
+    for (const f of list) {
+      const sub = substitutions[f.id]
+      const resolved = sub ? { ...sub, _evolvedFrom: f.name } : f
+      if (!seen.has(resolved.id)) { seen.add(resolved.id); out.push(resolved) }
+    }
+    return out
+  }
+
+  const rawItems = value.trim() ? results : recent
+  const items = resolveItems(rawItems)
   const showHeader = !value.trim() && items.length > 0
 
   return (
@@ -37,6 +51,9 @@ export default function FighterAutocomplete({ value, onChange, onSelect, placeho
             <button key={f.id} onMouseDown={() => { onSelect(f); setOpen(false) }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'transparent', border: 'none', borderTop: '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{f.name}</div>
+              {f._evolvedFrom && (
+                <div style={{ fontSize: 10, color: 'var(--color-text-info)', marginTop: 1 }}>↗ evolved from {f._evolvedFrom}</div>
+              )}
               <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 1 }}>
                 {f.wins}W – {f.losses}L · {f.owner_name}{f.bio ? ` · ${f.bio.slice(0, 40)}${f.bio.length > 40 ? '…' : ''}` : ''}
               </div>

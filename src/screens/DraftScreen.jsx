@@ -6,17 +6,19 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain } from '../supabase.js'
 import {
   ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
-  normalizeRoomSettings,
+  normalizeRoomSettings, buildActiveFormMap,
 } from '../gameLogic.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack }) {
   const [room, setLocal] = useState(init)
   const { rosterSize } = normalizeRoomSettings(init.settings)
+  // substitutions: { [originalId]: combatant } — active-form overrides for heritage games
+  const [substitutions, setSubstitutions] = useState({})
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
   const savedDraft = existing.length === 0 ? (room.drafts?.[playerId] ?? null) : null
@@ -63,6 +65,28 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       if (r.phase === 'battle') onDone()
     })
   }, [room.id])
+
+  // Heritage game: load the ancestry chain and build active-form substitutions
+  // so the autocomplete shows evolved forms instead of their superseded originals.
+  useEffect(() => {
+    if (!init.prevRoomId) return
+    getHeritageChain(init.prevRoomId).then(chain => {
+      const activeFormMap = buildActiveFormMap(chain)
+      if (!Object.keys(activeFormMap).length) return
+      const allCombatants = chain.flatMap(r => Object.values(r.combatants || {}).flat())
+      const combatantsById = Object.fromEntries(allCombatants.map(c => [c.id, c]))
+      const subs = {}
+      for (const [origId, varId] of Object.entries(activeFormMap)) {
+        const v = combatantsById[varId]
+        if (v) subs[origId] = {
+          id: v.id, name: v.name, bio: v.bio || '',
+          wins: v.wins || 0, losses: v.losses || 0,
+          owner_name: v.ownerName || v.owner_name || '',
+        }
+      }
+      setSubstitutions(subs)
+    })
+  }, [init.prevRoomId])
 
   const biosRequired = normalizeRoomSettings(room.settings).biosRequired
   const myPrevWinners = room.prevWinners?.[playerId] || []
@@ -197,6 +221,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 onSelect={f => { const n = [...names]; n[i] = f.name; setNames(n); const b = [...bios]; b[i] = f.bio || ''; setBios(b); const g = [...globalIds]; g[i] = f.id; setGlobalIds(g) }}
                 placeholder={`Combatant ${i + 1}`}
                 playerId={playerId}
+                substitutions={substitutions}
               />
               {isPrevWinnerSlot && globalIds[i] && (
                 <CombatantStatsPill globalId={globalIds[i]} label="🏆 champion" pillStyle={{ background: 'var(--color-background-success)', color: 'var(--color-text-success)', border: '0.5px solid var(--color-border-success)' }} />

@@ -341,6 +341,21 @@ export async function getEligibleCombatants(ownerId) {
   } catch (e) { console.error('getEligibleCombatants exception', e); return [] }
 }
 
+// Walks the prevRoomId chain from startRoomId backwards, returning all ancestor
+// rooms oldest-first. Used in DraftScreen to build the active-form substitution
+// map for heritage games.
+export async function getHeritageChain(startRoomId) {
+  const rooms = []
+  let currentId = startRoomId
+  while (currentId) {
+    const room = await sget('room:' + currentId)
+    if (!room) break
+    rooms.unshift(room) // prepend so oldest is first for buildActiveFormMap
+    currentId = room.prevRoomId || null
+  }
+  return rooms
+}
+
 // ─── Admin combatant operations ──────────────────────────────────────────────
 
 // Search all combatants including unpublished — admin only

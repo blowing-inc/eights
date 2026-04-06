@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getRoomsByIds, getActiveRoomsForPlayer, sset } from './supabase.js'
-import { uid, makeBots, makeBotCombatants, playerColor, extractPreviousWinners } from './gameLogic.js'
+import { uid, makeBots, makeBotCombatants, playerColor, extractPreviousWinners, buildActiveFormMap, applyActiveFormMap } from './gameLogic.js'
 
 // Screens
 import HomeScreen from './screens/HomeScreen.jsx'
@@ -129,11 +129,21 @@ export default function App() {
 
   async function handleHostNextBattle(completedRoom) {
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
-    const prevWinners = extractPreviousWinners(completedRoom.rounds)
+    let prevWinners = extractPreviousWinners(completedRoom.rounds)
+
+    // Ticket 16: if any winner evolved during this game, carry forward the variant
+    const activeFormMap = buildActiveFormMap([completedRoom])
+    if (Object.keys(activeFormMap).length > 0) {
+      const allCombatants = Object.values(completedRoom.combatants || {}).flat()
+      const combatantsById = Object.fromEntries(allCombatants.map(c => [c.id, c]))
+      prevWinners = applyActiveFormMap(prevWinners, activeFormMap, combatantsById)
+    }
+
     const newRoom = {
       id: roomCode, code: roomCode, host: playerId, phase: 'draft',
       players: completedRoom.players,
       combatants: {}, rounds: [], currentRound: 0,
+      prevRoomId: completedRoom.id, // Ticket 14: heritage chain anchor
       createdAt: Date.now(), prevWinners,
     }
     await sset('room:' + roomCode, newRoom)
