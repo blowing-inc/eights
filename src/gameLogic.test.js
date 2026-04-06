@@ -25,6 +25,7 @@ import {
   prepareNextBattle,
   computeSeriesStandings,
   applyDraw,
+  replacePlayerIdInRoom,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1660,5 +1661,109 @@ describe('canUndoLastRound (draw)', () => {
 
   it('disallows undo when round has no winner and no draw', () => {
     expect(canUndoLastRound(true, 1, { combatants: [] })).toBe(false)
+  })
+})
+
+// ─── replacePlayerIdInRoom ────────────────────────────────────────────────────
+
+describe('replacePlayerIdInRoom', () => {
+  const OLD = 'guest-1'
+  const NEW = 'user-99'
+
+  function makeRoom(overrides = {}) {
+    return {
+      id: 'room1',
+      host: OLD,
+      players: [{ id: OLD, name: 'Alice' }, { id: 'p2', name: 'Bob' }],
+      combatants: {
+        [OLD]: [{ id: 'c1', ownerId: OLD }, { id: 'c2', ownerId: OLD }],
+        p2:    [{ id: 'c3', ownerId: 'p2' }],
+      },
+      rounds: [
+        {
+          id: 'r1',
+          combatants: [{ id: 'c1', ownerId: OLD }, { id: 'c3', ownerId: 'p2' }],
+          winner:     { id: 'c1', ownerId: OLD },
+          picks:      { [OLD]: 'c1', p2: 'c3' },
+          playerReactions: { [OLD]: { c3: 'heart' }, p2: { c1: 'angry' } },
+          chat:       [{ playerId: OLD, text: 'hi' }, { playerId: 'p2', text: 'yo' }],
+        },
+      ],
+      prevWinners: { [OLD]: [{ id: 'c1', name: 'A' }], p2: [] },
+      ...overrides,
+    }
+  }
+
+  it('updates host', () => {
+    expect(replacePlayerIdInRoom(makeRoom(), OLD, NEW).host).toBe(NEW)
+  })
+
+  it('does not change unrelated host', () => {
+    const room = makeRoom({ host: 'p2' })
+    expect(replacePlayerIdInRoom(room, OLD, NEW).host).toBe('p2')
+  })
+
+  it('updates player id in players list', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.players.find(p => p.id === NEW)).toBeTruthy()
+    expect(result.players.find(p => p.id === OLD)).toBeUndefined()
+  })
+
+  it('remaps combatants map key and ownerId', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.combatants[NEW]).toHaveLength(2)
+    expect(result.combatants[NEW][0].ownerId).toBe(NEW)
+    expect(result.combatants[OLD]).toBeUndefined()
+    expect(result.combatants.p2[0].ownerId).toBe('p2') // unchanged
+  })
+
+  it('updates round combatant ownerId', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    const rc = result.rounds[0].combatants.find(c => c.ownerId === NEW)
+    expect(rc).toBeTruthy()
+    expect(result.rounds[0].combatants.find(c => c.ownerId === OLD)).toBeUndefined()
+  })
+
+  it('updates round winner ownerId', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.rounds[0].winner.ownerId).toBe(NEW)
+  })
+
+  it('remaps picks key', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.rounds[0].picks[NEW]).toBe('c1')
+    expect(result.rounds[0].picks[OLD]).toBeUndefined()
+    expect(result.rounds[0].picks.p2).toBe('c3') // unchanged
+  })
+
+  it('remaps playerReactions key', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.rounds[0].playerReactions[NEW]).toEqual({ c3: 'heart' })
+    expect(result.rounds[0].playerReactions[OLD]).toBeUndefined()
+  })
+
+  it('updates chat playerId', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.rounds[0].chat[0].playerId).toBe(NEW)
+    expect(result.rounds[0].chat[1].playerId).toBe('p2') // unchanged
+  })
+
+  it('remaps prevWinners key', () => {
+    const result = replacePlayerIdInRoom(makeRoom(), OLD, NEW)
+    expect(result.prevWinners[NEW]).toBeTruthy()
+    expect(result.prevWinners[OLD]).toBeUndefined()
+    expect(result.prevWinners.p2).toEqual([]) // unchanged
+  })
+
+  it('is a no-op when oldId === newId', () => {
+    const room = makeRoom()
+    expect(replacePlayerIdInRoom(room, OLD, OLD)).toEqual(room)
+  })
+
+  it('does not mutate the input', () => {
+    const room = makeRoom()
+    const original = JSON.parse(JSON.stringify(room))
+    replacePlayerIdInRoom(room, OLD, NEW)
+    expect(room).toEqual(original)
   })
 })

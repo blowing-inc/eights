@@ -74,7 +74,10 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
       {room.devMode && <DevBanner />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle arena</h2>
-        <button onClick={onHistory} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>History</button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={onHistory} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>History</button>
+          <button onClick={onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Home</button>
+        </div>
       </div>
 
       {room.currentRound === 0 && (
@@ -144,6 +147,12 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         )}
         {!isHost && room.phase === 'voting' && (
           <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Deliberating — waiting for host to confirm…</p>
+        )}
+        {!isHost && room.phase === 'battle' && room.currentRound < totalRounds && (round?.winner || round?.draw) && (
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13, margin: 0 }}>Waiting for host to start Round {room.currentRound + 1}…</p>
+            <button onClick={onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, flexShrink: 0 }}>← Home</button>
+          </div>
         )}
         {room.currentRound >= totalRounds && (round?.winner || round?.draw) && (
           <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>

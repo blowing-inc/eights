@@ -9,7 +9,7 @@ import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom
 import SpectatorList from '../components/SpectatorList.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
-export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer }) {
+export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome }) {
   const [room, setLocal] = useState(init)
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
@@ -354,7 +354,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
-        <SpectatorList spectators={room.spectators} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SpectatorList spectators={room.spectators} />
+          <button onClick={onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Home</button>
+        </div>
       </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}
@@ -449,7 +452,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
               {/* Normal: two-button decision */}
               {isHost && isPicked && !evolutionPending && !isEvolving && (
                 <div style={{ padding: '0 16px 14px', display: 'flex', gap: 8 }}>
-                  <button onClick={() => confirmWinner(c.id)} style={{ ...btn('primary'), flex: 1, padding: '10px', fontSize: 14 }}>
+                  <button onClick={() => confirmWinner(c.id)} style={{ ...btn('primary'), flex: 2, padding: '10px', fontSize: 14 }}>
                     Confirm win ✓
                   </button>
                   <button
@@ -457,7 +460,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                       stage:       c.ownerId === playerId ? 'writing' : 'pending',
                       combatantId: c.id,
                     })}
-                    style={{ ...btn(), padding: '10px', fontSize: 14 }}
+                    style={{ ...btn(), flex: 1, padding: '8px 10px', fontSize: 13 }}
                   >
                     Evolve ⚡
                   </button>

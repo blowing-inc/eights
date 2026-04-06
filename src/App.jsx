@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getRoomsByIds, getActiveRoomsForPlayer, sset } from './supabase.js'
-import { uid, makeBots, makeBotCombatants, playerColor, prepareNextBattle } from './gameLogic.js'
+import { getRoomsByIds, getActiveRoomsForPlayer, sget, sset } from './supabase.js'
+import { uid, makeBots, makeBotCombatants, playerColor, prepareNextBattle, replacePlayerIdInRoom } from './gameLogic.js'
 
 // Screens
 import HomeScreen from './screens/HomeScreen.jsx'
@@ -20,6 +20,43 @@ import PlayerProfile from './screens/PlayerProfile.jsx'
 import BestiaryScreen from './screens/BestiaryScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
+
+function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [open])
+
+  const label = isGuest ? `${effectiveName || 'guest'} (guest)` : `⚔ ${currentUser.username}`
+
+  return (
+    <div style={{ position: 'fixed', top: 12, right: 14, zIndex: 999 }}>
+      <div
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        style={{ fontSize: 12, padding: '4px 10px', borderRadius: 99, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', color: isGuest ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)', cursor: 'pointer', userSelect: 'none' }}
+      >
+        {label}
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '4px 0', minWidth: 148, boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+          {isGuest ? (
+            <button onClick={onLogin} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: 13, background: 'transparent', border: 'none', color: 'var(--color-text-primary)', cursor: 'pointer' }}>
+              Log in / Register
+            </button>
+          ) : (
+            <button onClick={onLogout} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', fontSize: 13, background: 'transparent', border: 'none', color: 'var(--color-text-danger)', cursor: 'pointer' }}>
+              Log out
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Read ?join= / ?spectate= from the URL once at module load (before any React rendering)
 const _params        = new URLSearchParams(window.location.search)
@@ -95,7 +132,24 @@ export default function App() {
   function logout() {
     localStorage.removeItem('eights_user')
     setCurrentUser(null)
+    goHome()
   }
+
+  // When a guest logs in while inside a game, migrate the room blob so the
+  // new account id replaces the guest id everywhere it appears.
+  useEffect(() => {
+    if (!currentUser || !room) return
+    const guestInRoom = (room.players || []).some(p => p.id === guestId)
+    if (!guestInRoom || guestId === currentUser.id) return
+    ;(async () => {
+      const r = await sget('room:' + room.id)
+      if (!r) return
+      if (!(r.players || []).some(p => p.id === guestId)) return
+      const updated = replacePlayerIdInRoom(r, guestId, currentUser.id)
+      await sset('room:' + r.id, updated)
+      setRoom(updated)
+    })()
+  }, [currentUser?.id])
 
   const nav = s => setScreen(s)
 
@@ -121,11 +175,18 @@ export default function App() {
     nav('draft')
   }
 
-  const userPill = (
-    <div style={{ position: 'fixed', top: 12, right: 14, zIndex: 999, fontSize: 12, padding: '4px 10px', borderRadius: 99, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', color: isGuest ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)', pointerEvents: 'none', userSelect: 'none' }}>
-      {isGuest ? `${effectiveName || 'guest'} (guest)` : `⚔ ${currentUser.username}`}
-    </div>
-  )
+  function goAuth() {
+    setAfterAuth(screen)
+    nav('auth')
+  }
+
+  const userPill = <UserPill
+    currentUser={currentUser}
+    isGuest={isGuest}
+    effectiveName={effectiveName}
+    onLogout={logout}
+    onLogin={goAuth}
+  />
 
   async function handleHostNextBattle(completedRoom) {
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
@@ -174,7 +235,7 @@ export default function App() {
   else if (screen === 'battle')
     content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
   else if (screen === 'vote')
-    content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} />
+    content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} onHome={goHome} />
 
   return <>{userPill}{content}</>
 }

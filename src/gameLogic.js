@@ -764,6 +764,66 @@ export function prepareNextBattle(completedRoom, { newRoomCode, hostId, now = Da
   return { newRoom, updatedCompletedRoom }
 }
 
+// ─── Guest session migration ──────────────────────────────────────────────────
+
+/**
+ * Replaces every occurrence of oldId with newId throughout a room blob.
+ * Used when a guest logs in mid-game to associate the active session with their account.
+ *
+ * Touches: host, players, combatants map key + ownerId, rounds combatants ownerId,
+ *          rounds winner ownerId, rounds picks keys, rounds playerReactions keys,
+ *          rounds chat playerId, prevWinners map key.
+ */
+export function replacePlayerIdInRoom(room, oldId, newId) {
+  if (!room || !oldId || !newId || oldId === newId) return room
+
+  const players = (room.players || []).map(p =>
+    p.id === oldId ? { ...p, id: newId } : p
+  )
+
+  const combatants = { ...room.combatants }
+  if (combatants[oldId]) {
+    combatants[newId] = combatants[oldId].map(c => ({ ...c, ownerId: newId }))
+    delete combatants[oldId]
+  }
+
+  const host = room.host === oldId ? newId : room.host
+
+  const rounds = (room.rounds || []).map(rd => ({
+    ...rd,
+    combatants: (rd.combatants || []).map(c =>
+      c.ownerId === oldId ? { ...c, ownerId: newId } : c
+    ),
+    winner: rd.winner?.ownerId === oldId
+      ? { ...rd.winner, ownerId: newId }
+      : rd.winner,
+    picks: rd.picks
+      ? Object.fromEntries(Object.entries(rd.picks).map(([k, v]) => [k === oldId ? newId : k, v]))
+      : rd.picks,
+    playerReactions: rd.playerReactions
+      ? Object.fromEntries(Object.entries(rd.playerReactions).map(([k, v]) => [k === oldId ? newId : k, v]))
+      : rd.playerReactions,
+    chat: (rd.chat || []).map(m =>
+      m.playerId === oldId ? { ...m, playerId: newId } : m
+    ),
+  }))
+
+  const prevWinners = room.prevWinners ? { ...room.prevWinners } : undefined
+  if (prevWinners?.[oldId]) {
+    prevWinners[newId] = prevWinners[oldId]
+    delete prevWinners[oldId]
+  }
+
+  return {
+    ...room,
+    host,
+    players,
+    combatants,
+    rounds,
+    ...(prevWinners !== undefined ? { prevWinners } : {}),
+  }
+}
+
 // ─── Series standings ─────────────────────────────────────────────────────────
 
 /**
