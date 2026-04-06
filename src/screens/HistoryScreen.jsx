@@ -43,9 +43,9 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
       </div>
 
       {canReopen && (
-        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: 0 }}>You hosted this tournament. Start a next battle with the same players.</p>
-          <button onClick={() => onNextBattle(room)} style={{ ...btn('primary'), padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>Next Battle ⚔️</button>
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: '0 0 10px' }}>You hosted this tournament. Continue the series with the same players.</p>
+          <button onClick={() => onNextBattle(room)} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13, color: 'var(--color-text-info)', borderColor: 'var(--color-border-info)' }}>Continue series ⚔️</button>
         </div>
       )}
 
