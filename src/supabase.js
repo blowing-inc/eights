@@ -298,6 +298,64 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   } catch (e) { console.error('getPlayerRecentCombatants exception', e); return [] }
 }
 
+// ─── Admin combatant operations ──────────────────────────────────────────────
+
+// Search all combatants including unpublished — admin only
+export async function adminSearchAllCombatants(query = '') {
+  try {
+    let q = supabase.from('combatants')
+      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, owner_id, owner_name, published')
+      .order('updated_at', { ascending: false })
+      .limit(50)
+    if (query.trim()) q = q.ilike('name', `%${query.trim()}%`)
+    const { data, error } = await q
+    if (error) { console.error('adminSearchAllCombatants error', error); return [] }
+    return data || []
+  } catch (e) { console.error('adminSearchAllCombatants exception', e); return [] }
+}
+
+export async function adminDeleteCombatant(id) {
+  try {
+    const { error } = await supabase.from('combatants').delete().eq('id', id)
+    if (error) console.error('adminDeleteCombatant error', error)
+  } catch (e) { console.error('adminDeleteCombatant exception', e) }
+}
+
+// Set exact stat values (used after recalculation)
+export async function adminSetCombatantStats(id, { wins, losses, heart, angry, cry }) {
+  try {
+    const { error } = await supabase.from('combatants').update({
+      wins, losses,
+      reactions_heart: heart,
+      reactions_angry: angry,
+      reactions_cry:   cry,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) console.error('adminSetCombatantStats error', error)
+  } catch (e) { console.error('adminSetCombatantStats exception', e) }
+}
+
+// ─── Admin user operations ────────────────────────────────────────────────────
+
+// Transfer all room references from dropId → keepId, then delete the drop user.
+// Relies on applyMergeToRoom (pure) from adminLogic.js for the room transforms.
+export async function adminMergeUsers(keepId, dropId, rooms, applyMergeToRoomFn) {
+  try {
+    // Update affected rooms
+    const affected = rooms.filter(r => (r.players || []).some(p => p.id === dropId))
+    for (const room of affected) {
+      const updated = applyMergeToRoomFn(room, dropId, keepId)
+      await sset('room:' + room.id, updated)
+    }
+    // Update combatants table
+    await supabase.from('combatants')
+      .update({ owner_id: keepId, updated_at: new Date().toISOString() })
+      .eq('owner_id', dropId)
+    // Delete the dropped user
+    await supabase.from('users').delete().eq('id', dropId)
+  } catch (e) { console.error('adminMergeUsers exception', e); throw e }
+}
+
 // Full combatant table dump for admin export (includes unpublished)
 export async function getAllCombatantsForExport() {
   try {
