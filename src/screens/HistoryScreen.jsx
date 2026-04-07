@@ -298,6 +298,7 @@ function StandingsTable({ rooms }) {
           <tr>
             <th style={{ textAlign: 'left', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>Player</th>
             <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>W</th>
+            <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>D</th>
             <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4, paddingRight: 8 }}>L</th>
             <th style={{ textAlign: 'right', fontWeight: 400, color: 'var(--color-text-tertiary)', paddingBottom: 4 }}>G</th>
           </tr>
@@ -307,6 +308,7 @@ function StandingsTable({ rooms }) {
             <tr key={r.playerId} style={{ borderTop: i > 0 ? '0.5px solid var(--color-border-tertiary)' : 'none' }}>
               <td style={{ paddingTop: 5, paddingBottom: 5, paddingRight: 8, color: 'var(--color-text-primary)' }}>{r.playerName}</td>
               <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-success)', fontWeight: 500 }}>{r.wins}</td>
+              <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-secondary)' }}>{r.draws}</td>
               <td style={{ textAlign: 'right', paddingRight: 8, color: 'var(--color-text-tertiary)' }}>{r.losses}</td>
               <td style={{ textAlign: 'right', color: 'var(--color-text-tertiary)' }}>{r.games}</td>
             </tr>

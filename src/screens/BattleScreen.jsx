@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn } from '../styles.js'
@@ -10,6 +10,9 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
   const [sheetCombatant, setSheetCombatant] = useState(null) // { id, inRoom }
+  const [undoNotice, setUndoNotice] = useState(null) // "Host undid Round X"
+  const prevRoundRef = useRef(init.currentRound)
+  const undoTimerRef = useRef(null)
 
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
@@ -17,6 +20,14 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         const nextRoom = await sget('room:' + r.nextRoomId)
         if (nextRoom) { setRoom(nextRoom); onRejoinNextBattle(nextRoom); return }
       }
+      // Detect undo for non-hosts: currentRound decreased
+      if (r.host !== playerId && r.currentRound < prevRoundRef.current) {
+        const undoneRound = prevRoundRef.current
+        setUndoNotice(`Host undid Round ${undoneRound}`)
+        clearTimeout(undoTimerRef.current)
+        undoTimerRef.current = setTimeout(() => setUndoNotice(null), 4000)
+      }
+      prevRoundRef.current = r.currentRound
       setLocal(r); setRoom(r)
       if (r.phase === 'voting') onVote()
     })
@@ -165,6 +176,11 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         )}
         {!isHost && room.phase === 'voting' && (
           <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 14 }}>Deliberating — waiting for host to confirm…</p>
+        )}
+        {undoNotice && (
+          <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', fontSize: 13, color: 'var(--color-text-warning)' }}>
+            ↩ {undoNotice}
+          </div>
         )}
         {!isHost && room.phase === 'battle' && room.currentRound < totalRounds && (round?.winner || round?.draw) && (
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
