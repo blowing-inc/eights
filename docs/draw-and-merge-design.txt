@@ -106,6 +106,35 @@ Primary owner: Host designates which owner controls the merged combatant. All
 other owners become co-owners. Suggested default: the combatant with the most
 wins (or first in list if tied). This is a single host tap — no ceremony.
 
+Merge bio authorship:
+  The primary owner (or host, if they decline) writes a fresh bio for the merged
+  combatant. This is a creative act — the writer synthesizes the parents' identities
+  into something new. Parent bios are not concatenated or auto-generated; they are
+  preserved permanently on the parent combatants' own records and are not lost.
+
+  During the merge form, parent bios are shown as collapsible reference cards above
+  the bio input — one card per parent, labeled with the combatant's name, collapsed
+  by default. The writer taps any card to expand and read that bio while writing,
+  then collapses it. This keeps the form compact regardless of the number of parents
+  or bio length, and works cleanly on mobile. The form itself is otherwise identical
+  to EvolutionForm: name field, bio field, submit.
+
+  round.merge also stores toBio as written — if the author leaves the bio blank, it
+  falls back to the primary parent's bio (same fallback as standard evolution).
+
+OPTIONAL UPGRADE: mergeNote
+  An optional short free-text field the host or primary owner can fill in to capture
+  the table reaction to the merge moment — a quoted line, a running joke, the reason
+  the merge felt right. Not a bio substitute. Skippable with a single dismiss.
+
+  round.merge: {
+    ...
+    mergeNote: string | null,   // e.g. "the room went silent when this happened"
+  }
+
+  Displayed in the Bestiary beneath the origin story line, styled as a caption or
+  aside. Preserved forever on the round record.
+
 
 UI FLOW (VoteScreen)
 ---------------------
@@ -126,8 +155,13 @@ The existing "🤝 Declare draw" button becomes a multi-step flow:
   Step 4 (if merge):
     "Who controls the merged combatant?"
     Tap to select one owner from those in the draw
-    → That owner (or host) names and bios the merged combatant
-      (reuses EvolutionForm — same flow as single evolution)
+
+  Step 5 (if merge):
+    Merge form — primary owner (or host) fills in:
+      - Name field
+      - Bio field (with parent bio collapsible cards above it as reference)
+      - mergeNote field (optional, skippable)
+    Reuses EvolutionForm layout; parent bio cards are the only new UI element.
 
 With 2 combatants + no_advance: no extra steps, same behavior as today.
 
@@ -192,4 +226,4 @@ Given interdependencies, implement in this sequence:
      round.merge schema, EvolutionForm reuse for naming
 
   5. Bestiary / story updates — buildChainEvolutionStory merge nodes,
-     co-owner display on combatant detail page
+     co-owner display on combatant detail page, mergeNote caption display

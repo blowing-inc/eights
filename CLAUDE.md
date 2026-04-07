@@ -107,6 +107,26 @@ Once a draft is locked in, the roster for that tournament is fixed for every rou
 
 ---
 
+## UX Fluidity
+
+Every screen and flow must have a clear way out. Players and hosts should never feel trapped, confused about their state, or unable to recover from a wrong tap.
+
+- **Every screen has a back path.** If a user can navigate to it, they can navigate away. No dead ends.
+- **Multi-step flows are always escapable.** Any flow with more than one step must have a visible cancel or back option at every step. Cancelling should restore the prior state cleanly, not leave orphaned data or ambiguous room state.
+- **Delegated actions can be reclaimed or declined.** If the host passes an action to a player (e.g. evolution authorship), the host must always have a way to skip or reclaim it. Equally, the player must always have a way to decline and hand it back — being pulled into a screen by the host should never trap the player there. Either side bailing must leave room state clean.
+- **Destructive or irreversible steps are clearly labeled.** Non-destructive steps should never look like they aren't. Tapping "submit" on a draft pick feels different from tapping "end game" — the UI should reflect that difference.
+- **Flows don't strand state.** If a multi-step flow is cancelled mid-way, the room state must be the same as before it started. No half-written records, no dangling pending flags.
+- **When in doubt, add the escape hatch.** The cost of an unused cancel button is zero. The cost of a player stuck in a broken state mid-game is real.
+
+| Situation | Principle in action |
+|---|---|
+| Evolution passed to owner | Host always has a visible "skip / take back" option; owner always has a visible "decline / pass back" option |
+| Draft screen | "Clear pick" available any time before lock |
+| Multi-step draw / merge flow | Back button at every step; cancel resets draw state entirely |
+| Any modal or sub-flow | Dismiss/cancel is always reachable without completing the flow |
+
+---
+
 ## What this app is
 
 A lightweight, offline-assisted tournament tool for friends. Not a platform. Not a product. A shared artifact — the kind of thing you open years later and it still makes sense.
