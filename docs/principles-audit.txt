@@ -1,0 +1,145 @@
+PRINCIPLES AUDIT — Implementation Backlog
+Generated: 2026-04-07
+Based on: CLAUDE.md design principles
+
+This doc exists so a future session can pick up and implement these changes
+without re-auditing. Each item includes the file(s) to touch, the change
+needed, and why it's required by the principles.
+
+Overall health: core architecture is solid. These are targeted gaps, not
+systemic issues. Implement in priority order below.
+
+================================================================================
+PRIORITY 1 — Guest Nudges (Player Continuity First)
+================================================================================
+
+CLAUDE.md says: nudge guests toward login at natural moments (joining,
+draft submit, etc.). Don't lecture — just make the benefit clear.
+Currently: zero guest nudge moments exist in the app.
+
+Three moments to add, in order of value:
+
+--- 1A. CreateRoom.jsx ---
+Moment: after the guest fills in their name and is about to create a room.
+What to add: one-line nudge beneath the name field (or near the submit button)
+  e.g. "Playing as guest? Log in to save your history across devices."
+  Only show if user is not logged in (check currentUser prop).
+  Should link to / trigger the login flow, not block creation.
+
+--- 1B. DraftScreen.jsx ---
+Moment: after the guest taps the submit/lock confirmation.
+What to add: a brief one-liner on the post-submit state
+  e.g. "Lock in your picks? Log in so you can always rejoin this game."
+  Appears in the confirmation step, not as a wall before submit.
+  Same condition: only for guests.
+
+--- 1C. VoteScreen.jsx ---
+Moment: when a guest casts their first vote (round 1 or first time voting).
+What to add: a dismissible banner or inline note after the vote is recorded.
+  e.g. "Nice pick. Log in so you never lose your spot if you switch devices."
+  One-time show (use local state, don't re-show each vote).
+  Same condition: only for guests.
+
+Implementation note: all three should use the same visual treatment for
+consistency — check how existing nudge UI is styled (if any) or pick one
+pattern and apply it to all three. Keep it subtle: inline text with a
+login link, not a modal.
+
+================================================================================
+PRIORITY 2 — Extract Evolution Logic to gameLogic.js (Dev Practices)
+================================================================================
+
+CLAUDE.md says: applyWinner is the canonical place for round resolution.
+Pure functions for game logic — no Supabase, no React, unit-testable.
+Currently: VoteScreen.jsx builds the evolution round payload inline when
+the host or owner confirms an evolution. This is business logic in a
+component.
+
+Files involved:
+  - src/gameLogic.js  (add the new pure function here)
+  - src/VoteScreen.jsx  (call the new function instead of inline logic)
+
+What to create in gameLogic.js:
+
+  function buildEvolutionRound(round, winnerId, newName, newBio, authorId, opponentName)
+    - Takes the current round object plus evolution inputs
+    - Returns the updated round object with evolution fields set
+    - Must mirror the shape that VoteScreen currently produces inline
+    - Should validate that required fields are present (throw or return null if not)
+    - Pure: no Supabase, no side effects
+
+Steps:
+  1. Find where VoteScreen builds the evolution payload (search for
+     "evolution" object construction in VoteScreen.jsx).
+  2. Extract that construction into gameLogic.js as buildEvolutionRound.
+  3. Import and call it from VoteScreen — VoteScreen still owns the
+     Supabase write, just not the object construction.
+  4. Write a unit test for buildEvolutionRound in the test suite.
+
+================================================================================
+PRIORITY 3 — Evolution Decline UX (UX Fluidity)
+================================================================================
+
+CLAUDE.md says: delegated actions can be reclaimed or declined. The player
+must always have a way to decline and hand it back. Being pulled into a
+screen by the host should never trap the player there.
+Currently: when the host delegates evolution authorship to the owner,
+the owner's escape button says "Cancel" — unclear that declining is
+explicitly allowed and the round will proceed normally without it.
+
+File: src/VoteScreen.jsx
+Location: the EvolutionForm cancel button (around the ownerPromptWinner block)
+
+Change:
+  - Button text: "Cancel" -> "Decline evolution" (or "Skip")
+  - Optionally add a brief label above: "You can skip this — the round
+    result is already recorded."
+  - The skipEvolution() call behind the button is already correct; this
+    is purely a copy/clarity change.
+
+================================================================================
+PRIORITY 4 — Guard lineage.bornFrom in createVariantCombatant (Data Conservative)
+================================================================================
+
+CLAUDE.md says: don't throw things away. The ancestry chain is part of the
+story. Currently there's no guard or comment ensuring bornFrom is always
+set when a variant is created.
+
+File: wherever createVariantCombatant is defined (search gameLogic.js)
+
+Change:
+  - Add an explicit check or assertion that bornFrom is present before
+    the variant object is returned.
+  - Add a comment: "bornFrom is required — it's the lineage link that
+    powers buildChainEvolutionStory. Never omit it."
+  - If bornFrom is missing, throw a descriptive error rather than
+    silently creating an orphaned variant.
+
+================================================================================
+DEFERRED — Ticker/Bot Voice Audit (Narrative Driven)
+================================================================================
+
+CLAUDE.md says: ticker messages, bot personality, combatant bios are part
+of the voice. Maintain that voice.
+Status: not audited in detail. New features added since initial setup
+should have their UI copy checked for "app-speak" vs. thematic language.
+
+When to do this: after the above four items are complete. Do a pass over
+all button labels, confirmation prompts, and system messages added in
+recent commits. Look for generic verbs (Submit, Confirm, Cancel) in
+contexts where a more narrative label would fit without being precious.
+
+================================================================================
+WHAT WAS CONFIRMED SOLID — don't re-audit these
+================================================================================
+
+- buildChainEvolutionStory is consistently used everywhere it should be
+- No hard deletes on game data; soft-ends and undo everywhere
+- Draft roster immutability enforced (variant never replaces original mid-game)
+- Every screen has a back path; no dead ends found
+- Host controls are fast and unambiguous
+- applyWinner, normalizeRoomSettings, applyDraw are single sources of truth
+- Guest session migration (replacePlayerIdInRoom) works correctly
+- Evolution delegation (host skip / owner decline) mechanics are correct;
+  only the copy needs updating (Priority 3 above)
+- Bestiary shows opponent context via buildChainEvolutionStory
