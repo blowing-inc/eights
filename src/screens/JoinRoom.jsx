@@ -4,7 +4,7 @@ import { btn, inp, lbl } from '../styles.js'
 import { sget, sset } from '../supabase.js'
 import { playerColor } from '../gameLogic.js'
 
-export default function JoinRoom({ playerId, playerName, setPlayerName, lockedName, initialCode = '', spectateMode = false, onJoined, onSpectated, onBack, onLogin }) {
+export default function JoinRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, initialCode = '', spectateMode = false, onJoined, onSpectated, onBack, onLogin, openLobbies = [], onLobbies }) {
   const [name, setName] = useState(playerName)
   const [code, setCode] = useState(initialCode)
   const [error, setError] = useState('')
@@ -79,7 +79,14 @@ export default function JoinRoom({ playerId, playerName, setPlayerName, lockedNa
       <input style={{ ...inp(), opacity: lockedName ? 0.65 : 1 }} value={name} onChange={e => { if (!lockedName) setName(e.target.value) }} placeholder="Enter your name" autoFocus={!lockedName} readOnly={lockedName} />
       {lockedName
         ? <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>
-        : onLogin && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Playing as guest. <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in or create account</button></p>}
+        : onLogin && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>
+            Playing as guest. <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in or create account</button>
+            {isGuest && openLobbies.length > 0 && (
+              <> · <button onClick={onLobbies} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>{openLobbies.length} open game{openLobbies.length !== 1 ? 's' : ''} →</button></>
+            )}
+          </p>
+        )}
       <label style={{ ...lbl, marginTop: 16 }}>Room code</label>
       <input style={{ ...inp(), textTransform: 'uppercase', letterSpacing: 4, fontSize: 22 }} value={code} onChange={e => { setCode(e.target.value.toUpperCase()); setSpectateRoom(null); setError('') }} placeholder="XXXX" maxLength={4} onKeyDown={e => e.key === 'Enter' && join()} autoFocus={lockedName} />
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { btn, inp } from '../../styles.js'
-import { listUsers, adminResetUser, slist, adminMergeUsers } from '../../supabase.js'
+import { listUsers, adminResetUser, slist, adminMergeUsers, getCombatantsByOwnerId, adminLinkGuestToUser } from '../../supabase.js'
 import { planMerge, applyMergeToRoom } from '../../adminLogic.js'
+import { replacePlayerIdInRoom } from '../../gameLogic.js'
 
 // ─── Pin Reset section ────────────────────────────────────────────────────────
 
@@ -166,6 +167,118 @@ function MergeSection() {
   )
 }
 
+// ─── Re-attribute guest history ───────────────────────────────────────────────
+//
+// Admin workflow:
+//   1. Use Inspector tab to look up the room → find the guest's player id in JSON
+//   2. Paste that id here, preview what will move, pick a destination account, confirm
+
+function GuestSection() {
+  const [users,      setUsers]      = useState([])
+  const [guestId,    setGuestId]    = useState('')
+  const [destId,     setDestId]     = useState('')
+  const [preview,    setPreview]    = useState(null)  // { combatants, affectedRooms }
+  const [loading,    setLoading]    = useState(false)
+  const [linking,    setLinking]    = useState(false)
+  const [msg,        setMsg]        = useState('')
+  const [error,      setError]      = useState('')
+
+  useEffect(() => { listUsers().then(setUsers) }, [])
+
+  const destUser = users.find(u => u.id === destId)
+
+  async function buildPreview() {
+    const id = guestId.trim()
+    if (!id) { setError('Enter a guest ID.'); return }
+    if (!destId) { setError('Select a destination account.'); return }
+    setLoading(true); setError(''); setPreview(null); setMsg('')
+    const [combatants, rooms] = await Promise.all([
+      getCombatantsByOwnerId(id),
+      slist(),
+    ])
+    const affectedRooms = rooms.filter(r => (r.players || []).some(p => p.id === id))
+    setPreview({ combatants, affectedRooms, rooms })
+    setLoading(false)
+  }
+
+  async function doLink() {
+    if (!preview || !destUser) return
+    setLinking(true); setError(''); setMsg('')
+    try {
+      await adminLinkGuestToUser(guestId.trim(), destUser.id, destUser.username, preview.rooms, replacePlayerIdInRoom)
+      setMsg(`Done. ${preview.combatants.length} combatant${preview.combatants.length !== 1 ? 's' : ''} and ${preview.affectedRooms.length} room${preview.affectedRooms.length !== 1 ? 's' : ''} moved to "${destUser.username}".`)
+      setPreview(null); setGuestId(''); setDestId('')
+    } catch {
+      setError('Link failed. Check the console for details.')
+    }
+    setLinking(false)
+  }
+
+  return (
+    <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
+      <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Re-attribute guest history</h3>
+      <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+        Find the guest's player ID in the Inspector tab, then assign their combatants and room history to a registered account.
+      </p>
+
+      {msg   && <Notice msg={msg} />}
+      {error && <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{error}</p>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        <div>
+          <label style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Guest ID (from Inspector)</label>
+          <input
+            style={{ ...inp(), margin: 0, fontSize: 13, fontFamily: 'monospace' }}
+            placeholder="e.g. abc1234"
+            value={guestId}
+            onChange={e => { setGuestId(e.target.value); setPreview(null) }}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>Destination account</label>
+          <select
+            value={destId}
+            onChange={e => { setDestId(e.target.value); setPreview(null) }}
+            style={{ ...inp(), margin: 0, fontSize: 14 }}
+          >
+            <option value="">— select account —</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {!preview && (
+        <button onClick={buildPreview} disabled={!guestId.trim() || !destId || loading}
+          style={{ ...btn('ghost'), padding: '7px 16px', fontSize: 13, width: 'auto' }}>
+          {loading ? 'Looking up…' : 'Preview'}
+        </button>
+      )}
+
+      {preview && (
+        <div style={{ padding: '12px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', marginTop: 8 }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 4px', fontWeight: 500 }}>Preview</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '0 0 10px' }}>
+            Guest ID <code style={{ fontFamily: 'monospace' }}>{guestId.trim()}</code>:{' '}
+            {preview.combatants.length} combatant{preview.combatants.length !== 1 ? 's' : ''},{' '}
+            {preview.affectedRooms.length} room{preview.affectedRooms.length !== 1 ? 's' : ''} →{' '}
+            "{destUser?.username}"
+            {preview.combatants.length === 0 && preview.affectedRooms.length === 0 && (
+              <span> — nothing found for this ID. Double-check it in the Inspector.</span>
+            )}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={doLink} disabled={linking || (preview.combatants.length === 0 && preview.affectedRooms.length === 0)}
+              style={{ ...btn('primary'), flex: 1, background: 'var(--color-text-warning)', fontSize: 13, padding: '8px' }}>
+              {linking ? 'Linking…' : 'Confirm'}
+            </button>
+            <button onClick={() => setPreview(null)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '8px' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 export default function UsersTab() {
@@ -173,6 +286,7 @@ export default function UsersTab() {
     <>
       <PinResetSection />
       <MergeSection />
+      <GuestSection />
     </>
   )
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
+import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
@@ -12,6 +13,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [sheetCombatant, setSheetCombatant] = useState(null) // { id, inRoom }
   const [undoNotice, setUndoNotice] = useState(null) // "Host undid Round X"
   const [hostOnline, setHostOnline] = useState(null) // null = not yet synced; false = host absent
+  const [presentIds, setPresentIds] = useState([])
   const prevRoundRef = useRef(init.currentRound)
   const undoTimerRef = useRef(null)
 
@@ -35,7 +37,10 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   }, [room.id])
 
   useEffect(() => {
-    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', setHostOnline)
+    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
+      onHostStatusChange: setHostOnline,
+      onPresenceChange:   setPresentIds,
+    })
   }, [room.id])
 
   const isHost = room.host === playerId
@@ -99,6 +104,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   return (<>
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
+      <ConnectionStatus players={room.players} presentIds={presentIds} isHost={isHost} roomCode={room.code} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle arena</h2>
         <div style={{ display: 'flex', gap: 6 }}>

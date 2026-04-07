@@ -4,6 +4,7 @@ import Pill from '../components/Pill.jsx'
 import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
+import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
@@ -28,6 +29,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [evolveSubmitting, setEvolveSubmitting] = useState(false)  // true while name-check is in flight
   const [confirmLeave,     setConfirmLeave]     = useState(false)  // host leaving mid-round
   const [hostOnline,       setHostOnline]       = useState(null)   // null = not yet synced; false = host absent
+  const [presentIds,       setPresentIds]       = useState([])
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
@@ -45,7 +47,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   }, [room.id, room.currentRound])
 
   useEffect(() => {
-    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', setHostOnline)
+    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
+      onHostStatusChange: setHostOnline,
+      onPresenceChange:   setPresentIds,
+    })
   }, [room.id])
 
   // ── Voting ────────────────────────────────────────────────────────────────
@@ -363,6 +368,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   return (<>
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
+      <ConnectionStatus players={room.players} presentIds={presentIds} isHost={isHost} roomCode={room.code} />
       {room.devMode && (
         <button onClick={simulateToEnd} disabled={simulating} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: '1rem', color: 'var(--color-text-warning)' }}>
           {simulating ? 'Simulating…' : '🧪 Simulate to end of battle'}

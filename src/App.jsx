@@ -59,19 +59,26 @@ function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
   )
 }
 
-// Read ?join= / ?spectate= from the URL once at module load (before any React rendering)
-const _params        = new URLSearchParams(window.location.search)
-const _urlJoinCode   = _params.get('join')?.toUpperCase()     || ''
+// Read URL params once at module load (before any React rendering)
+const _params          = new URLSearchParams(window.location.search)
+const _urlJoinCode     = _params.get('join')?.toUpperCase()     || ''
 const _urlSpectateCode = _params.get('spectate')?.toUpperCase() || ''
-if (_urlJoinCode || _urlSpectateCode) window.history.replaceState(null, '', window.location.pathname)
+const _urlPid          = _params.get('pid')                     || ''
+const _urlCode         = _params.get('code')?.toUpperCase()     || ''
+if (_urlJoinCode || _urlSpectateCode || _urlPid || _urlCode) window.history.replaceState(null, '', window.location.pathname)
 
 export default function App() {
-  const [screen, setScreen] = useState(_urlJoinCode || _urlSpectateCode ? 'join' : 'home')
+  const [screen, setScreen] = useState(_urlJoinCode || _urlSpectateCode || _urlCode ? 'join' : 'home')
 
-  // Guest ID — stable for the browser session
+  // Guest ID — stable across sessions (localStorage). If a host-generated rejoin
+  // link includes ?pid=, that value takes priority so the guest reclaims their identity.
   const [guestId] = useState(() => {
-    const s = sessionStorage.getItem('eights_pid') || uid()
-    sessionStorage.setItem('eights_pid', s)
+    if (_urlPid) {
+      localStorage.setItem('eights_pid', _urlPid)
+      return _urlPid
+    }
+    const s = localStorage.getItem('eights_pid') || uid()
+    localStorage.setItem('eights_pid', s)
     return s
   })
 
@@ -242,13 +249,13 @@ export default function App() {
   else if (screen === 'home')
     content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
-    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => { setAfterAuth('create'); nav('auth') }} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
-    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} initialCode={_urlJoinCode || _urlSpectateCode} spectateMode={!!_urlSpectateCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} />
+    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} initialCode={_urlJoinCode || _urlSpectateCode || _urlCode} spectateMode={!!_urlSpectateCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
   else if (screen === 'spectate')
     content = <SpectateScreen room={room} playerId={playerId} setRoom={setRoom} onHome={goHome} />
   else if (screen === 'lobby')
-    content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
+    content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} isGuest={isGuest} onLogin={() => { setAfterAuth('lobby'); nav('auth') }} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')
     content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onBack={goHome} onEndSeries={handleEndSeries} />
   else if (screen === 'battle')

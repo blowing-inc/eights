@@ -89,27 +89,40 @@ export function subscribeToRoom(roomId, onUpdate) {
 }
 
 // Track a user's presence in a room. Every participant calls this — the host
-// with role:'host', others with role:'player'. onHostStatusChange is called
-// with true/false whenever the host's presence changes. Returns an unsubscribe
-// function for useEffect cleanup.
+// with role:'host', others with role:'player'.
+//
+// callbacks can be a plain function (legacy: onHostStatusChange) or an object:
+//   { onHostStatusChange, onPresenceChange }
+//   onHostStatusChange(bool)     — fires when host online/offline status changes
+//   onPresenceChange(string[])   — fires on every sync with all present userIds
+//
+// Returns an unsubscribe function for useEffect cleanup.
 //
 // Prerequisite: Realtime must be enabled on the Supabase project. Presence
 // channels are ephemeral WebSocket state — they do not touch the DB.
-export function trackRoomPresence(roomId, userId, role, onHostStatusChange) {
-  let lastKnown = null
+export function trackRoomPresence(roomId, userId, role, callbacks) {
+  const { onHostStatusChange, onPresenceChange } =
+    typeof callbacks === 'function'
+      ? { onHostStatusChange: callbacks, onPresenceChange: null }
+      : (callbacks || {})
+
+  let lastKnownHost = null
   const channel = supabase
     .channel('presence-' + roomId, { config: { presence: { key: userId } } })
     .on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState()
-      const hostOnline = Object.values(state).flat().some(p => p.role === 'host')
-      if (hostOnline !== lastKnown) {
-        lastKnown = hostOnline
-        onHostStatusChange(hostOnline)
+      const flat  = Object.values(state).flat()
+      const hostOnline = flat.some(p => p.role === 'host')
+      if (hostOnline !== lastKnownHost) {
+        lastKnownHost = hostOnline
+        onHostStatusChange?.(hostOnline)
       }
+      // Report all currently-present userIds so callers can show connection dots
+      onPresenceChange?.(flat.map(p => p.userId).filter(Boolean))
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ role })
+        await channel.track({ role, userId })
       }
     })
   return () => supabase.removeChannel(channel)
@@ -523,6 +536,35 @@ export async function adminMergeUsers(keepId, dropId, rooms, applyMergeToRoomFn)
     // Delete the dropped user
     await supabase.from('users').delete().eq('id', dropId)
   } catch (e) { console.error('adminMergeUsers exception', e); throw e }
+}
+
+// Fetch all combatants (published or not) belonging to a specific owner_id.
+// Used by the admin guest re-attribution tool to preview what will be moved.
+export async function getCombatantsByOwnerId(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants').select('id, name, published').eq('owner_id', ownerId)
+    if (error) { console.error('getCombatantsByOwnerId error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getCombatantsByOwnerId exception', e); return [] }
+}
+
+// Re-attribute all history from a guest ID to a registered user account.
+// Parallel to adminMergeUsers but the source is a raw guest ID (no user row to delete).
+// replacePlayerIdInRoomFn must be replacePlayerIdInRoom from gameLogic.js.
+export async function adminLinkGuestToUser(guestId, userId, ownerName, rooms, replacePlayerIdInRoomFn) {
+  try {
+    // Update all room blobs that contain the guest as a player
+    const affected = rooms.filter(r => (r.players || []).some(p => p.id === guestId))
+    for (const room of affected) {
+      const updated = replacePlayerIdInRoomFn(room, guestId, userId)
+      await sset('room:' + room.id, updated)
+    }
+    // Re-attribute combatants in the global table
+    await supabase.from('combatants')
+      .update({ owner_id: userId, owner_name: ownerName, updated_at: new Date().toISOString() })
+      .eq('owner_id', guestId)
+  } catch (e) { console.error('adminLinkGuestToUser exception', e); throw e }
 }
 
 // Full combatant table dump for admin export (includes unpublished)

@@ -46,7 +46,7 @@ const SETTINGS = [
   ['biosRequired',           'Bios required',           'Players must write a bio for each combatant'],
 ]
 
-export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, onCreated, onBack }) {
+export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false })
@@ -75,6 +75,13 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
       <label style={lbl}>Your name</label>
       <input style={{ ...inp(), opacity: lockedName ? 0.65 : 1 }} value={name} onChange={e => { if (!lockedName) setName(e.target.value) }} placeholder="Enter your name" onKeyDown={e => e.key === 'Enter' && create()} autoFocus={!lockedName} readOnly={lockedName} />
       {lockedName && <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '-8px 0 8px' }}>Logged in — name set by account.</p>}
+
+      {isGuest && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '-8px 0 8px' }}>
+          You're creating as a guest. If you close this tab or switch devices, you'll lose host controls and the game can't continue.{' '}
+          <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-warning)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in first →</button>
+        </p>
+      )}
 
       <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '1.5rem 0 0' }}>Settings</h3>
       <div style={{ marginBottom: '1.5rem' }}>
