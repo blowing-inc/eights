@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx vitest:*)",
-      "Bash(wc -l src/screens/*.jsx src/screens/admin/*.jsx src/supabase.js src/gameLogic.js src/adminLogic.js src/App.jsx)"
+      "Bash(wc -l src/screens/*.jsx src/screens/admin/*.jsx src/supabase.js src/gameLogic.js src/adminLogic.js src/App.jsx)",
+      "Bash(node /tmp/compare.js)"
     ]
   }
 }
