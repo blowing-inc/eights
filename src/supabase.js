@@ -88,6 +88,33 @@ export function subscribeToRoom(roomId, onUpdate) {
   return () => supabase.removeChannel(channel)
 }
 
+// Track a user's presence in a room. Every participant calls this — the host
+// with role:'host', others with role:'player'. onHostStatusChange is called
+// with true/false whenever the host's presence changes. Returns an unsubscribe
+// function for useEffect cleanup.
+//
+// Prerequisite: Realtime must be enabled on the Supabase project. Presence
+// channels are ephemeral WebSocket state — they do not touch the DB.
+export function trackRoomPresence(roomId, userId, role, onHostStatusChange) {
+  let lastKnown = null
+  const channel = supabase
+    .channel('presence-' + roomId, { config: { presence: { key: userId } } })
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState()
+      const hostOnline = Object.values(state).flat().some(p => p.role === 'host')
+      if (hostOnline !== lastKnown) {
+        lastKnown = hostOnline
+        onHostStatusChange(hostOnline)
+      }
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({ role })
+      }
+    })
+  return () => supabase.removeChannel(channel)
+}
+
 // ─── User accounts ───────────────────────────────────────────────────────────
 
 function genId() { return Math.random().toString(36).slice(2, 9) }

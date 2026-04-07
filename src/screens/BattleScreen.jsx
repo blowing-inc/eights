@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
@@ -11,6 +11,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [confirmEnd, setConfirmEnd] = useState(false)
   const [sheetCombatant, setSheetCombatant] = useState(null) // { id, inRoom }
   const [undoNotice, setUndoNotice] = useState(null) // "Host undid Round X"
+  const [hostOnline, setHostOnline] = useState(null) // null = not yet synced; false = host absent
   const prevRoundRef = useRef(init.currentRound)
   const undoTimerRef = useRef(null)
 
@@ -31,6 +32,10 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
       setLocal(r); setRoom(r)
       if (r.phase === 'voting') onVote()
     })
+  }, [room.id])
+
+  useEffect(() => {
+    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', setHostOnline)
   }, [room.id])
 
   const isHost = room.host === playerId
@@ -182,6 +187,11 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
             ↩ {undoNotice}
           </div>
         )}
+        {!isHost && hostOnline === false && (
+          <div style={{ marginTop: 8, padding: '8px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', fontSize: 13, color: 'var(--color-text-tertiary)' }}>
+            Host is out of the room
+          </div>
+        )}
         {!isHost && room.phase === 'battle' && room.currentRound < totalRounds && (round?.winner || round?.draw) && (
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13, margin: 0 }}>Waiting for host to start Round {room.currentRound + 1}…</p>
@@ -192,14 +202,19 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought. Check the history for full results.</p>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-              {isHost && <button style={btn('primary')} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>}
               {isHost && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button style={btn()} onClick={onHistory}>View history</button>
-                  <button style={btn()} onClick={completeTournament}>Complete tournament</button>
-                </div>
+                <>
+                  <button style={btn('primary')} onClick={completeTournament}>Complete tournament ✓</button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button style={btn()} onClick={onHistory}>View history</button>
+                    <button style={btn()} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                    This room stays open until you complete or start the next battle.
+                  </p>
+                </>
               )}
               {!isHost && (
                 <>

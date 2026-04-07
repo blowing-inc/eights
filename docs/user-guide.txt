@@ -347,28 +347,36 @@ Priority key: [P1] = fix or ship soon  [P2] = important, next wave  [P3] = nice-
 
 --- GAMEPLAY ---
 
-[P2] TICKET 4 — Force-start interaction with "bios required"
-  If "bios required" is on and the host force-starts, players who were skipped
-  had incomplete drafts. Their combatants may be submitted without bios or not
-  submitted at all. The exact behavior should be verified and documented. If
-  their combatants are silently dropped, the host should see a clear warning
-  before confirming the force-start.
+[DONE] TICKET 4 — Force-start interaction with "bios required"
+  Verified: unsubmitted players sit out entirely — their combatants don't enter
+  any round. Players who did submit passed bios validation at submit time, so
+  no bio-less combatants slip through. Force-start warning updated to clearly
+  state "players who haven't submitted will sit out — their slots won't appear
+  in any round," with an additional line when biosRequired is on: "Bios are
+  required — unsubmitted players are excluded entirely."
 
-[P2] TICKET 7 — "Complete tournament" prompt not obvious enough
-  When all rounds finish the room phase stays 'battle' and can reappear in
-  open lobbies until the host taps "Complete tournament." First-time hosts may
-  not realize this step is required. Consider a more prominent prompt or
-  auto-advancing to 'ended' once all rounds are resolved.
+[DONE] TICKET 7 — "Complete tournament" prompt not obvious enough
+  "Complete tournament" is now the primary button in the tournament-complete
+  card. "View history" and "Next Battle" sit below it as secondary actions.
+  A brief note — "This room stays open until you complete or start the next
+  battle" — makes the consequence visible.
 
-[P3] TICKET 8 — No warning when host navigates away mid-round
-  If a host taps "← Home" during an active voting round, other players are left
-  waiting with no indication the host has left. Low severity for in-person play,
-  higher for remote. A confirm dialog ("Players are waiting — leave anyway?")
-  would cover this.
+[DONE] TICKET 8 — No warning when host navigates away mid-round
+  Host now sees a confirmation dialog ("Players are waiting — leave anyway?")
+  when tapping "← Home" on VoteScreen. Non-hosts see a persistent "Host is out
+  of the room" banner (BattleScreen and VoteScreen) driven by Supabase Realtime
+  presence — the banner appears when the host's presence channel goes silent
+  and clears automatically when the host returns.
 
 
 --- DATA / INTEGRITY ---
 
+[P3] TICKET 3 — Evolution name uniqueness check is published-only
+  checkCombatantNameExists only compares against published combatants. A
+  currently-running game could contain an unpublished combatant that shares a
+  name with an evolution target — both would pass validation and get published
+  simultaneously. Low probability but a real integrity gap: two distinct
+  Bestiary entries with the same name corrupt the lineage record.
 
 [P2] TICKET 6 — Series standings missing Draws column
   computeSeriesStandings tracks wins/losses/games but the standings table

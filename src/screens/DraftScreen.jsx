@@ -161,9 +161,15 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         </div>
         {canForce && (
           <div style={{ padding: '12px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)' }}>
-            <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 10px' }}>
-              {readyCount} of {realPlayers.length} players are ready. You can start now — players who haven't finished won't have their combatants published.
+            <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 4px' }}>
+              {readyCount} of {realPlayers.length} players are ready. Players who haven't submitted will sit out — their slots won't appear in any round.
             </p>
+            {biosRequired && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '0 0 10px', opacity: 0.85 }}>
+                Bios are required in this game. Unsubmitted players are excluded entirely — their combatants won't enter the Bestiary from this game.
+              </p>
+            )}
+            {!biosRequired && <div style={{ marginBottom: 10 }} />}
             <button onClick={forceStart} disabled={forceStarting} style={{ ...btn('primary'), background: 'var(--color-text-warning)', padding: '8px', fontSize: 13 }}>
               {forceStarting ? 'Starting…' : `Start with ${readyCount} players →`}
             </button>

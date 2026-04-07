@@ -5,7 +5,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
@@ -26,6 +26,8 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [evolveFlow,       setEvolveFlow]       = useState(null)
   const [evolveError,      setEvolveError]      = useState(null)   // novel-name validation message
   const [evolveSubmitting, setEvolveSubmitting] = useState(false)  // true while name-check is in flight
+  const [confirmLeave,     setConfirmLeave]     = useState(false)  // host leaving mid-round
+  const [hostOnline,       setHostOnline]       = useState(null)   // null = not yet synced; false = host absent
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
@@ -41,6 +43,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       setLocal(r); setRoom(r)
     })
   }, [room.id, room.currentRound])
+
+  useEffect(() => {
+    return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', setHostOnline)
+  }, [room.id])
 
   // ── Voting ────────────────────────────────────────────────────────────────
 
@@ -367,9 +373,24 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <SpectatorList spectators={room.spectators} />
-          <button onClick={onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Home</button>
+          <button onClick={isHost ? () => setConfirmLeave(true) : onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Home</button>
         </div>
       </div>
+      {confirmLeave && (
+        <div style={{ marginBottom: '1rem', padding: '12px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)' }}>
+          <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 10px', fontWeight: 500 }}>Players are waiting — leave anyway?</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '0 0 10px' }}>The round will stay open. Players won't be able to advance until you return and confirm a result.</p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={onHome} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-warning)', borderColor: 'var(--color-border-warning)' }}>Leave anyway</button>
+            <button onClick={() => setConfirmLeave(false)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>Stay</button>
+          </div>
+        </div>
+      )}
+      {!isHost && hostOnline === false && (
+        <div style={{ marginBottom: '1rem', padding: '8px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', fontSize: 13, color: 'var(--color-text-tertiary)' }}>
+          Host is out of the room
+        </div>
+      )}
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}
       </p>
