@@ -14,7 +14,7 @@ import {
   normalizeRoomSettings, buildActiveFormMap,
 } from '../gameLogic.js'
 
-export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onBack, onEndSeries }) {
+export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {
   const [room, setLocal] = useState(init)
   const { rosterSize } = normalizeRoomSettings(init.settings)
   // substitutions: { [originalId]: combatant } — active-form overrides for heritage games
@@ -145,7 +145,13 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     return (
       <Screen title="Draft submitted!" onBack={onBack}>
         {room.devMode && <DevBanner />}
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 2rem' }}>Your combatants are locked in. Waiting for others…</p>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 1rem' }}>Your combatants are locked in. Waiting for others…</p>
+        {isGuest && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 1.5rem' }}>
+            Playing as guest — if you switch devices or refresh, you might lose your spot.{' '}
+            <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in to stay connected →</button>
+          </p>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: canForce ? '1.5rem' : 0 }}>
           {room.players.map(p => {
             const done = p.isBot || (room.combatants[p.id] || []).length === rosterSize

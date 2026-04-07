@@ -11,7 +11,7 @@ import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
 
-export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome }) {
+export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
@@ -30,6 +30,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [confirmLeave,     setConfirmLeave]     = useState(false)  // host leaving mid-round
   const [hostOnline,       setHostOnline]       = useState(null)   // null = not yet synced; false = host absent
   const [presentIds,       setPresentIds]       = useState([])
+  const [voteNudgeDone,    setVoteNudgeDone]    = useState(false)  // one-time guest nudge after first pick
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
@@ -582,6 +583,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       {/* ── Status lines ─────────────────────────────────────────────────── */}
       {!isHost && myPick && !ownerPromptWinner && (
         <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 13 }}>Pick registered — waiting for host to confirm.</p>
+      )}
+      {!isHost && myPick && isGuest && !voteNudgeDone && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', textAlign: 'center', margin: '6px 0 0' }}>
+          Playing as guest — switching devices could lose your spot.{' '}
+          <button onClick={() => { setVoteNudgeDone(true); onLogin?.() }} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in →</button>
+          {' '}<button onClick={() => setVoteNudgeDone(true)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-tertiary)', fontSize: 12, cursor: 'pointer' }}>✕</button>
+        </p>
       )}
       {isHost && !myPick && !evolveFlow && !evolutionPending && (
         <p style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>Tap a combatant to select, then confirm to finalise.</p>
