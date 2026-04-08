@@ -184,8 +184,10 @@ export default function App() {
     nav('draft')
   }
 
-  function goAuth() {
-    setAfterAuth(screen)
+  // Single entry point for all login flows. Pass an explicit target screen to
+  // return to after auth; omit to return to whatever screen is currently active.
+  function goAuth(target) {
+    setAfterAuth(target ?? screen)
     nav('auth')
   }
 
@@ -249,19 +251,19 @@ export default function App() {
   else if (screen === 'home')
     content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
-    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => { setAfterAuth('create'); nav('auth') }} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => goAuth('create')} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
-    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} initialCode={_urlJoinCode || _urlSpectateCode || _urlCode} spectateMode={!!_urlSpectateCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => { setAfterAuth('join'); nav('auth') }} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
+    content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} initialCode={_urlJoinCode || _urlSpectateCode || _urlCode} spectateMode={!!_urlSpectateCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'battle' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => goAuth('join')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
   else if (screen === 'spectate')
     content = <SpectateScreen room={room} playerId={playerId} setRoom={setRoom} onHome={goHome} />
   else if (screen === 'lobby')
-    content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} isGuest={isGuest} onLogin={() => { setAfterAuth('lobby'); nav('auth') }} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
+    content = <LobbyScreen room={room} playerId={playerId} setRoom={setRoom} isGuest={isGuest} onLogin={() => goAuth('lobby')} onStart={() => nav('draft')} onBack={() => { removeLobbyCode(room?.id); goHome() }} onViewPlayer={setViewPlayerProfile} />
   else if (screen === 'draft')
-    content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onLogin={() => { setAfterAuth('draft'); nav('auth') }} onBack={goHome} onEndSeries={handleEndSeries} />
+    content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('battle') }} isGuest={isGuest} onLogin={() => goAuth('draft')} onBack={goHome} onEndSeries={handleEndSeries} />
   else if (screen === 'battle')
     content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextBattle={handleHostNextBattle} onRejoinNextBattle={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
   else if (screen === 'vote')
-    content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} onHome={goHome} isGuest={isGuest} onLogin={() => { setAfterAuth('vote'); nav('auth') }} />
+    content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} onHome={goHome} isGuest={isGuest} onLogin={() => goAuth('vote')} />
 
   return <>{userPill}{content}{viewHelp && <HelpModal onClose={() => setViewHelp(false)} />}</>
 }

@@ -9,7 +9,7 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
@@ -230,24 +230,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     // Evolution record is fully self-contained so downstream consumers (App.jsx
     // handleHostNextBattle, DraftScreen substitutions) don't need to dig into
     // room.combatants to find variant data.
-    const evolution = {
-      fromId:    winnerId,
-      fromName:  winner.name,
-      toId:      newId,
-      toName:    newName,
-      toBio:     variantBio,
-      ownerId,
-      ownerName: winner.ownerName,
-      authorId,
-    }
-    const finalRound = {
-      ...rd,
-      winner,
-      evolution,
-      resolvedAt: Date.now(),
-      picks: { ...(rd.picks || {}), [playerId]: winnerId },
-    }
-    delete finalRound.evolutionPending
+    const finalRound = buildEvolutionRound(rd, winnerId, newId, newName, variantBio, authorId, playerId)
 
     const rounds = [...r.rounds]; rounds[rdIdx] = finalRound
 

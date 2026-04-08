@@ -26,6 +26,7 @@ import {
   computeSeriesStandings,
   applyDraw,
   replacePlayerIdInRoom,
+  buildEvolutionRound,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1765,5 +1766,104 @@ describe('replacePlayerIdInRoom', () => {
     const original = JSON.parse(JSON.stringify(room))
     replacePlayerIdInRoom(room, OLD, NEW)
     expect(room).toEqual(original)
+  })
+})
+
+// ─── buildEvolutionRound ──────────────────────────────────────────────────────
+
+describe('buildEvolutionRound', () => {
+  const winner   = { id: 'c1', name: 'Titan',   bio: 'Big.', ownerId: 'p1', ownerName: 'Alice' }
+  const opponent = { id: 'c2', name: 'Specter', bio: 'Fast.', ownerId: 'p2', ownerName: 'Bob' }
+
+  function makeRound(overrides = {}) {
+    return {
+      id: 'r1', number: 1,
+      combatants: [winner, opponent],
+      picks: {},
+      evolutionPending: { winnerId: 'c1', requestedFrom: 'p1' },
+      ...overrides,
+    }
+  }
+
+  it('returns a round with winner set to the winning combatant', () => {
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', 'Upgraded.', 'p1', 'p1')
+    expect(result.winner).toEqual(winner)
+  })
+
+  it('builds the evolution object with all required fields', () => {
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', 'Upgraded.', 'p1', 'p1')
+    expect(result.evolution).toEqual({
+      fromId:    'c1',
+      fromName:  'Titan',
+      toId:      'v1',
+      toName:    'Titan Prime',
+      toBio:     'Upgraded.',
+      ownerId:   'p1',
+      ownerName: 'Alice',
+      authorId:  'p1',
+    })
+  })
+
+  it('records the picker\'s vote in picks', () => {
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', 'Upgraded.', 'p1', 'p1')
+    expect(result.picks['p1']).toBe('c1')
+  })
+
+  it('preserves existing picks from other players', () => {
+    const round = makeRound({ picks: { p2: 'c2' } })
+    const result = buildEvolutionRound(round, 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(result.picks['p2']).toBe('c2')
+    expect(result.picks['p1']).toBe('c1')
+  })
+
+  it('sets resolvedAt to a recent timestamp', () => {
+    const before = Date.now()
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(result.resolvedAt).toBeGreaterThanOrEqual(before)
+    expect(result.resolvedAt).toBeLessThanOrEqual(Date.now())
+  })
+
+  it('removes evolutionPending from the returned round', () => {
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(result.evolutionPending).toBeUndefined()
+  })
+
+  it('defaults variantBio to empty string when falsy', () => {
+    const result = buildEvolutionRound(makeRound(), 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(result.evolution.toBio).toBe('')
+  })
+
+  it('preserves all other round fields', () => {
+    const round = makeRound({ number: 3, playerReactions: { p1: { c1: 'heart' } } })
+    const result = buildEvolutionRound(round, 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(result.number).toBe(3)
+    expect(result.playerReactions).toEqual({ p1: { c1: 'heart' } })
+  })
+
+  it('does not mutate the input round', () => {
+    const round    = makeRound()
+    const original = JSON.parse(JSON.stringify(round))
+    buildEvolutionRound(round, 'c1', 'v1', 'Titan Prime', '', 'p1', 'p1')
+    expect(round).toEqual(original)
+  })
+
+  it('throws when winnerId is not found in round.combatants', () => {
+    expect(() => buildEvolutionRound(makeRound(), 'c99', 'v1', 'Titan Prime', '', 'p1', 'p1'))
+      .toThrow('not found in round.combatants')
+  })
+
+  it('throws when winnerId is missing', () => {
+    expect(() => buildEvolutionRound(makeRound(), '', 'v1', 'Titan Prime', '', 'p1', 'p1'))
+      .toThrow('winnerId is required')
+  })
+
+  it('throws when newId is missing', () => {
+    expect(() => buildEvolutionRound(makeRound(), 'c1', '', 'Titan Prime', '', 'p1', 'p1'))
+      .toThrow('newId is required')
+  })
+
+  it('throws when newName is blank', () => {
+    expect(() => buildEvolutionRound(makeRound(), 'c1', 'v1', '   ', '', 'p1', 'p1'))
+      .toThrow('newName is required')
   })
 })

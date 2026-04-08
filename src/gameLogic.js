@@ -376,6 +376,59 @@ export function undoRound(room, round) {
   return combatants
 }
 
+// ─── Evolution round builder ──────────────────────────────────────────────────
+
+/**
+ * Assembles the finalised round object after an evolution is confirmed.
+ * Pure — no Supabase, no uid() calls, no side effects.
+ *
+ * Params:
+ *   round          — the current round object (from room.rounds)
+ *   winnerId       — id of the winning combatant
+ *   newId          — pre-generated id for the new variant combatant
+ *   newName        — name of the evolved form
+ *   variantBio     — bio for the evolved form (may be empty string)
+ *   authorId       — id of the player who wrote the evolution
+ *   pickerPlayerId — id of the player whose pick to record (typically the host)
+ *
+ * Returns a new round object with winner, evolution, resolvedAt, and picks set.
+ * evolutionPending is removed from the returned object.
+ *
+ * Throws if required fields are missing or if winnerId is not found in round.combatants.
+ * bornFrom is the lineage link that powers buildChainEvolutionStory — the caller
+ * must supply it via the globalWinner Supabase fetch; it is not derived here.
+ */
+export function buildEvolutionRound(round, winnerId, newId, newName, variantBio, authorId, pickerPlayerId) {
+  if (!winnerId) throw new Error('buildEvolutionRound: winnerId is required')
+  if (!newId)    throw new Error('buildEvolutionRound: newId is required')
+  if (!newName?.trim()) throw new Error('buildEvolutionRound: newName is required')
+
+  const winner = round.combatants.find(c => c.id === winnerId)
+  if (!winner) throw new Error(`buildEvolutionRound: winnerId "${winnerId}" not found in round.combatants`)
+
+  const evolution = {
+    fromId:    winnerId,
+    fromName:  winner.name,
+    toId:      newId,
+    toName:    newName,
+    toBio:     variantBio || '',
+    ownerId:   winner.ownerId,
+    ownerName: winner.ownerName,
+    authorId,
+  }
+
+  const finalRound = {
+    ...round,
+    winner,
+    evolution,
+    resolvedAt: Date.now(),
+    picks: { ...(round.picks || {}), [pickerPlayerId]: winnerId },
+  }
+  delete finalRound.evolutionPending
+
+  return finalRound
+}
+
 // ─── Reaction tallying ────────────────────────────────────────────────────────
 
 /**
