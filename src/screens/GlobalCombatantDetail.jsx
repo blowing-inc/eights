@@ -10,8 +10,12 @@ import { downloadFile, formatCombatantHistory } from '../export.js'
 //          (branching support) and for navigation data when a node is tapped.
 // onViewCombatant: optional — if provided, non-current nodes become tappable links.
 function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
-  // Build parent→children map using lineage.parentId from raw tree data.
-  const childMap = {}
+  // selectedId drives the ancestry highlight — defaults to the current combatant.
+  const [selectedId, setSelectedId] = useState(currentId)
+
+  // Build parent→children map and child→parent map from raw tree data.
+  const childMap  = {}
+  const parentMap = {}  // combatantId → parentCombatantId
   ;(rawTree || []).forEach(raw => {
     const pid = raw.lineage?.parentId
     if (!pid) return
@@ -19,6 +23,7 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
     if (node) {
       if (!childMap[pid]) childMap[pid] = []
       childMap[pid].push(node)
+      parentMap[raw.id] = pid
     }
   })
   // Fallback for trees without rawTree (shouldn't happen, but keeps rendering safe)
@@ -28,30 +33,57 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
       const parent = story[i - 1]
       if (!childMap[parent.combatantId]) childMap[parent.combatantId] = []
       childMap[parent.combatantId].push(node)
+      parentMap[node.combatantId] = parent.combatantId
     })
   }
 
-  function renderNode(node, depth) {
-    const isCurrent  = node.combatantId === currentId
-    const children   = childMap[node.combatantId] || []
-    const indent     = depth * 16
-    const rawRecord  = (rawTree || []).find(r => r.id === node.combatantId)
-    const canTap     = !isCurrent && onViewCombatant && rawRecord
+  // Collect all ancestors of selectedId so they can be muted-highlighted.
+  const ancestorIds = new Set()
+  let walk = parentMap[selectedId]
+  while (walk) { ancestorIds.add(walk); walk = parentMap[walk] }
+
+  function renderNode(node) {
+    const isCurrent   = node.combatantId === currentId
+    const isSelected  = node.combatantId === selectedId
+    const isAncestor  = ancestorIds.has(node.combatantId)
+    const children    = childMap[node.combatantId] || []
+    const rawRecord   = (rawTree || []).find(r => r.id === node.combatantId)
+    const canTap      = !isCurrent && onViewCombatant && rawRecord
+
+    // Dot color: bright blue when selected, muted blue when ancestor, dim otherwise.
+    // Using border-info (not text-info) for ancestors keeps them clearly below selected.
+    const dotColor = isSelected
+      ? 'var(--color-text-info)'
+      : isAncestor
+        ? 'var(--color-border-info)'
+        : 'var(--color-border-secondary)'
+
+    // Row background: info tint only for selected. Ancestors use text color instead
+    // of background — background-tertiary is nearly invisible in dark mode.
+    const rowBg = isSelected ? 'var(--color-background-info)' : 'transparent'
+
+    // Text color: bold primary for selected, info-blue for ancestors (readable in
+    // both modes and clearly "medium" between selected and unrelated nodes).
+    const textColor = isSelected
+      ? 'var(--color-text-primary)'
+      : isAncestor
+        ? 'var(--color-text-info)'
+        : 'var(--color-text-secondary)'
+
+    function handleClick() {
+      setSelectedId(node.combatantId)
+      if (canTap) onViewCombatant(rawRecord)
+    }
 
     return (
       <div key={node.combatantId}>
-        {node.bornFrom && (
-          <div style={{ paddingLeft: indent + 8, padding: '3px 0 3px ' + (indent + 8) + 'px', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-            ⚡ beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
-            {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
-          </div>
-        )}
+        {/* Node row */}
         <div
-          onClick={canTap ? () => onViewCombatant(rawRecord) : undefined}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', paddingLeft: indent, cursor: canTap ? 'pointer' : 'default' }}
+          onClick={handleClick}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px', margin: '1px -6px', borderRadius: 6, background: rowBg, cursor: 'pointer', transition: 'background 0.15s' }}
         >
-          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isCurrent ? 'var(--color-text-info)' : canTap ? 'var(--color-text-secondary)' : 'var(--color-border-secondary)' }} />
-          <span style={{ fontSize: 14, fontWeight: isCurrent ? 500 : 400, color: isCurrent ? 'var(--color-text-primary)' : canTap ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', textDecoration: canTap ? 'underline' : 'none', textDecorationColor: 'var(--color-border-tertiary)' }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: dotColor, transition: 'background 0.15s' }} />
+          <span style={{ fontSize: 14, fontWeight: isSelected ? 500 : 400, color: textColor, textDecoration: canTap ? 'underline' : 'none', textDecorationColor: 'var(--color-border-tertiary)', transition: 'color 0.15s' }}>
             {node.name}
           </span>
           {isCurrent && (
@@ -65,7 +97,33 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
             </span>
           )}
         </div>
-        {children.map(child => renderNode(child, depth + 1))}
+
+        {/* Children — tree line connects parent dot to all siblings */}
+        {children.length > 0 && (
+          <div style={{ marginLeft: 3, paddingLeft: 13, borderLeft: '1.5px solid var(--color-border-tertiary)' }}>
+            {children.map((child, i) => (
+              <div key={child.combatantId}>
+                {/* Sibling separator — borderTop is cross-browser reliable; sub-pixel heights are not */}
+                {i > 0 && (
+                  <div style={{ borderTop: '1px solid var(--color-border-tertiary)', margin: '6px 0' }} />
+                )}
+                {/* Evolution event */}
+                {child.bornFrom && (
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, padding: '4px 0', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                    <span>⚡ beat</span>
+                    <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{child.bornFrom.opponentName || 'an opponent'}</strong>
+                    {child.bornFrom.gameCode && (
+                      <span style={{ fontStyle: 'normal', padding: '1px 5px', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 4, fontSize: 10, color: 'var(--color-text-secondary)', letterSpacing: '0.03em' }}>
+                        {child.bornFrom.gameCode} R{child.bornFrom.roundNumber}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {renderNode(child)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -78,7 +136,7 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
       <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {title}
       </h3>
-      {renderNode(root, 0)}
+      {renderNode(root)}
     </div>
   )
 }
