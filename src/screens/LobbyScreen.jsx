@@ -78,7 +78,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
           {guestStartPrompt === 'confirming' ? (
             <div style={{ padding: '12px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', marginBottom: 10 }}>
               <p style={{ fontSize: 13, color: 'var(--color-text-warning)', margin: '0 0 10px' }}>
-                You're the host but not logged in. If you close this tab or switch devices, no one will be able to advance the game.
+                You're the host but not logged in. If you disappear, your players will be stuck — the arena waits for its host.
               </p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '7px 10px', color: 'var(--color-text-warning)', borderColor: 'var(--color-border-warning)' }}

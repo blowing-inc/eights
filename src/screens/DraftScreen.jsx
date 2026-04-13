@@ -148,8 +148,8 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 15, margin: '0 0 1rem' }}>Your combatants are locked in. Waiting for others…</p>
         {isGuest && (
           <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 1.5rem' }}>
-            Playing as guest — if you switch devices or refresh, you might lose your spot.{' '}
-            <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in to stay connected →</button>
+            Playing as guest — your picks might not follow you if you switch devices.{' '}
+            <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in to stay in it →</button>
           </p>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: canForce ? '1.5rem' : 0 }}>

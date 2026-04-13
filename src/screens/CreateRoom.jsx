@@ -78,7 +78,7 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
 
       {isGuest && (
         <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '-8px 0 8px' }}>
-          You're creating as a guest. If you close this tab or switch devices, you'll lose host controls and the game can't continue.{' '}
+          You're creating as a guest. If you disappear, the game has no host — nobody moves forward.{' '}
           <button onClick={onLogin} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-warning)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in first →</button>
         </p>
       )}

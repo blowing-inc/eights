@@ -583,7 +583,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       )}
       {!isHost && myPick && isGuest && !voteNudgeDone && (
         <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', textAlign: 'center', margin: '6px 0 0' }}>
-          Playing as guest — switching devices could lose your spot.{' '}
+          Playing as guest — your vote might not follow you if you switch devices.{' '}
           <button onClick={() => { setVoteNudgeDone(true); onLogin?.() }} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-info)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Log in →</button>
           {' '}<button onClick={() => setVoteNudgeDone(true)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-text-tertiary)', fontSize: 12, cursor: 'pointer' }}>✕</button>
         </p>

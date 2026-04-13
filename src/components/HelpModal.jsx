@@ -60,7 +60,7 @@ Each combatant page shows their win/loss record, bio history, reactions, and —
     title: 'Accounts & guests',
     content: `You can play as a guest — just enter a name. Guests work fine for a single session, but your history may not follow you if you switch devices or refresh.
 
-Creating an account (top-right on the home screen) ties your games and combatants to a persistent identity. You can log in on any device and your open lobbies will reappear.`
+Creating an account (top-right on the home screen) ties your games and combatants to you. Log in on any device and your history and open lobbies will reappear.`
   },
 ]
 

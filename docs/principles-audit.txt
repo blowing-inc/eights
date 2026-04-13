@@ -120,19 +120,27 @@ supabase.js — createVariantCombatant comment updated:
     document bornFrom as a required field at the write layer.
 
 ================================================================================
-DEFERRED — Ticker/Bot Voice Audit (Narrative Driven)
+[DONE] DEFERRED — Ticker/Bot Voice Audit (Narrative Driven)
 ================================================================================
 
 CLAUDE.md says: ticker messages, bot personality, combatant bios are part
 of the voice. Maintain that voice.
-Status: not audited in detail. New features added since initial setup
-should have their UI copy checked for "app-speak" vs. thematic language.
 
-When to do this: after Priority 3 and 4 are complete. Do a pass over all
-button labels, confirmation prompts, and system messages added in recent
-commits — including the new guest nudges, ConnectionStatus, and the lobby
-guest-start confirmation. Look for generic verbs (Submit, Confirm, Cancel)
-in contexts where a more narrative label would fit without being precious.
+Confirmed in voice — no changes: buildTickerMessages, EvolutionForm buttons,
+ConnectionStatus utility labels, LobbyScreen decision buttons.
+
+Rewrites made to guest nudge copy across four locations:
+  - CreateRoom.jsx: "lose host controls and the game can't continue"
+    → "If you disappear, the game has no host — nobody moves forward."
+  - LobbyScreen.jsx: "no one will be able to advance the game"
+    → "your players will be stuck — the arena waits for its host."
+  - DraftScreen.jsx: "you might lose your spot. Log in to stay connected →"
+    → "your picks might not follow you. Log in to stay in it →"
+  - VoteScreen.jsx: "switching devices could lose your spot"
+    → "your vote might not follow you if you switch devices."
+
+HelpModal.jsx: "ties your games and combatants to a persistent identity"
+  → "ties your games and combatants to you."
 
 ================================================================================
 WHAT WAS CONFIRMED SOLID — don't re-audit these
