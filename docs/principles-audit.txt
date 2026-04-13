@@ -100,28 +100,24 @@ VoteScreen ownerPromptWinner block:
     only copy and context changed.
 
 ================================================================================
-PRIORITY 4 — Guard lineage.bornFrom in createVariantCombatant (Data Conservative)
+[DONE] PRIORITY 4 — Guard lineage.bornFrom in createVariantCombatant (Data Conservative)
 ================================================================================
 
 CLAUDE.md says: don't throw things away. The ancestry chain is part of the
-story. Currently there's no guard or comment ensuring bornFrom is always
-set when a variant is created.
+story.
 
-Note: createVariantCombatant lives in supabase.js (not gameLogic.js as the
-original audit assumed) — it is the Supabase write function. The bornFrom
-field is assembled in VoteScreen and passed in via the lineage object.
-The guard should live at the VoteScreen callsite (before createVariantCombatant
-is called) since that is where lineage is assembled. Alternatively, add a
-throw inside createVariantCombatant if lineage.bornFrom is absent.
+VoteScreen.jsx — before the createVariantCombatant call:
+  - Asserts lineage.bornFrom is present and all four required fields
+    (opponentName, roundNumber, gameCode, parentName) are non-null/non-zero.
+  - Throws a descriptive error naming the missing fields if the assert fails —
+    no silent orphaned variants.
+  - Comment explains why: "bornFrom is required — it's the lineage link that
+    powers buildChainEvolutionStory. Without opponentName the evolution
+    narrative is half a story."
 
-Change:
-  - In VoteScreen.jsx, before the createVariantCombatant call, assert that
-    lineage.bornFrom is set and its required fields (opponentName, roundNumber,
-    gameCode, parentName) are present.
-  - Add a comment on the bornFrom block: "bornFrom is required — it's the
-    lineage link that powers buildChainEvolutionStory. Never omit it."
-  - If bornFrom is missing, throw a descriptive error rather than silently
-    creating an orphaned variant.
+supabase.js — createVariantCombatant comment updated:
+  - Now reads lineage = { rootId, parentId, generation, bornFrom } to
+    document bornFrom as a required field at the write layer.
 
 ================================================================================
 DEFERRED — Ticker/Bot Voice Audit (Narrative Driven)

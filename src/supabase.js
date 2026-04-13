@@ -372,7 +372,8 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
 
 // ─── Lineage / variant combatants ────────────────────────────────────────────
 
-// Insert a new variant combatant. lineage = { rootId, parentId, generation }.
+// Insert a new variant combatant. lineage = { rootId, parentId, generation, bornFrom }.
+// bornFrom is required — it's the lineage link that powers buildChainEvolutionStory.
 // Published starts false — same lifecycle as any new combatant.
 export async function createVariantCombatant({ id, name, bio, ownerId, ownerName, lineage }) {
   try {

@@ -213,6 +213,18 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       },
     }
 
+    // bornFrom is required — it's the lineage link that powers buildChainEvolutionStory.
+    // Never omit it. Without opponentName the evolution narrative is half a story;
+    // without roundNumber / gameCode / parentName the record can't be reconstructed.
+    const bf = lineage.bornFrom
+    if (!bf || !bf.opponentName || !bf.roundNumber || !bf.gameCode || !bf.parentName) {
+      throw new Error(
+        `createVariantCombatant: lineage.bornFrom is incomplete — ` +
+        `opponentName=${bf?.opponentName}, roundNumber=${bf?.roundNumber}, ` +
+        `gameCode=${bf?.gameCode}, parentName=${bf?.parentName}`
+      )
+    }
+
     // Create the global combatant record for the variant.
     // If no new bio was written, fall back to the original's bio so the variant
     // isn't blank — the original's bio is preserved separately on room.combatants.
