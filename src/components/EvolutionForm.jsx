@@ -8,11 +8,12 @@ import { btn, inp } from '../styles.js'
  * Props:
  *   winner     — the combatant being evolved (id, name, bio)
  *   onSubmit   — (name: string, bio: string) => void
- *   onCancel   — () => void
- *   error      — optional string shown below the name field (e.g. name-taken message)
- *   submitting — optional bool to disable the confirm button during async validation
+ *   onCancel     — () => void
+ *   cancelLabel  — optional label for the cancel button (default: "Cancel")
+ *   error        — optional string shown below the name field (e.g. name-taken message)
+ *   submitting   — optional bool to disable the confirm button during async validation
  */
-export default function EvolutionForm({ winner, onSubmit, onCancel, error = null, submitting = false }) {
+export default function EvolutionForm({ winner, onSubmit, onCancel, cancelLabel = 'Cancel', error = null, submitting = false }) {
   const [name, setName] = useState(winner.name)
   const [bio,  setBio]  = useState(winner.bio || '')
 
@@ -51,7 +52,7 @@ export default function EvolutionForm({ winner, onSubmit, onCancel, error = null
           {submitting ? 'Checking…' : 'Confirm evolution ⚡'}
         </button>
         <button onClick={onCancel} style={{ ...btn('ghost'), fontSize: 13, padding: '9px 14px' }}>
-          Cancel
+          {cancelLabel}
         </button>
       </div>
     </div>

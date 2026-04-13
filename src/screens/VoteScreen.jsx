@@ -552,11 +552,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           <div style={{ padding: '12px 16px', background: 'var(--color-background-info)' }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-info)' }}>⚡ Your combatant just won</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>The host wants to know — how did this change <strong>{ownerPromptWinner.name}</strong>?</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>You can skip this — the round result is already recorded.</div>
           </div>
           <EvolutionForm
             winner={ownerPromptWinner}
             onSubmit={(name, bio) => handleEvolution(evolutionPending.winnerId, name, bio, playerId)}
             onCancel={() => { skipEvolution(evolutionPending.winnerId); setEvolveError(null) }}
+            cancelLabel="Decline evolution"
             error={evolveError}
             submitting={evolveSubmitting}
           />
