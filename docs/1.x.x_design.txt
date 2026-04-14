@@ -1,0 +1,125 @@
+release planning
+
+1.1.x
+	Features
+		Concept of a league. If the progression of gameplay is round -> game -> series, league would follow series.
+			set user list
+			own stats page
+			awards after certain number of series/games
+			All code doesn't need to be in. But the groundwork/skeleton code should be in so I don't need to repeat all of this after all these enhancements/stats we're adding
+		Tags - already discussed. autocomplete first then allow creation
+			admin ability to merge tags and apply to all affected. eg "spooky" and "spoooky" can get fixed after the fact.
+			bestiary (and/or new arenas screen)
+				searchable
+				filterable
+			stats
+			probably needs own screen (might all go in The Forge or super host area) Or maybe tags, arenas, bestiary all gets moved into a compendium screen
+		Super Hosts - new role for trusted users that get extra options to make game/narrative level changes while outside of battles
+			apply/remove/edit tags
+			assign/remove combatants from groups
+			build arena presets
+		Arenas
+			description
+			house rules
+			tags
+			stats
+			likes/dislikes. metric to gauge player enjoyment
+			evolutions (can show up in ensuing battles in a series but won't be in a fresh rotation)
+			lobby option for one series or a random one each round.
+				dropdown for selecting the arena with autocomplete favoring your arenas or searchable(or autofill) for all of them.
+				Description and house rules should be editable here but option to publish or use once should be considered. eg Tim's House is a usual favorite for an arena. One day you want "Tim's house but it's christmas. house rules: if you're too loud gam gam comes down and smacks you with a slipper" but don't want to make a new arena or completely alter the original and you can't start with a variant (unless we think that's a good idea for The Forge)
+				tag-specific options
+					Host can decide, when picking random per round, which pool of arenas to choose from based on some high level tags/presets. these would probably be catered by super hosts or just compiled through attrition
+						standard
+						league(think sports seasons. eg. this series is played at Hyrule Castle)
+							could go into subarenas. Maybe league/series based "arenas" are something higher up "Realms" and then realms can, if wanted, multiple locations within a realm each with different rules and settings.
+						wacky
+						weighted-liked (after 10 times picked as an arena remove if dislikes 60% higher than likes)
+			probably needs own screen
+		Groups
+			guilds, clans, gangs, etc - ways to group combatants together in a more meaningful way.
+			stats
+			This is specific to combatants. Not a grouping of users
+			editable by all superhosts
+			possible addition of roles and heirarchy. eg. leader, captain, etc.
+			probably needs own screen
+		Combatants2.0
+			tags
+				label-esque tags - given during character creation by owner/user or after the fact by creator/super host.
+					something like a trap tag will instantly be applied if it's a trap combatant 
+				ephemeral/topical tags given when currently meeting certain conditions
+					on fire if won 3 matches in a row (a 4+ next to it if the number continues)
+					frozen guy emoji if lost 3 in a row
+					something for being a successful trapper
+				acheivements/superlatives that won't show on the smaller card but if you click the combatant in the bestiary you can see a full list.
+			groups
+				can be placed/removed in/from groups
+			bestiary upgrade to support tags/groups searchs for combatants
+			mvp stats - placeholder for now. Should provide a chance to vote for MVP at the end of a game/series/league
+		The Forge - see docs/arenas-and-combatants-the-forge.txt
+			Area for users to create most game objects
+			1. Schema migration (prerequisite — nothing else works without this)
+				 - Add `source`, `status`, `tags` to combatants
+				 - Migrate `published` boolean → status enum
+				 - Create `groups` and `combatant_groups` tables
+				 - Populate bio_history on bio edits
+			2. The Forge: Create-a-Combatant
+				 - Creation form: name, bio, tags, group picker, stash/publish toggle
+				 - My Forge library view (stashed + published, filter tabs)
+				 - Edit flow with bio_history append
+				 - Delete (stashed only), publish, un-publish actions
+			3. Draft autocomplete: stash integration
+				 - When logged in, include owner's stashed combatants in suggestions
+				 - Visual indicator for stashed suggestions
+			4. Publish-on-game-completion
+				 - Hook into room end state: auto-publish any stashed combatants that
+				   appeared in the completed game
+				 - Revert-to-stash on game abandonment
+			5. The Forge: Create-a-Group
+				 - Creation form: name, description, tags
+				 - Member management: add/remove combatants (own or published)
+				 - Group detail page in Bestiary: members, combined record
+			6. The Forge: Create-an-Arena
+				 - Gated on arena scope decision (see arenas-and-combatants-2.0.txt)
+				 - Don't start until that decision is made
+		Open Lobbies - and subsequently closed lobbies
+			option in lobby creation to make public
+			option in join lobby to see public lobbies, sortable, default by times played with host.
+	Refactoring
+		We should codify a glossary of terms for technical discussion. eg "battle" is used loosely for multiple concepts.
+			round -> game -> series
+			retire battle from technical term
+			retire tournament from technical term
+	QoL
+		N/A
+	bugfixs
+		N/A
+1.2.x
+	Features
+		Users lounge - area to goof or play minigames based on the compendium created in base-eights
+			user decks
+				combatants will be released periodically as collectable trading cards (only in the users lounge)
+				cards are 1 of 1
+				users draft to select the latest cards for their decks
+				can trade with other users
+				can gamble (blind or known) for cards from other users
+				probably have stats but will be kept exclusively in the users lounge. Won't affect main game.
+			minigames based on the decks
+				narrative games where your deck is laid out in a way and you flip cards to tell a story. think mahjong tarot.
+					airplane - put x number of cards in rows and flip one card at a time and marvel at who is sitting next to who "Fishman is next to The prodigal Sun!?? he's fried!"
+						super stupid but good for some laughs
+					football
+						1v1 users put their cards in a 7on7 grid. Flip asyncronously to build the narrative as how the play ended up.
+							again, no substance. just for yucks
+					tbd
+				narrative games probably don't keep history but we could if it made sense.
+				somewhat more substantial games
+					8s but with your deck. Select 8 cards you have in your deck and random draw or select if you want.
+						could be recorded as a minigame stat.
+			open to other ideas
+	Refactoring
+		N/A
+	QoL
+		N/A
+	bugfixs
+		N/A
