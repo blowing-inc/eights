@@ -1,17 +1,29 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree, getCombatantBattleHistory } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantBattleHistory, sget } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
+import GameSummaryScreen from './GameSummaryScreen.jsx'
 
 // Renders a lineage tree (handles both linear chains and branching).
 // rawTree: raw combatant rows from getLineageTree — used for the parent→children map
 //          (branching support) and for navigation data when a node is tapped.
 // onViewCombatant: optional — if provided, non-current nodes become tappable links.
-function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
+function LineageSection({ title, story, rawTree, currentId, onViewCombatant, onViewRoom }) {
   // selectedId drives the ancestry highlight — defaults to the current combatant.
   const [selectedId, setSelectedId] = useState(currentId)
+
+  // validRooms: null = still loading, otherwise { [gameCode]: roomData | null }
+  // null value means the room was not found in the DB (old/deleted game).
+  const [validRooms, setValidRooms] = useState(null)
+
+  useEffect(() => {
+    const codes = [...new Set(story.flatMap(n => n.bornFrom?.gameCode ? [n.bornFrom.gameCode] : []))]
+    if (codes.length === 0) { setValidRooms({}); return }
+    Promise.all(codes.map(code => sget(code).then(data => [code, data])))
+      .then(pairs => setValidRooms(Object.fromEntries(pairs)))
+  }, [story])
 
   // Build parent→children map and child→parent map from raw tree data.
   const childMap  = {}
@@ -112,11 +124,21 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
                   <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, padding: '4px 0', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
                     <span>⚡ beat</span>
                     <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{child.bornFrom.opponentName || 'an opponent'}</strong>
-                    {child.bornFrom.gameCode && (
-                      <span style={{ fontStyle: 'normal', padding: '1px 5px', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 4, fontSize: 10, color: 'var(--color-text-secondary)', letterSpacing: '0.03em' }}>
-                        {child.bornFrom.gameCode} R{child.bornFrom.roundNumber}
-                      </span>
-                    )}
+                    {child.bornFrom.gameCode && (() => {
+                      const code     = child.bornFrom.gameCode
+                      const roomData = validRooms?.[code]          // undefined = loading, null = gone, object = exists
+                      const exists   = roomData != null
+                      const gone     = validRooms !== null && roomData === null
+                      return (
+                        <span
+                          onClick={exists ? e => { e.stopPropagation(); onViewRoom(roomData, child.bornFrom.roundNumber) } : undefined}
+                          title={gone ? 'Game no longer in database' : exists ? 'View game summary' : undefined}
+                          style={{ fontStyle: 'normal', padding: '1px 5px', background: gone ? 'transparent' : 'var(--color-background-tertiary)', border: `0.5px solid ${gone ? 'var(--color-border-tertiary)' : 'var(--color-border-secondary)'}`, borderRadius: 4, fontSize: 10, color: gone ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)', letterSpacing: '0.03em', cursor: exists ? 'pointer' : 'default', textDecoration: exists ? 'underline dotted' : 'none' }}
+                        >
+                          {code} R{child.bornFrom.roundNumber}{exists ? ' ↗' : gone ? ' –' : ''}
+                        </span>
+                      )
+                    })()}
                   </div>
                 )}
                 {renderNode(child)}
@@ -153,7 +175,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [ownChainStory, setOwnChainStory] = useState([])  // standalone tree (variants produced from this combatant as root)
   const [ownChainTree,  setOwnChainTree]  = useState([])  // raw tree data for own chain — needed for navigation
   const [h2hOpen,  setH2hOpen]  = useState(false)
-  const [h2hRows,  setH2hRows]  = useState(null)  // null = not yet loaded
+  const [h2hRows,  setH2hRows]  = useState(null)   // null = not yet loaded
+  const [roomOverlay, setRoomOverlay] = useState(null) // { room, initialRound }
 
   const canEdit    = c.owner_id === playerId
   const totalBattles = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
@@ -244,6 +267,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           rawTree={lineageTree}
           currentId={c.id}
           onViewCombatant={onViewCombatant}
+          onViewRoom={(room, initialRound) => setRoomOverlay({ room, initialRound })}
         />
       )}
       {ownChainStory.length > 1 && (
@@ -253,6 +277,14 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           rawTree={ownChainTree}
           currentId={c.id}
           onViewCombatant={onViewCombatant}
+          onViewRoom={(room, initialRound) => setRoomOverlay({ room, initialRound })}
+        />
+      )}
+      {roomOverlay && (
+        <GameSummaryScreen
+          room={roomOverlay.room}
+          initialRound={roomOverlay.initialRound}
+          onClose={() => setRoomOverlay(null)}
         />
       )}
 
