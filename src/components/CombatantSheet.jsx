@@ -4,7 +4,7 @@ import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantRoundH
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 
 /**
- * Slide-up sheet showing a combatant's global Bestiary record.
+ * Slide-up sheet showing a combatant's global Cast record.
  *
  * Props:
  *   combatantId  — global combatant id to load (preferred)
@@ -95,7 +95,7 @@ function InRoomView({ combatant: c }) {
   return (
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px', fontStyle: 'italic' }}>
-        This combatant hasn't been published yet — full Bestiary stats are available after the game ends.
+        This combatant hasn't been published yet — full Cast stats are available after the game ends.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1rem' }}>
         {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Rounds', totalRounds, 'var(--color-text-tertiary)']].map(([label, val, color]) => (

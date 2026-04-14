@@ -6,7 +6,7 @@ import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
 
-export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextGame, onRejoinNextGame }) {
+export default function BattleScreen({ room: init, playerId, setRoom, onVote, onChronicles, onHome, onNextGame, onRejoinNextGame }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
@@ -108,7 +108,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle arena</h2>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={onHistory} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>History</button>
+          <button onClick={onChronicles} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>The Chronicles</button>
           <button onClick={onHome} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Home</button>
         </div>
       </div>
@@ -214,7 +214,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                 <>
                   <button style={btn('primary')} onClick={completeGame}>Complete game ✓</button>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={btn()} onClick={onHistory}>View history</button>
+                    <button style={btn()} onClick={onChronicles}>The Chronicles</button>
                     <button style={btn()} onClick={() => onNextGame(room)}>Next Game ⚔️</button>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
@@ -226,7 +226,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                 <>
                   <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next game…</p>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={btn()} onClick={onHistory}>View history</button>
+                    <button style={btn()} onClick={onChronicles}>The Chronicles</button>
                     <button style={btn()} onClick={onHome}>Back to home</button>
                   </div>
                 </>

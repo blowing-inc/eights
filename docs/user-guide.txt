@@ -124,7 +124,7 @@ next round hasn't started.
 --- End Game Early ---
 
 The host can end the game before all rounds are played. The game is marked as
-ended early. Combatants from that game won't be published to the Bestiary
+ended early. Combatants from that game won't be published to The Cast
 (since the game was incomplete).
 
 --- Game Complete ---
@@ -151,13 +151,13 @@ HOW IT WORKS:
 3. The writer sees a form with the combatant's current name pre-filled. They
    give the evolved form a new name. The bio field starts with the original
    bio as a baseline — they can rewrite it entirely or extend it.
-4. On submit, the name is checked for uniqueness across the entire Bestiary.
+4. On submit, the name is checked for uniqueness across The Cast.
    Evolution names must be novel — you can't evolve into something that
    already exists.
 
 WHAT EVOLUTION CREATES:
 
-  · A new entry in the global Bestiary — the evolved variant is a distinct
+  · A new entry in The Cast — the evolved variant is a distinct
     combatant with its own win/loss record, reactions, and bio.
   · A permanent evolution record on the round — storing who evolved from whom,
     what opponent caused it, and the game it happened in.
@@ -187,10 +187,10 @@ READING THE EVOLUTION IN HISTORY:
 
 
 ================================================================================
-BATTLE HISTORY
+THE CHRONICLES
 ================================================================================
 
-Tap "Battle history" from the home screen to see all recorded games.
+Tap "The Chronicles" from the home screen to see all recorded games.
 
 Games in a series are grouped together. Each group shows the total rounds
 played across the series and the date range.
@@ -222,10 +222,10 @@ history and the series can be resumed later.
 
 
 ================================================================================
-THE BESTIARY
+THE CAST
 ================================================================================
 
-The Bestiary is the permanent public record of every combatant ever entered
+The Cast is the permanent public record of every combatant ever entered
 across all games — once a game completes, its combatants are published here.
 
 Each entry shows:
@@ -376,7 +376,7 @@ Priority key: [P1] = fix or ship soon  [P2] = important, next wave  [P3] = nice-
   currently-running game could contain an unpublished combatant that shares a
   name with an evolution target — both would pass validation and get published
   simultaneously. Low probability but a real integrity gap: two distinct
-  Bestiary entries with the same name corrupt the lineage record.
+  Cast entries with the same name corrupt the lineage record.
 
 [P2] TICKET 6 — Series standings missing Draws column
   computeSeriesStandings tracks wins/losses/games but the standings table

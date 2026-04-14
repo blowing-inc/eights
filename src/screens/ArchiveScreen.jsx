@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, tab, inp } from '../styles.js'
-import { listCombatants, searchBestiary } from '../supabase.js'
+import { listCombatants, searchCast } from '../supabase.js'
 
-const BESTIARY_SORTS = [
+const CAST_SORTS = [
   { key: 'wins',            label: 'Wins',   asc: false },
   { key: 'losses',          label: 'Losses', asc: false },
   { key: 'reactions_heart', label: '❤️',     asc: false },
@@ -13,7 +13,7 @@ const BESTIARY_SORTS = [
 ]
 const PAGE_SIZE = 20
 
-export default function BestiaryScreen({ onBack, onViewCombatant }) {
+export default function ArchiveScreen({ onBack, onViewCombatant }) {
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -27,11 +27,11 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
 
   useEffect(() => {
     setLoading(true)
-    const sortDef = BESTIARY_SORTS.find(s => s.key === sort)
+    const sortDef = CAST_SORTS.find(s => s.key === sort)
     // baseOnly filters variants server-side so pagination counts are accurate
     const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE, baseOnly: view === 'characters' }
     const fn = query.trim()
-      ? searchBestiary(query.trim(), opts)
+      ? searchCast(query.trim(), opts)
       : listCombatants(opts)
     fn.then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
   }, [sort, page, query, view])
@@ -49,7 +49,7 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
-    <Screen title="Bestiary" onBack={onBack}>
+    <Screen title="The Cast" onBack={onBack}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '-0.75rem 0 1rem' }}>Every fighter ever entered, across all games.</p>
 
       <input
@@ -67,7 +67,7 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
 
       {/* Sort bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.25rem' }}>
-        {BESTIARY_SORTS.map(s => (
+        {CAST_SORTS.map(s => (
           <button key={s.key} onClick={() => changeSort(s.key)} style={tab(sort === s.key)}>{s.label}</button>
         ))}
       </div>

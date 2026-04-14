@@ -581,9 +581,9 @@ export async function getAllCombatantsForExport() {
   } catch (e) { console.error('getAllCombatantsForExport exception', e); return [] }
 }
 
-// Paginated bestiary list — published only.
+// Paginated Cast list — published only.
 // baseOnly: when true, excludes variants (lineage IS NULL) so pagination is accurate
-// for the "characters" view in BestiaryScreen.
+// for the "characters" view in ArchiveScreen.
 export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
   try {
     const from = page * pageSize
@@ -596,9 +596,9 @@ export async function listCombatants({ sort = 'wins', ascending = false, page = 
   } catch (e) { console.error('listCombatants exception', e); return { items: [], total: 0 } }
 }
 
-// Full-field name/bio search across published combatants — used by BestiaryScreen.
+// Full-field name/bio search across published combatants — used by ArchiveScreen.
 // baseOnly: same as listCombatants — filters variants server-side for accurate pagination.
-export async function searchBestiary(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
+export async function searchCast(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
@@ -607,9 +607,9 @@ export async function searchBestiary(query, { sort = 'wins', ascending = false, 
       .or(`name.ilike.%${query}%,bio.ilike.%${query}%,owner_name.ilike.%${query}%`)
     if (baseOnly) q = q.is('lineage', null)
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
-    if (error) { console.error('searchBestiary error', error); return { items: [], total: 0 } }
+    if (error) { console.error('searchCast error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
-  } catch (e) { console.error('searchBestiary exception', e); return { items: [], total: 0 } }
+  } catch (e) { console.error('searchCast exception', e); return { items: [], total: 0 } }
 }
 
 // Past games for a player — used on the profile screen to show game history.
