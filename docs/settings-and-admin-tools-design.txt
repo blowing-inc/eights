@@ -1,0 +1,169 @@
+SETTINGS & ADMIN TOOLS DESIGN
+==============================
+Written after full audit of the current user pill, AdminScreen tabs, and
+supabase.js helpers. Ordered by priority within each section.
+
+
+════════════════════════════════════════════════════════
+USER PILL / SETTINGS
+════════════════════════════════════════════════════════
+
+Current pill: shows name ("username" or "guest (guest)"), dropdown with
+Log in or Log out. That's it.
+
+
+── PRIORITY 1: Real gaps ──────────────────────────────
+
+1. Copy rejoin link (guests only)
+   Generates a ?pid=xxx URL the guest can bookmark or message to themselves.
+   This is the "player continuity first" principle in its purest form — guests
+   have no recovery path after a phone switch or refresh without this. One button.
+   Implementation: read guestId from localStorage, build the URL, copy to
+   clipboard. No DB needed.
+
+2. Change PIN (logged-in users only)
+   Currently a user can only get their PIN changed if an admin resets it.
+   That's an unnecessary dependency for a simple password change. Should
+   require: current PIN, new PIN (twice). Validates current PIN against DB
+   before allowing the update. Removes a whole class of admin support requests.
+
+3. My profile shortcut (logged-in users only)
+   Getting to your own profile requires: Home → Players → find yourself.
+   The pill should just have "My profile" as a menu item that jumps directly
+   there. One-tap navigation, zero new infrastructure — just pass profileId
+   = playerId from the pill.
+
+
+── PRIORITY 2: Nice-to-have ───────────────────────────
+
+4. Default room settings (logged-in users, frequent hosts only)
+   When creating a room, pre-populate the settings form with the host's
+   preferred roster size, bio required, blind voting, etc. Store as a JSON
+   blob in the users table (new column: preferred_settings). On CreateRoom
+   mount, fetch the user's preferences and pass them as defaults.
+   Worth building if the group plays frequently enough that the settings
+   ceremony gets annoying.
+
+5. Color theme toggle (everyone)
+   Dark / Light / System. The app already uses CSS variables throughout.
+   Implementation would be a data-theme attribute on <html> plus a small
+   index.css update to define a light theme override block. Persist to
+   localStorage. No DB needed.
+   Note: only worth doing if the default dark theme is actually causing
+   complaints. Don't build for hypothetical preference.
+
+6. Username change (logged-in users only)
+   Rare need, but painful when you want it. Requires: uniqueness check against
+   the users table, then cascade the new name into owner_name on combatants
+   and player name on room blobs. The room blob cascade is the expensive part
+   (full table scan, same as guest re-attribution). Should be labeled clearly
+   as "this updates your name everywhere."
+
+
+── DON'T BUILD ────────────────────────────────────────
+
+- Notification preferences: no push notification infrastructure, nothing
+  to configure.
+- Per-user combatant display preferences: speculative, no signal that
+  anyone wants this.
+- Accessibility settings: real concern but out of scope for now.
+
+
+════════════════════════════════════════════════════════
+ADMIN TOOLS
+════════════════════════════════════════════════════════
+
+What exists: Games (end/delete rooms), Users (PIN reset, account merge,
+guest attribution), Combatants (search/edit name+bio/delete), Stats
+(recalc win-loss from room history), Inspector (view room JSON, full export).
+
+
+── PRIORITY 1: Operational gaps ───────────────────────
+
+1. Manual combatant publish
+   When a game is ended early (via admin "end game" or host ending with no
+   result), combatants stay unpublished permanently. They fought, they should
+   be in the Bestiary. Currently there's no way to fix this without writing
+   SQL directly.
+   Implementation: in CombatantsTab, the unpublished badge is already shown.
+   Add a "Publish" button next to it that calls publishCombatants([id]). One
+   function call, already exists in supabase.js.
+   Fits cleanly in the existing CombatantsTab search-and-edit flow.
+
+2. Bulk dev room deletion
+   Dev mode rooms accumulate quickly. GamesTab "All" view shows them but you
+   have to delete them one by one. Add a "Delete all dev rooms" action (with
+   confirm) at the top of GamesTab when devMode rooms are present. Reads the
+   full room list, filters for devMode === true, deletes in a loop.
+   Low blast radius: dev rooms have no published combatants and no real history.
+
+3. Room JSON editor
+   The Inspector shows the raw room JSON but can't edit it. When a room gets
+   into a stuck state (stale pending flag, wrong combatant snapshot, etc.),
+   there's currently no recovery path except writing SQL directly. This happens.
+   Implementation: in InspectorTab, add an "Edit JSON" toggle that swaps the
+   <pre> read-only view for a <textarea> pre-filled with the JSON. Validate
+   JSON on submit, show parse errors inline. Require a second confirmation step
+   ("I understand this can corrupt game state"). Use sset() to write.
+   This is dangerous and should be labeled clearly as a last-resort tool —
+   but the Inspector already exists for exactly this class of problem, and
+   not having edit capability is the gap.
+
+
+── PRIORITY 2: Edge cases but real ────────────────────
+
+4. Combatant re-attribution (registered → registered)
+   GuestSection handles guest → registered. But what if one registered user
+   entered a combatant for another player? Currently there's no admin tool for
+   that. Would need: search for the combatant, pick a new owner from the user
+   list, update owner_id + owner_name in combatants table. Room history blobs
+   also embed ownerName on combatant snapshots, but those are display-only
+   (the room records the name at fight time, which is correct). Only the global
+   combatants table needs updating.
+
+5. Combatant full record view
+   CombatantsTab shows name / bio / wins / losses / published status. It does
+   not show lineage, bio_history, or the raw record. When debugging a broken
+   lineage chain or a variant that isn't resolving correctly, you have to use
+   the Inspector tab on the room and dig through the JSON manually. A "View
+   full record" expand in CombatantsTab (just a <pre> of the raw combatant
+   row) would cover this without building a separate tool.
+
+6. Series repair
+   If a series gets partially broken — e.g. nextRoomId pointing to a cancelled
+   room, or a room missing its seriesId — there's no admin tool to fix it.
+   Would need: an interface to manually set seriesId / seriesIndex / prevRoomId
+   / nextRoomId on rooms. Possibly just: extend the room JSON editor (item 3)
+   to cover this case. If the JSON editor exists, series repair comes for free.
+   So this isn't a separate build — it's a dependency on item 3.
+
+
+── DON'T BUILD ────────────────────────────────────────
+
+- Audit log: useful in principle, requires infrastructure (a new table, write
+  hooks on every admin action). Overkill at current scale. If you need to know
+  what happened, the room's endedByAdmin flag and git history are enough.
+- Recalculate series standings: derived data, recomputed on every render.
+  Can't drift unless the room blobs themselves are wrong. Fix the rooms, not
+  the standings.
+- Scheduled cleanup jobs: auto-deleting old rooms, expiring guest IDs. The
+  app is a permanent record. Don't auto-delete anything.
+
+
+════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER RECOMMENDATION
+════════════════════════════════════════════════════════
+
+If I were picking the next 3 things to build from this whole list:
+
+  1. Manual combatant publish (Admin P1) — closes a real data hole with one
+     button and an existing supabase function. Probably an hour of work.
+
+  2. Copy rejoin link (Settings P1) — solves the biggest guest continuity
+     problem with zero DB changes. Probably 30 minutes.
+
+  3. Room JSON editor (Admin P1) — the one tool that makes everything else
+     fixable without SQL access. Will save time repeatedly.
+
+The PIN change and My Profile shortcut are both good but not urgent — the
+admin PIN reset covers the PIN case and the Players screen covers the profile.
