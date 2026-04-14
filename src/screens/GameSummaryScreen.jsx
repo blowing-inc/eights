@@ -6,6 +6,9 @@ import { btn } from '../styles.js'
 //   room         — full room data object (from sget)
 //   initialRound — 1-based round number to open to (e.g. the round where an evolution happened)
 //   onClose      — called when the user dismisses the screen
+//
+// NOTE: The round display logic here (RoundCard) is partially duplicated with HistoryRoomDetail
+// in HistoryScreen.jsx. If you're updating either, consider extracting a shared component.
 export default function GameSummaryScreen({ room, initialRound = 1, onClose }) {
   const rounds     = room.rounds || []
   const players    = (room.players || []).filter(p => !p.isBot)

@@ -6,6 +6,8 @@ import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '..
 import { slist } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 
+// NOTE: The round display logic in HistoryRoomDetail is partially duplicated with RoundCard
+// in GameSummaryScreen.jsx. If you're updating either, consider extracting a shared component.
 function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBattle }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
   const allRounds = room.rounds || []
