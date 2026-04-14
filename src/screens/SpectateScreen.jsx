@@ -101,7 +101,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
     return (
       <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
         {room.devMode && <DevBanner />}
-        <Header title="Game arena" />
+        <Header title="The Stage" />
         {completedRounds.length === 0 && (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Waiting for the first round to begin…</p>
         )}

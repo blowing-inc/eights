@@ -1,12 +1,12 @@
 EIGHTS — USER GUIDE
-The game of improbable combatants
+The game of improbable battles
 ================================================================================
 
 WHAT IS EIGHTS?
 
 Eights is a game tool for friends. You invent combatants — fictional
 characters, inside jokes, real people, abstract concepts — draft a roster, and
-run them through rounds with your group voting on each result. The host
+battle them out round by round with your group voting on each result. The host
 makes the final call. Everything that happens is saved permanently: the
 combatants, the winners, the reactions, the chat, the story.
 

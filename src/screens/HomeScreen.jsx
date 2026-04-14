@@ -41,7 +41,7 @@ export default function HomeScreen({ onCreate, onJoin, onHistory, onBestiary, on
         <HomeTicker />
         <div style={{ fontSize: 56, marginBottom: '0.5rem' }}>⚔️</div>
         <h1 style={{ fontSize: 40, fontWeight: 500, margin: '0 0 0.5rem', color: 'var(--color-text-primary)', letterSpacing: '-1px' }}>Eights</h1>
-        <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 16 }}>The game of improbable combatants</p>
+        <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 16 }}>The game of improbable battles</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 280 }}>
         {openLobbies.length > 0 && (
