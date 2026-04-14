@@ -14,7 +14,7 @@ export default function MyLobbiesScreen({ lobbies, playerId, onBack, onEnter }) 
         const { rosterSize } = normalizeRoomSettings(r.settings)
         const submitted = realPlayers.filter(p => (r.combatants[p.id] || []).length === rosterSize)
         const isMyTurn  = r.phase === 'draft' && (r.combatants[playerId] || []).length < rosterSize
-        const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : r.phase === 'draft' ? 'Drafting combatants' : r.phase === 'vote' ? 'Voting in progress' : 'Battle in progress'
+        const phaseLabel = r.phase === 'lobby' ? 'Waiting to start' : r.phase === 'draft' ? 'Drafting combatants' : r.phase === 'vote' ? 'Voting in progress' : 'Rounds in progress'
 
         return (
           <div key={r.id} style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', border: isMyTurn ? '1.5px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 12 }}>

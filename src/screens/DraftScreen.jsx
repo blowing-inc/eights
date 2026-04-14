@@ -32,9 +32,9 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [confirmCancel, setConfirmCancel] = useState(false)
   const isHost = room.host === playerId
   const isSeries = !!room.prevRoomId
-  const cancelLabel = isSeries ? 'End series' : 'Cancel tournament'
+  const cancelLabel = isSeries ? 'End series' : 'Cancel game'
   const cancelBody  = isSeries
-    ? 'This draft will be discarded. The completed games will remain in battle history and can be continued later.'
+    ? 'This draft will be discarded. The completed games will remain in history and can be continued later.'
     : 'This draft will be discarded. Any combatants already submitted won\'t be published.'
 
   const saveTimer = useRef(null)
@@ -75,7 +75,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   // Heritage game: load the ancestry chain and build active-form substitutions
   // so the autocomplete shows evolved forms instead of their superseded originals.
   // Variant data is fetched from the DB — variants are not in room.combatants
-  // (draft is immutable; variant only enters play in the next battle).
+  // (draft is immutable; variant only enters play in the next game).
   useEffect(() => {
     if (!init.prevRoomId) return
     getHeritageChain(init.prevRoomId).then(async chain => {
@@ -226,7 +226,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
       {myPrevWinners.length > 0 && (
         <div style={{ marginBottom: '1.5rem', padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Champions from last battle</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Champions from last game</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {myPrevWinners.map(w => {
               const placed = !unplacedWinners.find(u => u.id === w.id)
@@ -287,7 +287,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
               onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }}
             />
 
-            {/* Trap controls — only for brand-new combatants in a Next Battle */}
+            {/* Trap controls — only for brand-new combatants in a Next Game */}
             {isNewCombatant && otherPrevWinners.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 {trap ? (

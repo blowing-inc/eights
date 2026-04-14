@@ -68,7 +68,7 @@ export function formatCombatantHistory(combatant, lineageTree = [], ownChainTree
 
   const total = (combatant.wins || 0) + (combatant.losses || 0)
   lines.push('=== RECORD ===')
-  lines.push(`  ${combatant.wins || 0}W  ${combatant.losses || 0}L  ·  ${total} battle${total !== 1 ? 's' : ''}`)
+  lines.push(`  ${combatant.wins || 0}W  ${combatant.losses || 0}L  ·  ${total} round${total !== 1 ? 's' : ''}`)
 
   const heart = combatant.reactions_heart || 0
   const angry = combatant.reactions_angry || 0
@@ -80,7 +80,7 @@ export function formatCombatantHistory(combatant, lineageTree = [], ownChainTree
   return lines.join('\n')
 }
 
-// ─── Single-tournament export ─────────────────────────────────────────────────
+// ─── Single-game export ───────────────────────────────────────────────────────
 
 export function formatRoomAsText(room) {
   const players         = (room.players || []).filter(p => !p.isBot)

@@ -55,11 +55,11 @@ export const DEV_ROSTER_BIOS = [
 ]
 
 /**
- * Simulates all remaining rounds of a battle to completion.
+ * Simulates all remaining rounds of a game to completion.
  * Picks a random winner for each unplayed round.
  * Returns the fully updated room object (does not write to DB).
  */
-export function simulateBattleToEnd(room) {
+export function simulateGameToEnd(room) {
   const totalRounds = Math.min(...room.players.map(p => (room.combatants[p.id] || []).length))
   let updated = JSON.parse(JSON.stringify(room))
 
@@ -214,14 +214,14 @@ export function getReadyPlayerCount(players, combatants, rosterSize = 8) {
 }
 
 /**
- * Whether the host can force-start the battle phase with only some players ready.
+ * Whether the host can force-start the round phase with only some players ready.
  * Requires: is host, at least 2 ready, and at least 1 still not ready.
  */
 export function canForceStart(isHost, readyCount, totalRealPlayers) {
   return isHost && readyCount >= 2 && readyCount < totalRealPlayers
 }
 
-// ─── Battle logic ─────────────────────────────────────────────────────────────
+// ─── Round logic ──────────────────────────────────────────────────────────────
 
 /**
  * Whether the host can undo the last round.
@@ -242,7 +242,7 @@ export function canEditCombatant(ownerId, playerId, hostId) {
 
 /**
  * Scans a completed room's rounds and builds a per-owner map of winning combatants.
- * Used to populate prevWinners on the next battle room so the draft can enforce
+ * Used to populate prevWinners on the next game room so the draft can enforce
  * that champions are re-entered.
  * Returns { [ownerId]: [{ id, name, bio }, ...] }
  */
@@ -282,7 +282,7 @@ export function matchupForRound(room, roundNum) {
 
 /**
  * Given the full room object and a winning combatant id, returns updated
- * combatants map with wins/losses incremented and battle records appended.
+ * combatants map with wins/losses incremented and round records appended.
  * Does NOT mutate the input — returns a new deep-copied map.
  */
 export function applyWinner(room, round, winnerId) {
@@ -319,7 +319,7 @@ export function applyWinner(room, round, winnerId) {
 }
 
 /**
- * Both combatants drew — increments draws for each and appends battle records.
+ * Both combatants drew — increments draws for each and appends round records.
  * Does NOT mutate the input — returns a new deep-copied map.
  */
 export function applyDraw(room, round) {
@@ -348,7 +348,7 @@ export function applyDraw(room, round) {
 /**
  * Reverses the stat changes from the last completed round (win or draw).
  * Returns a new combatants map with stats decremented and the round's
- * battle record entries removed.  Clamps to 0 (never goes negative).
+ * round record entries removed.  Clamps to 0 (never goes negative).
  */
 export function undoRound(room, round) {
   const combatants = JSON.parse(JSON.stringify(room.combatants))
@@ -573,7 +573,7 @@ export function buildTickerMessages(rooms) {
     "New challenger approaching. Old challenger still sulking in the corner.",
     "The arena does not accept appeals, complaints, or requests for recounts.",
     "Fun fact: 100% of combatants who have never lost are currently undefeated.",
-    "Management is not responsible for emotional damage caused by tournament results.",
+    "Management is not responsible for emotional damage caused by game results.",
     "Somewhere, a combatant is preparing. It probably won't help.",
     "Submit your 8. Destiny will handle the rest.",
     "This ticker is legally distinct from sports journalism.",
@@ -774,11 +774,11 @@ export function buildChainEvolutionStory(rooms, rootId) {
   return story
 }
 
-// ─── Next battle preparation ──────────────────────────────────────────────────
+// ─── Next game preparation ────────────────────────────────────────────────────
 
 /**
  * Pure function: derives the new room and the updated completed room for a
- * "Host Next Battle" transition. Contains all series/heritage logic so App.jsx
+ * "Host Next Game" transition. Contains all series/heritage logic so App.jsx
  * only handles the two DB writes and navigation.
  *
  * @param {object} completedRoom  The room that just finished
@@ -788,7 +788,7 @@ export function buildChainEvolutionStory(rooms, rootId) {
  * @param {number} [opts.now]        Timestamp for createdAt (defaults to Date.now())
  * @returns {{ newRoom: object, updatedCompletedRoom: object }}
  */
-export function prepareNextBattle(completedRoom, { newRoomCode, hostId, now = Date.now() }) {
+export function prepareNextGame(completedRoom, { newRoomCode, hostId, now = Date.now() }) {
   let prevWinners = extractPreviousWinners(completedRoom.rounds)
 
   // Translate any evolved winners to their current active form using the

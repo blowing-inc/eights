@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { btn, inp, lbl } from '../styles.js'
-import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantBattleHistory } from '../supabase.js'
+import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantRoundHistory } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 
 /**
@@ -91,14 +91,14 @@ export default function CombatantSheet({ combatantId, combatant: inRoom, playerI
 // ── In-room fallback view (unpublished combatant) ─────────────────────────────
 
 function InRoomView({ combatant: c }) {
-  const totalBattles = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
+  const totalRounds = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   return (
     <div style={{ padding: '16px' }}>
       <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px', fontStyle: 'italic' }}>
         This combatant hasn't been published yet — full Bestiary stats are available after the game ends.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1rem' }}>
-        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Battles', totalBattles, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Rounds', totalRounds, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: 12, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 500, color }}>{val}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</div>
@@ -196,7 +196,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
   }, [init.id])
 
   const canEdit    = c.owner_id === playerId
-  const totalBattles = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
+  const totalRounds = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   const history    = c.bio_history || []
   const isVariant  = !!c.lineage
   const rootId     = c.lineage?.rootId || c.id
@@ -217,7 +217,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
   }, [rootId, c.id])
 
   function toggleH2h() {
-    if (!h2hOpen && h2hRows === null) getCombatantBattleHistory(c.id).then(setH2hRows)
+    if (!h2hOpen && h2hRows === null) getCombatantRoundHistory(c.id).then(setH2hRows)
     setH2hOpen(o => !o)
   }
 
@@ -254,7 +254,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1rem' }}>
-        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Battles', totalBattles, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Rounds', totalRounds, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: 10, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 500, color }}>{val}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</div>
@@ -296,7 +296,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
       </div>
 
       {/* Head-to-head */}
-      {totalBattles > 0 && (
+      {totalRounds > 0 && (
         <div style={{ marginBottom: '1rem' }}>
           <button onClick={toggleH2h} style={{ ...btn('ghost'), width: '100%', textAlign: 'left', fontSize: 13, marginBottom: h2hOpen ? 8 : 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Head-to-head</span><span>{h2hOpen ? '↑' : '↓'}</span>

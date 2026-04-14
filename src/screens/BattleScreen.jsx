@@ -6,7 +6,7 @@ import { btn } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
 
-export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextBattle, onRejoinNextBattle }) {
+export default function BattleScreen({ room: init, playerId, setRoom, onVote, onHistory, onHome, onNextGame, onRejoinNextGame }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
@@ -21,7 +21,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     return subscribeToRoom(room.id, async r => {
       if (r.nextRoomId) {
         const nextRoom = await sget('room:' + r.nextRoomId)
-        if (nextRoom) { setRoom(nextRoom); onRejoinNextBattle(nextRoom); return }
+        if (nextRoom) { setRoom(nextRoom); onRejoinNextGame(nextRoom); return }
       }
       // Detect undo for non-hosts: currentRound decreased
       if (r.host !== playerId && r.currentRound < prevRoundRef.current) {
@@ -66,7 +66,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     onHome()
   }
 
-  async function completeTournament() {
+  async function completeGame() {
     const r = await sget('room:' + room.id)
     if (!r) return
     const updated = { ...r, phase: 'ended' }
@@ -207,24 +207,24 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         {room.currentRound >= totalRounds && (round?.winner || round?.draw) && (
           <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🏆</div>
-            <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Tournament complete!</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Game complete!</h3>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
               {isHost && (
                 <>
-                  <button style={btn('primary')} onClick={completeTournament}>Complete tournament ✓</button>
+                  <button style={btn('primary')} onClick={completeGame}>Complete game ✓</button>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button style={btn()} onClick={onHistory}>View history</button>
-                    <button style={btn()} onClick={() => onNextBattle(room)}>Next Battle ⚔️</button>
+                    <button style={btn()} onClick={() => onNextGame(room)}>Next Game ⚔️</button>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
-                    This room stays open until you complete or start the next battle.
+                    This room stays open until you complete or start the next game.
                   </p>
                 </>
               )}
               {!isHost && (
                 <>
-                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next battle…</p>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next game…</p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button style={btn()} onClick={onHistory}>View history</button>
                     <button style={btn()} onClick={onHome}>Back to home</button>

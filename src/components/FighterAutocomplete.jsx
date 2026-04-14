@@ -53,7 +53,7 @@ export default function FighterAutocomplete({ value, onChange, onSelect, placeho
       />
       {open && items.length > 0 && (
         <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', zIndex: 200, overflow: 'hidden', boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
-          {showPinnedHeader && <div style={{ padding: '5px 12px 3px', fontSize: 10, color: 'var(--color-text-success)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🏆 Champions from last battle</div>}
+          {showPinnedHeader && <div style={{ padding: '5px 12px 3px', fontSize: 10, color: 'var(--color-text-success)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🏆 Champions from last game</div>}
           {items.map((f, idx) => {
             const isPinned = filteredPinned.some(p => p.id === f.id)
             const isFirstRecent = !value.trim() && showRecentHeader && idx === filteredPinned.length

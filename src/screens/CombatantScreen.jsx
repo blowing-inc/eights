@@ -29,7 +29,7 @@ export default function CombatantScreen({ room, combatant, playerId, onBack, onV
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
-        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Battles', (c.wins || 0) + (c.losses || 0) + (c.draws || 0), 'var(--color-text-tertiary)']].map(([label, val, color]) => (
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Rounds', (c.wins || 0) + (c.losses || 0) + (c.draws || 0), 'var(--color-text-tertiary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: '12px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 500, color }}>{val}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</div>
@@ -83,7 +83,7 @@ export default function CombatantScreen({ room, combatant, playerId, onBack, onV
 
       {(c.battles || []).length > 0 && (
         <div>
-          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>Battle record</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>Round record</h3>
           {c.battles.map((b, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', marginBottom: 6, border: '0.5px solid var(--color-border-tertiary)' }}>
               <span style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>vs {b.opponent}</span>

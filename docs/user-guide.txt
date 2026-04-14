@@ -1,12 +1,12 @@
 EIGHTS — USER GUIDE
-The game of improbable battles
+The game of improbable combatants
 ================================================================================
 
 WHAT IS EIGHTS?
 
-Eights is a tournament tool for friends. You invent combatants — fictional
+Eights is a game tool for friends. You invent combatants — fictional
 characters, inside jokes, real people, abstract concepts — draft a roster, and
-battle them out round by round with your group voting on each result. The host
+run them through rounds with your group voting on each result. The host
 makes the final call. Everything that happens is saved permanently: the
 combatants, the winners, the reactions, the chat, the story.
 
@@ -86,12 +86,12 @@ don't see anyone else's combatants until the first round begins.
 
 --- Heritage Drafts (Series) ---
 
-If this game is part of a series — a continuation of a previous battle — your
+If this game is part of a series — a continuation of a previous game — your
 champions from the last game are required entries. You'll see your previous
 winners listed and must place each one in a slot before you can submit. They
 appear highlighted in your draft form.
 
-If a champion evolved since the last battle, their evolved form appears instead
+If a champion evolved since the last game, their evolved form appears instead
 of the original. That variant carries the same owner and the same obligation.
 
 --- Force Start ---
@@ -103,10 +103,10 @@ someone has gone quiet or the group is ready to move on.
 
 
 ================================================================================
-BATTLE ROUNDS
+ROUNDS
 ================================================================================
 
-The battle screen shows the full round list as it fills up. Rounds are started
+The rounds screen shows the full round list as it fills up. Rounds are started
 by the host — tap the round button to advance.
 
 Each round opens a voting screen for all players. One combatant per player is
@@ -127,12 +127,12 @@ The host can end the game before all rounds are played. The game is marked as
 ended early. Combatants from that game won't be published to the Bestiary
 (since the game was incomplete).
 
---- Tournament Complete ---
+--- Game Complete ---
 
 When all rounds are done, the host has three options:
   · View history — see the full record of the game
   · Continue series — start a new draft with the same players (see Series)
-  · Complete tournament — marks the game as finished and returns home
+  · Complete game — marks the game as finished and returns home
 
 
 ================================================================================
@@ -212,7 +212,7 @@ standings: wins, losses, and total games per player across the whole series.
 
 --- Continue Series ---
 
-If you hosted a completed tournament, you'll see a "Continue series" callout
+If you hosted a completed game, you'll see a "Continue series" callout
 in the room detail. Tapping it starts a new draft with the same players,
 carrying forward prevWinners and evolved forms.
 
@@ -251,7 +251,7 @@ COMBATANT DETAIL:
 
   Tap any combatant to see their full profile:
     · Current name and bio
-    · Stats grid: wins, losses, draws, total battles
+    · Stats grid: wins, losses, draws, total rounds
     · Head-to-head breakdown (expandable) — who they faced most and their
       record against each opponent
     · Evolution lineage — for variants, the full story of every form they
@@ -279,9 +279,9 @@ HOST CONTROLS (SUMMARY)
 ================================================================================
 
   Lobby:       Share room code/link, start game, cancel room
-  Draft:       See readiness, force-start, cancel tournament / end series
+  Draft:       See readiness, force-start, cancel game / end series
   Vote round:  Confirm winner, declare draw, trigger evolution, undo last round
-  Battle:      Start next round, end game early, complete tournament, next battle
+  Rounds:      Start next round, end game early, complete game, next game
 
 
 ================================================================================
@@ -296,7 +296,7 @@ TICKET 1 — Spectators can't react or chat
 TICKET 2 — "Undo last round" not shown to non-hosts
   Non-host players have no indication that a round can be undone or that it
   was undone. The round list just changes. A small notification on the
-  non-host battle screen when an undo happens could improve clarity.
+  non-host rounds screen when an undo happens could improve clarity.
 
 TICKET 3 — Evolution name uniqueness check is published-only
   The uniqueness check (checkCombatantNameExists) only compares against
@@ -322,9 +322,9 @@ TICKET 6 — Series standings don't account for draws
   the standings table has no D column. If draws matter competitively this is
   a gap; if series standings are purely narrative it may be fine.
 
-TICKET 7 — "Complete tournament" vs. auto-end phase
+TICKET 7 — "Complete game" vs. auto-end phase
   When all rounds are played, the room phase stays as 'battle' until the host
-  explicitly taps "Complete tournament." Until then, the room can appear in
+  explicitly taps "Complete game." Until then, the room can appear in
   open lobbies. The guide describes this flow correctly, but a first-time host
   may not realize they need to tap Complete. A more prominent prompt or
   auto-completion on all-rounds-done could help.
@@ -355,16 +355,16 @@ Priority key: [P1] = fix or ship soon  [P2] = important, next wave  [P3] = nice-
   in any round," with an additional line when biosRequired is on: "Bios are
   required — unsubmitted players are excluded entirely."
 
-[DONE] TICKET 7 — "Complete tournament" prompt not obvious enough
-  "Complete tournament" is now the primary button in the tournament-complete
-  card. "View history" and "Next Battle" sit below it as secondary actions.
+[DONE] TICKET 7 — "Complete game" prompt not obvious enough
+  "Complete game" is now the primary button in the game-complete card.
+  "View history" and "Next Game" sit below it as secondary actions.
   A brief note — "This room stays open until you complete or start the next
-  battle" — makes the consequence visible.
+  game" — makes the consequence visible.
 
 [DONE] TICKET 8 — No warning when host navigates away mid-round
   Host now sees a confirmation dialog ("Players are waiting — leave anyway?")
   when tapping "← Home" on VoteScreen. Non-hosts see a persistent "Host is out
-  of the room" banner (BattleScreen and VoteScreen) driven by Supabase Realtime
+  of the room" banner (rounds screen and VoteScreen) driven by Supabase Realtime
   presence — the banner appears when the host's presence channel goes silent
   and clears automatically when the host returns.
 
