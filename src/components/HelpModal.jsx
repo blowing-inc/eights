@@ -40,19 +40,19 @@ After confirming, the host can choose to evolve the winner: give them a new name
 
 The host can write the evolution themselves, or hand it to the combatant's owner. Either way, you pick a new name and write (or update) the bio for the evolved form.
 
-The original combatant's stats and bio are preserved. The evolved variant is a new entry in the Bestiary with its own record. In a series, the evolved form appears as a required pick in the next draft.`
+The original combatant's stats and bio are preserved. The evolved variant is a new entry in The Cast with its own record. In a series, the evolved form appears as a required pick in the next draft.`
   },
   {
-    title: 'Battle history & series',
-    content: `Every game is saved in Battle History. Tap a room to see round-by-round results, combatant rosters, reactions, and chat.
+    title: 'The Chronicles',
+    content: `Every game is saved in The Chronicles. Tap a room to see round-by-round results, combatant rosters, reactions, and chat.
 
 If you hosted a completed game, you'll see a "Continue series" option — this starts a new draft with the same players, carrying forward champions and evolved forms.
 
 A series groups all connected games together and shows standings across every game played.`
   },
   {
-    title: 'The Bestiary',
-    content: `The Bestiary is the permanent record of every combatant ever entered across all games. Search by name, bio text, or player name.
+    title: 'The Cast',
+    content: `The Cast is the permanent record of every combatant ever entered across all games. Search by name, bio text, or player name.
 
 Each combatant page shows their win/loss record, bio history, reactions, and — if they evolved — the full lineage of what they became and why.`
   },

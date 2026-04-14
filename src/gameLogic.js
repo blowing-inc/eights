@@ -661,8 +661,8 @@ export function buildActiveFormMap(rooms) {
  *
  * Produces the same { combatantId, name, generation, bornFrom } shape as
  * buildChainEvolutionStory so display code is interchangeable between the two.
- * Use this when you have combatant data (Bestiary, detail pages). Use
- * buildChainEvolutionStory when you have room history (HistoryScreen).
+ * Use this when you have combatant data (The Cast, detail pages). Use
+ * buildChainEvolutionStory when you have room history (ChroniclesScreen).
  *
  * Requires that each variant's lineage.bornFrom was populated at creation time
  * (VoteScreen handleEvolution, Tier 4+).
@@ -943,7 +943,7 @@ export function computeSeriesStandings(rooms) {
 // ─── History grouping ─────────────────────────────────────────────────────────
 
 /**
- * Groups a flat list of rooms into display items for HistoryScreen.
+ * Groups a flat list of rooms into display items for ChroniclesScreen.
  *
  * Returns an array sorted newest-first, each item either:
  *   { type: 'series',     seriesId, rooms: Room[], latestAt: number }

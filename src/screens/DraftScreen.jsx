@@ -172,7 +172,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
             </p>
             {biosRequired && (
               <p style={{ fontSize: 12, color: 'var(--color-text-warning)', margin: '0 0 10px', opacity: 0.85 }}>
-                Bios are required in this game. Unsubmitted players are excluded entirely — their combatants won't enter the Bestiary from this game.
+                Bios are required in this game. Unsubmitted players are excluded entirely — their combatants won't enter The Cast from this game.
               </p>
             )}
             {!biosRequired && <div style={{ marginBottom: 10 }} />}
@@ -204,6 +204,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, marginBottom: '1rem' }}>← Back</button>
+      <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 4px' }}>The Fight Card</p>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Your {rosterSize} combatants</h2>
         {saveStatus === 'saving'   && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>Saving…</span>}

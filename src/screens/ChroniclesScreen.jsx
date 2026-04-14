@@ -6,9 +6,9 @@ import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '..
 import { slist } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 
-// NOTE: The round display logic in HistoryRoomDetail is partially duplicated with RoundCard
+// NOTE: The round display logic in ChroniclesRoomDetail is partially duplicated with RoundCard
 // in GameSummaryScreen.jsx. If you're updating either, consider extracting a shared component.
-function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextGame }) {
+function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNextGame }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
   const allRounds = room.rounds || []
   const players = (room.players || []).filter(p => !p.isBot)
@@ -390,7 +390,7 @@ function SeriesRow({ item, onSelect, playerId }) {
   )
 }
 
-export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNextGame }) {
+export default function ChroniclesScreen({ onBack, setViewCombatant, playerId, onNextGame }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
 
@@ -409,7 +409,7 @@ export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNe
   }, [])
 
   if (selected) {
-    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} playerId={playerId} onNextGame={onNextGame} />
+    return <ChroniclesRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} playerId={playerId} onNextGame={onNextGame} />
   }
 
   const items = rooms ? groupRoomsForHistory(rooms) : []
@@ -418,7 +418,7 @@ export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNe
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
         <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
-        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle history</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>The Chronicles</h2>
       </div>
 
       {rooms === null && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}

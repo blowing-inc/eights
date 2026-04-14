@@ -11,13 +11,13 @@ import LobbyScreen from './screens/LobbyScreen.jsx'
 import DraftScreen from './screens/DraftScreen.jsx'
 import BattleScreen from './screens/BattleScreen.jsx'
 import VoteScreen from './screens/VoteScreen.jsx'
-import HistoryScreen from './screens/HistoryScreen.jsx'
+import ChroniclesScreen from './screens/ChroniclesScreen.jsx'
 import CombatantScreen from './screens/CombatantScreen.jsx'
 import AuthScreen from './screens/AuthScreen.jsx'
 import AdminScreen from './screens/AdminScreen.jsx'
 import PlayersScreen from './screens/PlayersScreen.jsx'
 import PlayerProfile from './screens/PlayerProfile.jsx'
-import BestiaryScreen from './screens/BestiaryScreen.jsx'
+import ArchiveScreen from './screens/ArchiveScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
 import GameSummaryScreen from './screens/GameSummaryScreen.jsx'
@@ -129,8 +129,8 @@ export default function App() {
   const [afterAuth, setAfterAuth] = useState(null)
   const [room, setRoom] = useState(null)
   const [viewCombatant, setViewCombatant] = useState(null)
-  const [viewHistory, setViewHistory] = useState(false)
-  const [viewBestiary, setViewBestiary] = useState(false)
+  const [viewChronicles, setViewChronicles] = useState(false)
+  const [viewArchive, setViewArchive] = useState(false)
   const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
   const [viewPlayers, setViewPlayers] = useState(false)
   const [viewPlayerProfile, setViewPlayerProfile] = useState(null)
@@ -252,10 +252,10 @@ export default function App() {
     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant)
     content = <GlobalCombatantDetail key={viewGlobalCombatant?.id} combatant={viewGlobalCombatant} playerId={playerId} playerName={effectiveName} onBack={() => setViewGlobalCombatant(null)} onViewCombatant={setViewGlobalCombatant} />
-  else if (viewBestiary)
-    content = <BestiaryScreen playerId={playerId} onBack={() => setViewBestiary(false)} onViewCombatant={c => setViewGlobalCombatant(c)} />
-  else if (viewHistory)
-    content = <HistoryScreen onBack={() => setViewHistory(false)} setViewCombatant={c => { setViewCombatant(c); setViewHistory(false) }} playerId={playerId} onNextGame={r => { setViewHistory(false); handleHostNextGame(r) }} />
+  else if (viewArchive)
+    content = <ArchiveScreen playerId={playerId} onBack={() => setViewArchive(false)} onViewCombatant={c => setViewGlobalCombatant(c)} />
+  else if (viewChronicles)
+    content = <ChroniclesScreen onBack={() => setViewChronicles(false)} setViewCombatant={c => { setViewCombatant(c); setViewChronicles(false) }} playerId={playerId} onNextGame={r => { setViewChronicles(false); handleHostNextGame(r) }} />
   else if (viewCombatant)
     content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} onViewCombatant={setViewCombatant} />
   else if (screen === 'auth')
@@ -263,7 +263,7 @@ export default function App() {
   else if (screen === 'admin')
     content = <AdminScreen onBack={() => nav('home')} />
   else if (screen === 'home')
-    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onHistory={() => setViewHistory(true)} onBestiary={() => setViewBestiary(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
+    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onChronicles={() => setViewChronicles(true)} onArchive={() => setViewArchive(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
     content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => goAuth('create')} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
@@ -275,7 +275,7 @@ export default function App() {
   else if (screen === 'draft')
     content = <DraftScreen room={room} playerId={playerId} setRoom={setRoom} onDone={() => { removeLobbyCode(room?.id); nav('round') }} isGuest={isGuest} onLogin={() => goAuth('draft')} onBack={goHome} onEndSeries={handleEndSeries} />
   else if (screen === 'round')
-    content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onHistory={() => setViewHistory(true)} onHome={goHome} onNextGame={handleHostNextGame} onRejoinNextGame={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
+    content = <BattleScreen room={room} playerId={playerId} setRoom={setRoom} onVote={() => nav('vote')} onChronicles={() => setViewChronicles(true)} onHome={goHome} onNextGame={handleHostNextGame} onRejoinNextGame={r => { addLobbyCode(r.id); setRoom(r); nav('draft') }} />
   else if (screen === 'vote')
     content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('round')} onViewPlayer={setViewPlayerProfile} onHome={goHome} isGuest={isGuest} onLogin={() => goAuth('vote')} />
 
