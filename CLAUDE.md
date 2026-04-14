@@ -146,6 +146,7 @@ These conventions apply when working issues from the GitHub tracker.
 1. Check the lowest-numbered open milestone first: `gh milestone list --repo blowing-inc/eights`
 2. Within that milestone, take the first open unassigned issue: `gh issue list --milestone '<title>' --state open --repo blowing-inc/eights`
 3. Assign it to yourself before starting: `gh issue edit <number> --add-assignee @me --repo blowing-inc/eights`
+4. **Create the branch before writing any code** — see Branch naming below.
 
 ### Branch naming
 
@@ -212,3 +213,4 @@ Before marking a PR ready:
 - [ ] If game logic changed: unit tests added or updated in the relevant `.test.js` file
 - [ ] If UI copy changed: verified against `docs/glossary.md`
 - [ ] If schema changed: migration SQL is present and backfill approach is documented
+- [ ] Switch back to `main` after the PR is open
