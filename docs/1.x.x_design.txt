@@ -148,7 +148,7 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
 
 ---
 
-1.2.x — Game Objects: Arenas, Groups, Super Hosts, The Archive, Open Lobbies
+1.2.x — Game Objects: Arenas, Groups, Super Hosts, Hall of Fame, The Archive, Open Lobbies
 
 Builds on the schema shipped in 1.1.x. Arenas are gated on a scope decision
 that must be made before implementation begins — don't start arena work until
@@ -239,10 +239,45 @@ that decision is locked.
       Assign and remove combatants from any group.
       Build and curate arena presets.
       Merge duplicate tags across all affected records.
+      Induct and remove combatants from the Hall of Fame (see Hall of Fame below).
     What Super Hosts are not
       Not a moderation role — no flagging, no approval flows.
       Not a host override — they cannot control games in progress or alter round outcomes.
       The host still runs the game. Super Hosts curate the world outside it.
+
+  Hall of Fame (first pass)
+    A permanent distinction for any published combatant, granted by Super Host
+      induction. Independent of awards cycles — no game or series needs to have
+      just ended. The badge is ceremonial; it carries no gameplay effect.
+    Schema
+      Add hall_of_fame bool to combatants, default false
+      Add inducted_at timestamptz — set on induction, preserved on removal
+      Add inducted_by text — Super Host name, denormalized
+      Add induction_note text — optional, Super Host written, one line
+      Add removed_at timestamptz — set on removal, null if currently inducted
+      Add removed_by text — Super Host name on removal, null if currently inducted
+      A combatant may only hold one active Hall of Fame entry — no duplicate
+        inductions.
+    Super Host tooling
+      Induction flow: find combatant in The Cast → "Induct into Hall of Fame" →
+        optional note field → confirm.
+      Removal flow: find inducted combatant → "Remove from Hall of Fame" →
+        confirm. Induction record preserved; badge removed.
+      Super Hosts can edit the induction note after the fact without triggering
+        a removal/re-induction cycle.
+    Display
+      Hall of Fame section in The Archive — dedicated view, separate from The
+        Cast tab, feels ceremonial.
+      Inducted combatants show a Hall of Fame badge on their Cast entry card and
+        detail page.
+      Combatant detail page: "Inducted [date] by [Super Host name]" with optional
+        note.
+      If removed: badge hidden, induction record still visible on detail page as
+        historical record.
+      Hall of Fame view in The Archive: browsable, filterable by league once
+        leagues exist.
+    Future pass
+      League-level voted award path — deferred until leagues ship in 1.4.x.
 
   The Archive
     Tabbed destination screen. The Cast is the default tab — users arriving at
@@ -286,12 +321,14 @@ that decision is locked.
 
 ---
 
-1.3.x — Season
+1.3.x — Season + Awards System
 
 Builds on the clean terminology and series concept from 1.1.x. Season is the
 layer above series: a structured container with a fixed player roster, declared
 series count, cumulative standings, and end-of-season awards. Requires no
-heritage carryover between series — each series starts fresh.
+heritage carryover between series — each series starts fresh. The Awards System
+ships in this release and applies retroactively across all layers — game-level
+MVP is part of this system, not just a season feature.
 
   Schema
     seasons table
@@ -316,40 +353,9 @@ heritage carryover between series — each series starts fresh.
     Season resume
       Creates a new fresh series under the same season_id.
       series_played increments. No prev winners or heritage carryover.
-    Awards — fires on season close (both natural and early)
-      Automated awards — computed immediately on close:
-        most round wins
-        most traps set
-        most efficient trapper (minimum trap threshold TBD once data exists)
-        most evolutions triggered
-      Voted awards — ballot opens for season members on close:
-        favorite combatant (season-scoped, distinct from per-game MVP vote)
-        most creative combatant (season-scoped)
-      Awards should feel like chapter titles, not leaderboard ranks.
-    MVP voting
-      Optional flow on the game end screen. First nomination opens the process —
-        once open it cannot be cancelled, only closed early by the host.
-      Nomination pool: round winners shown by default; full combatant dropdown
-        available as secondary option for memorable losers.
-      Secret ballot — picks hidden until resolution. Live status strip shows who
-        has locked in a nomination or abstained (names visible, picks hidden).
-        Mirrors ConnectionStatus pattern.
-      Resolution paths:
-        1. Clear winner — auto-awarded, no prompt.
-        2. Tie after all players lock in — tiebreak runoff between tied nominees.
-           Runoff resolves cleanly → MVP awarded.
-           Runoff deadlocks, or not all players lock in before host closes →
-             co-MVP, auto-resolved, no further prompts.
-        3. Host closes early at any point — resolve with current votes; ties
-             auto-resolve as co-MVP.
-      On resolution: append to mvp_record on each winning combatant —
-        { gameCode, voteShare, coMvp }.
-      Co-MVP: each tied combatant receives a separate entry, coMvp: true,
-        voteShare split evenly.
-      The Cast combatant detail: MVP history — "MVP in ROOM X — 67% of the vote"
-        per entry, derived from mvp_record.
-      MVP count (mvp_record.length) feeds into season-level automated awards.
-      mvp_record is populated from 1.1.x — data is ready when this UI ships.
+    Awards
+      Season awards (automatic and voted) fire on season close — both natural
+        and early. Full spec in the Awards System section below.
     Arena integration
       A season can designate a home arena — a recurring venue for the run.
       Optional: sub-arenas within a season realm. Build only if the base arena
@@ -360,6 +366,112 @@ heritage carryover between series — each series starts fresh.
       Store the setting at season creation. Implement draft-time lock in a
       follow-up once complexity is fully assessed. Do not block season launch
       on this.
+
+  Refactoring
+    N/A
+  QoL
+    N/A
+  Bugfixes
+    N/A
+
+---
+
+1.3.x — Awards System
+
+The single shared awards engine used at every layer. Built here in 1.3.x,
+reused for leagues in 1.4.x. Awards are permanent record — they do not affect
+gameplay mechanics.
+
+  Schema
+    New table: awards
+      id, type, layer, scope_id, scope_type, recipient_id, recipient_type,
+      recipient_name, value, co_award bool, awarded_at, created_at
+        type — award identifier e.g. 'most_wins', 'mvp', 'favorite_combatant',
+          'best_evolution'
+        layer — 'game' | 'series' | 'season' | 'league'
+        scope_id — the game/series/season/league this award belongs to
+        recipient_type — 'combatant' | 'player'
+        value — optional numeric for stat-based awards (win count, trap ratio, etc.)
+        co_award — true when shared
+    mvp_record jsonb on combatants — confirmed added in 1.1.x schema migration
+    New table: votes
+      id, award_id, voter_id, voter_name, nominee_id, nominee_type, nominee_name,
+      phase, cast_at
+        phase — 'nomination' | 'runoff' (supports tiebreak round)
+        Votes are never deleted — permanent record, Data Conservative
+
+  Voting Engine
+    Single voting engine component and backing logic, configurable by award type.
+    Nomination phase: eligible voters nominate one entry or abstain. Secret ballot.
+    Live status strip: count of locked-in voters, names visible, picks hidden.
+      Reuses ConnectionStatus pattern.
+    Resolution logic — pure function in gameLogic.js, fully unit tested:
+      Clear winner → auto-award
+      Tie after all lock in → open runoff phase between tied nominees
+      Runoff deadlocks or host closes during runoff → co-award, auto-resolve
+      Host closes nominations early → resolve with current votes, ties auto co-award
+    Co-award: each recipient gets a full award entry with co_award: true.
+    Host close available at any point once nominations open — cannot cancel, only
+      resolve early.
+    All vote records written to votes table regardless of resolution path.
+
+  Automatic Awards — game level
+    Most round wins — player with most winning combatants
+    Undefeated — player whose combatants went undefeated
+    Shutout — player who lost every round
+    Most reactions received — combatant with most total reactions
+    Trap sprung — any player who successfully triggered a trap (binary)
+
+  Automatic Awards — series level
+    Most round wins across the series — player level
+    Most evolutions triggered — player level
+    Longest winning streak — combatant level
+    Most evolved — combatant with deepest lineage chain
+    Trapper — most traps set, player level
+    Efficient trapper — best sprung/set ratio, minimum threshold TBD, player level
+
+  Automatic Awards — season level
+    Most round wins across the season — player level
+    Most series wins — player level
+    Most evolutions triggered across the season — player level
+    Most evolved combatant — deepest lineage chain
+    Most reactive combatant — most total reactions across the season
+    Trap master — most traps set across the season
+    Efficient trapper — best ratio across the season
+    Most MVPs awarded — combatant with most MVP awards across the season
+
+  Voted Awards — game level (MVP)
+    Trigger: available on game end screen, optional. First nomination opens the
+      process — cannot cancel, only close early.
+    Nomination pool: round winners by default; full game roster as secondary
+      dropdown for memorable losers.
+    Voting engine: standard flow as defined above.
+    Record: append to mvp_record on combatant — { gameCode, voteShare, coMvp }.
+    Display: MVP history on combatant detail page in The Cast —
+      "MVP in [game code] — [X]% of the vote" per entry.
+
+  Voted Awards — series level
+    Best combatant of the series — nomination pool: all combatants that appeared
+      in the series
+    Best evolution — nomination pool: all evolutions that occurred in the series
+    Trigger: available at series close, optional
+
+  Voted Awards — season level
+    Favorite combatant — nomination pool: all combatants that appeared in any
+      game in the season
+    Most creative combatant — same nomination pool
+    Best evolution of the season — nomination pool: all evolutions across the season
+    Trigger: opens automatically on season close; ballot open until all votes cast
+      or season creator closes
+
+  Awards Display
+    Awards visible on combatant detail page in The Cast — grouped by layer,
+      chronological.
+    Awards visible on player profile — career awards summary.
+    Series awards visible in The Chronicles on the series record.
+    Season awards visible in The Chronicles on the season record.
+    Automatic awards computed and displayed immediately on close.
+    Voted awards displayed once resolved — pending state shown while ballot is open.
 
   Refactoring
     N/A

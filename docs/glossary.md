@@ -176,6 +176,67 @@ Home screen nav (canonical):
 
 ---
 
+AWARDS
+
+Awards
+  Recognitions granted at the conclusion of a game, series, or season. Two
+  types: automatic (computed from existing data) and voted (nominated and
+  balloted by players). Awards are permanent record — they accumulate on
+  combatants and players across their lifetime. Awards do not affect gameplay
+  mechanics — they are narrative and historical distinctions only.
+
+Automatic Awards
+  Computed from existing data at the close of a game, series, or season. No
+  nomination or ballot required. Calculated and assigned immediately on close.
+  Cannot be disputed or overridden except by Super Host correction. Full list
+  defined per layer in the awards spec in 1.x.x_design.txt.
+
+Voted Awards
+  Require a nomination phase and a secret ballot from eligible voters. Eligible
+  voters are the players who participated in the game, series, or season being
+  awarded. All voted awards share a single voting engine with configurable scope
+  — the nomination pool, voter pool, and trigger vary by award but the mechanics
+  are identical. See Voting Engine.
+
+Voting Engine
+  The single shared system powering all voted awards across every layer.
+  Configurable parameters: nomination pool, voter pool, trigger event, and
+  resolution behavior. Used for MVP (game level), series awards, season awards,
+  and eventually league awards. Built once in 1.3.x, reused at every layer.
+  Core mechanics:
+    Any eligible voter may nominate one entry from the nomination pool, or abstain.
+    Votes are secret until resolution.
+    Live status visible to all: count of players who have locked in, names
+      shown, picks hidden. Mirrors ConnectionStatus pattern.
+    Resolution paths:
+      Clear winner → auto-awarded, no prompt
+      Tie after all players lock in → tiebreak runoff between tied nominees
+      Runoff deadlocks or host closes during runoff → co-award, auto-resolved
+      Host closes nominations early → resolve with current votes, ties auto co-award
+    Co-awards are valid at every layer — no special distinction, each recipient
+      gets full credit.
+    Host close is available at any point once nominations open — cannot cancel,
+      only resolve early.
+
+MVP
+  A voted award at the game level. Recognizes the most valuable or memorable
+  combatant of a single game. Optional — only triggered if at least one player
+  nominates. Nomination pool: round winners by default, full game roster
+  available as secondary for memorable losers. Recorded on the combatant's
+  mvp_record with game code, vote share percentage, and co-MVP flag. Displayed
+  on combatant detail page in The Cast.
+
+Hall of Fame
+  A permanent distinction available to any published combatant, independent of
+  awards cycles. First pass: granted by Super Host induction with an optional
+  induction note. Future pass: granted by league-level voted award. Inducted
+  combatants receive a permanent badge on their Cast entry. Induction is
+  recorded with date, Super Host name, and optional note. Removal is possible
+  via Super Host as an escape hatch — the induction record is preserved even
+  after removal, consistent with the Data Conservative principle.
+
+---
+
 CANONICAL PROGRESSION
 
   round → game → series → season → league
