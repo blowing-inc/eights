@@ -8,7 +8,7 @@ import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js
 
 // NOTE: The round display logic in HistoryRoomDetail is partially duplicated with RoundCard
 // in GameSummaryScreen.jsx. If you're updating either, consider extracting a shared component.
-function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBattle }) {
+function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextGame }) {
   const completedRounds = (room.rounds || []).filter(r => r.winner)
   const allRounds = room.rounds || []
   const players = (room.players || []).filter(p => !p.isBot)
@@ -60,8 +60,8 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
 
       {canReopen && (
         <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)' }}>
-          <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: '0 0 10px' }}>You hosted this tournament. Continue the series with the same players.</p>
-          <button onClick={() => onNextBattle(room)} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13, color: 'var(--color-text-info)', borderColor: 'var(--color-border-info)' }}>Continue series ⚔️</button>
+          <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: '0 0 10px' }}>You hosted this game. Continue the series with the same players.</p>
+          <button onClick={() => onNextGame(room)} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13, color: 'var(--color-text-info)', borderColor: 'var(--color-border-info)' }}>Continue series ⚔️</button>
         </div>
       )}
 
@@ -233,7 +233,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
               })
             : (room.combatants?.[rosterPlayer] || []).map((c, i) => {
                 const roundNum = i + 1
-                const battle   = (c.battles || [])[0]
+                const roundEntry = (c.battles || [])[0]
                 const isWin    = c.wins > 0
                 const isLoss   = c.losses > 0
                 const isDraw   = !isWin && !isLoss && (c.draws || 0) > 0
@@ -252,7 +252,7 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
                         </div>
                         {played && <span style={{ fontSize: 12, fontWeight: 500, color: isWin ? 'var(--color-text-success)' : isLoss ? 'var(--color-text-danger)' : 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{isWin ? 'W' : isLoss ? 'L' : 'D'}</span>}
                       </div>
-                      {battle?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {battle.opponent}</div>}
+                      {roundEntry?.opponent && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 3, paddingLeft: 60 }}>vs {roundEntry.opponent}</div>}
                       {c.bio && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 60 }}>{c.bio}</div>}
                     </button>
                     <button onClick={() => setSheetCombatant({ id: c.id, inRoom: c })} title={c.name}
@@ -390,7 +390,7 @@ function SeriesRow({ item, onSelect, playerId }) {
   )
 }
 
-export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNextBattle }) {
+export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNextGame }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
 
@@ -409,7 +409,7 @@ export default function HistoryScreen({ onBack, setViewCombatant, playerId, onNe
   }, [])
 
   if (selected) {
-    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} playerId={playerId} onNextBattle={onNextBattle} />
+    return <HistoryRoomDetail room={selected} onBack={() => setSelected(null)} setViewCombatant={setViewCombatant} playerId={playerId} onNextGame={onNextGame} />
   }
 
   const items = rooms ? groupRoomsForHistory(rooms) : []

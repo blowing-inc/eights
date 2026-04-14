@@ -92,7 +92,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
     )
   }
 
-  // Battle (between rounds)
+  // Rounds (between rounds)
   if (room.phase === 'battle') {
     const completedRounds = room.rounds.filter(r => r.winner || r.draw)
     const totalRounds = Math.min(...room.players.map(p => (room.combatants[p.id] || []).length))
@@ -101,7 +101,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
     return (
       <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
         {room.devMode && <DevBanner />}
-        <Header title="Battle arena" />
+        <Header title="The Scene" />
         {completedRounds.length === 0 && (
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Waiting for the first round to begin…</p>
         )}
@@ -123,8 +123,8 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
         {isComplete && (
           <div style={{ textAlign: 'center', padding: '1.5rem', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>🏆</div>
-            <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>Tournament complete!</p>
-            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>Waiting to see if the host starts another battle…</p>
+            <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>Game complete!</p>
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>Waiting to see if the host starts another game…</p>
           </div>
         )}
       </div>

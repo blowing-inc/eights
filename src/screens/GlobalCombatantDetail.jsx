@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree, getCombatantBattleHistory, sget } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
@@ -179,7 +179,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [roomOverlay, setRoomOverlay] = useState(null) // { room, initialRound }
 
   const canEdit    = c.owner_id === playerId
-  const totalBattles = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
+  const totalRounds = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   const history    = c.bio_history || []
   const isVariant  = !!c.lineage
   const rootId     = c.lineage?.rootId || c.id
@@ -221,7 +221,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
 
   function toggleH2h() {
     if (!h2hOpen && h2hRows === null) {
-      getCombatantBattleHistory(c.id).then(setH2hRows)
+      getCombatantRoundHistory(c.id).then(setH2hRows)
     }
     setH2hOpen(o => !o)
   }
@@ -290,7 +290,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
 
       {/* ── Stats ────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: '1.5rem' }}>
-        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Battles', totalBattles, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
+        {[['Wins', c.wins || 0, 'var(--color-text-success)'], ['Losses', c.losses || 0, 'var(--color-text-danger)'], ['Draws', c.draws || 0, 'var(--color-text-secondary)'], ['Rounds', totalRounds, 'var(--color-text-tertiary)']].map(([label, val, color]) => (
           <div key={label} style={{ padding: 12, background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 500, color }}>{val}</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</div>
@@ -331,7 +331,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
       </div>
 
       {/* ── Head-to-head ─────────────────────────────────────────────────── */}
-      {totalBattles > 0 && (
+      {totalRounds > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
           <button onClick={toggleH2h}
             style={{ ...btn('ghost'), width: '100%', textAlign: 'left', fontSize: 13, marginBottom: h2hOpen ? 8 : 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

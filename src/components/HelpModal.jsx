@@ -24,7 +24,7 @@ Share the room code or spectator link with your group.`
     title: 'The draft',
     content: `Each player names their combatants in secret. You can optionally write a bio for each one.
 
-If you've played a previous battle in a series, your champions from the last game are required — you must place them in a slot before you can lock in your roster.
+If you've played a previous game in a series, your champions from the last game are required — you must place them in a slot before you can lock in your roster.
 
 The host can force-start once most players are ready.`
   },
@@ -46,7 +46,7 @@ The original combatant's stats and bio are preserved. The evolved variant is a n
     title: 'Battle history & series',
     content: `Every game is saved in Battle History. Tap a room to see round-by-round results, combatant rosters, reactions, and chat.
 
-If you hosted a completed tournament, you'll see a "Continue series" option — this starts a new draft with the same players, carrying forward champions and evolved forms.
+If you hosted a completed game, you'll see a "Continue series" option — this starts a new draft with the same players, carrying forward champions and evolved forms.
 
 A series groups all connected games together and shows standings across every game played.`
   },

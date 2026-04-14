@@ -3,7 +3,7 @@ import { btn } from '../../styles.js'
 import { slist, sset, adminDeleteGame } from '../../supabase.js'
 
 const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote', 'voting']
-const PHASE_LABEL = { lobby: 'Lobby', draft: 'Drafting', battle: 'Battle', vote: 'Vote', voting: 'Vote', ended: 'Ended' }
+const PHASE_LABEL = { lobby: 'Lobby', draft: 'Drafting', battle: 'Rounds', vote: 'Vote', voting: 'Vote', ended: 'Ended' }
 
 export default function GamesTab() {
   const [rooms,     setRooms]     = useState(null)

@@ -15,14 +15,14 @@ import {
   canUndoLastRound, canEditCombatant,
   extractPreviousWinners,
   normalizeRoomSettings,
-  simulateBattleToEnd,
+  simulateGameToEnd,
   getLineageStats,
   buildActiveFormMap,
   buildChainEvolutionStory,
   buildStoryFromLineageTree,
   applyActiveFormMap,
   groupRoomsForHistory,
-  prepareNextBattle,
+  prepareNextGame,
   computeSeriesStandings,
   applyDraw,
   replacePlayerIdInRoom,
@@ -158,7 +158,7 @@ describe('applyWinner', () => {
     expect(result.p2[0].losses).toBe(1)
   })
 
-  it('appends a battle record to both combatants', () => {
+  it('appends a round record to both combatants', () => {
     const room = makeRoom()
     const c1 = room.combatants.p1[0]
     const c2 = room.combatants.p2[0]
@@ -242,7 +242,7 @@ describe('undoRound', () => {
     expect(result.p2[0].losses).toBe(0)
   })
 
-  it('removes only the matching battle record', () => {
+  it('removes only the matching round record', () => {
     const room = makeRoom()
     room.combatants.p1[0].battles = [
       { roundId: 'rd1', opponent: 'Bob-0', result: 'win'  },
@@ -881,9 +881,9 @@ describe('groupRoomsForHistory', () => {
   })
 })
 
-// ─── prepareNextBattle ────────────────────────────────────────────────────────
+// ─── prepareNextGame ──────────────────────────────────────────────────────────
 
-describe('prepareNextBattle', () => {
+describe('prepareNextGame', () => {
   const baseRoom = {
     id: 'ROOM1', code: 'ROOM1', host: 'p1', phase: 'battle',
     players: [{ id: 'p1', name: 'Alice', isBot: false }],
@@ -891,37 +891,37 @@ describe('prepareNextBattle', () => {
   }
 
   it('sets seriesId from completedRoom.id when no prior series', () => {
-    const { newRoom, updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom, updatedCompletedRoom } = prepareNextGame(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(newRoom.seriesId).toBe('ROOM1')
     expect(updatedCompletedRoom.seriesId).toBe('ROOM1')
   })
 
   it('inherits existing seriesId', () => {
     const room = { ...baseRoom, seriesId: 'ORIG', seriesIndex: 2 }
-    const { newRoom, updatedCompletedRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM3', hostId: 'p1', now: 3000 })
+    const { newRoom, updatedCompletedRoom } = prepareNextGame(room, { newRoomCode: 'ROOM3', hostId: 'p1', now: 3000 })
     expect(newRoom.seriesId).toBe('ORIG')
     expect(updatedCompletedRoom.seriesId).toBe('ORIG')
   })
 
   it('increments seriesIndex', () => {
     const room = { ...baseRoom, seriesId: 'S1', seriesIndex: 1 }
-    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom } = prepareNextGame(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(newRoom.seriesIndex).toBe(2)
   })
 
-  it('stamps seriesIndex: 1 on the completed room when first next-battle', () => {
-    const { updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+  it('stamps seriesIndex: 1 on the completed room when first next-game', () => {
+    const { updatedCompletedRoom } = prepareNextGame(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(updatedCompletedRoom.seriesIndex).toBe(1)
   })
 
   it('sets prevRoomId and nextRoomId correctly', () => {
-    const { newRoom, updatedCompletedRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom, updatedCompletedRoom } = prepareNextGame(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(newRoom.prevRoomId).toBe('ROOM1')
     expect(updatedCompletedRoom.nextRoomId).toBe('ROOM2')
   })
 
   it('starts new room with empty combatants and rounds', () => {
-    const { newRoom } = prepareNextBattle(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom } = prepareNextGame(baseRoom, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(newRoom.combatants).toEqual({})
     expect(newRoom.rounds).toEqual([])
     expect(newRoom.phase).toBe('draft')
@@ -936,7 +936,7 @@ describe('prepareNextBattle', () => {
         { id: 'bot1', name: 'Robo', isBot: true },
       ],
     }
-    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom } = prepareNextGame(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     expect(newRoom.combatants['bot1']).toBeDefined()
     expect(newRoom.combatants['bot1'].length).toBeGreaterThan(0)
   })
@@ -952,7 +952,7 @@ describe('prepareNextBattle', () => {
         evolution: { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ Evolved', toBio: 'new form', ownerId: 'p1', ownerName: 'Alice' },
       }],
     }
-    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    const { newRoom } = prepareNextGame(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
     const winners = newRoom.prevWinners?.p1 || []
     expect(winners.some(w => w.id === 'c2' && w.name === 'MJ Evolved')).toBe(true)
   })
@@ -1164,12 +1164,12 @@ describe('applyWinner trap detection', () => {
   })
 })
 
-// ─── simulateBattleToEnd ──────────────────────────────────────────────────────
+// ─── simulateGameToEnd ────────────────────────────────────────────────────────
 
-describe('simulateBattleToEnd', () => {
+describe('simulateGameToEnd', () => {
   it('simulates all 8 rounds from a fresh game (currentRound 0)', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
-    const result = simulateBattleToEnd(room)
+    const result = simulateGameToEnd(room)
     expect(result.rounds).toHaveLength(8)
     expect(result.currentRound).toBe(8)
     expect(result.phase).toBe('battle')
@@ -1177,7 +1177,7 @@ describe('simulateBattleToEnd', () => {
 
   it('every simulated round has a winner', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
-    const result = simulateBattleToEnd(room)
+    const result = simulateGameToEnd(room)
     result.rounds.forEach(r => {
       expect(r.winner).not.toBeNull()
       expect(r.winner).toBeDefined()
@@ -1187,10 +1187,10 @@ describe('simulateBattleToEnd', () => {
   it('continues from mid-game (currentRound 3, 3 completed rounds)', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
     // Build 3 completed rounds manually
-    let partial = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    let partial = simulateGameToEnd({ ...room, currentRound: 0, rounds: [] })
     // Trim to 3 rounds to simulate mid-game state
     partial = { ...partial, rounds: partial.rounds.slice(0, 3), currentRound: 3 }
-    const result = simulateBattleToEnd(partial)
+    const result = simulateGameToEnd(partial)
     expect(result.rounds).toHaveLength(8)
     expect(result.currentRound).toBe(8)
   })
@@ -1202,7 +1202,7 @@ describe('simulateBattleToEnd', () => {
     // Simulate round 1 open — round exists, no winner
     const openRound = { id: 'rd_open', number: 1, combatants: [c1, c2], picks: {}, winner: null, createdAt: Date.now() }
     const midRoom = { ...room, currentRound: 1, rounds: [openRound] }
-    const result = simulateBattleToEnd(midRoom)
+    const result = simulateGameToEnd(midRoom)
     // Round 1 should be resolved in-place (same id), not duplicated
     expect(result.rounds[0].id).toBe('rd_open')
     expect(result.rounds[0].winner).not.toBeNull()
@@ -1211,7 +1211,7 @@ describe('simulateBattleToEnd', () => {
 
   it('accumulates win/loss stats on combatants', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
-    const result = simulateBattleToEnd(room)
+    const result = simulateGameToEnd(room)
     // Each player's combatants should have 1 win+loss total across all 8 slots
     const p1Stats = result.combatants.p1.map(c => c.wins + c.losses)
     const p2Stats = result.combatants.p2.map(c => c.wins + c.losses)
@@ -1219,9 +1219,9 @@ describe('simulateBattleToEnd', () => {
     p2Stats.forEach(total => expect(total).toBe(1))
   })
 
-  it('each combatant gets exactly one battle record', () => {
+  it('each combatant gets exactly one round record', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
-    const result = simulateBattleToEnd(room)
+    const result = simulateGameToEnd(room)
     result.combatants.p1.forEach(c => expect(c.battles).toHaveLength(1))
     result.combatants.p2.forEach(c => expect(c.battles).toHaveLength(1))
   })
@@ -1230,14 +1230,14 @@ describe('simulateBattleToEnd', () => {
     const room = makeRoom()
     // Give p2 only 3 combatants — totalRounds will be 3
     room.combatants.p2 = room.combatants.p2.slice(0, 3)
-    const result = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    const result = simulateGameToEnd({ ...room, currentRound: 0, rounds: [] })
     expect(result.rounds).toHaveLength(3)
   })
 
-  it('sets phase to battle even when totalRounds is 0', () => {
+  it("sets phase to 'battle' even when totalRounds is 0", () => {
     const room = makeRoom()
     room.combatants.p1 = []
-    const result = simulateBattleToEnd({ ...room, currentRound: 0, rounds: [] })
+    const result = simulateGameToEnd({ ...room, currentRound: 0, rounds: [] })
     expect(result.rounds).toHaveLength(0)
     expect(result.phase).toBe('battle')
   })
@@ -1245,13 +1245,13 @@ describe('simulateBattleToEnd', () => {
   it('does not mutate the original room', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
     const original = JSON.parse(JSON.stringify(room))
-    simulateBattleToEnd(room)
+    simulateGameToEnd(room)
     expect(room).toEqual(original)
   })
 
   it('winner is always one of the round combatants', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
-    const result = simulateBattleToEnd(room)
+    const result = simulateGameToEnd(room)
     result.rounds.forEach(r => {
       const ids = r.combatants.map(c => c.id)
       expect(ids).toContain(r.winner.id)
@@ -1683,7 +1683,7 @@ describe('applyDraw', () => {
     expect(result.p2[0].losses).toBe(1)
   })
 
-  it('appends draw battle records for both', () => {
+  it('appends draw round records for both', () => {
     const result = applyDraw(room, round)
     expect(result.p1[0].battles).toHaveLength(1)
     expect(result.p1[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'draw', opponent: 'B' })
@@ -1712,7 +1712,7 @@ describe('undoRound (draw)', () => {
     expect(result.p2[0].draws).toBe(0)
   })
 
-  it('removes battle records for that round', () => {
+  it('removes round records for that round', () => {
     const result = undoRound(room, round)
     expect(result.p1[0].battles).toHaveLength(0)
     expect(result.p2[0].battles).toHaveLength(0)

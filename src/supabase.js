@@ -252,10 +252,10 @@ export async function getPlayerCombatants({ ownerId, query = '', sort = 'wins', 
 // Aggregate head-to-head records for a global combatant across all rooms.
 // Full table scan — acceptable for current scale (see getPlayerRoomStats note below).
 // Returns rows sorted by total matchups descending.
-export async function getCombatantBattleHistory(combatantId) {
+export async function getCombatantRoundHistory(combatantId) {
   try {
     const { data, error } = await supabase.from('rooms').select('data')
-    if (error) { console.error('getCombatantBattleHistory error', error); return [] }
+    if (error) { console.error('getCombatantRoundHistory error', error); return [] }
     const record = {}  // { [opponentId]: { opponentName, wins, losses, draws } }
     ;(data || []).forEach(row => {
       const r = row.data
@@ -277,7 +277,7 @@ export async function getCombatantBattleHistory(combatantId) {
     })
     return Object.values(record)
       .sort((a, b) => (b.wins + b.losses + b.draws) - (a.wins + a.losses + a.draws))
-  } catch (e) { console.error('getCombatantBattleHistory exception', e); return [] }
+  } catch (e) { console.error('getCombatantRoundHistory exception', e); return [] }
 }
 
 // Aggregate stats for a player from all rooms they participated in.

@@ -9,7 +9,7 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateBattleToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
@@ -236,11 +236,11 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
 
     // Apply win/loss to the original. The draft roster is immutable — the variant
     // does not replace the original in any future round of this game. It enters
-    // play only in a heritage "next battle" draft as a prevWinner prerequisite.
+    // play only in a heritage "next game" draft as a prevWinner prerequisite.
     const finalCombatants = applyWinner(r, { ...rd, winner }, winnerId)
 
     // Evolution record is fully self-contained so downstream consumers (App.jsx
-    // handleHostNextBattle, DraftScreen substitutions) don't need to dig into
+    // handleHostNextGame, DraftScreen substitutions) don't need to dig into
     // room.combatants to find variant data.
     const finalRound = buildEvolutionRound(rd, winnerId, newId, newName, variantBio, authorId, playerId)
 
@@ -302,7 +302,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setSimulating(true)
     const r = await sget('room:' + room.id)
     if (!r) { setSimulating(false); return }
-    const updated = simulateBattleToEnd(r)
+    const updated = simulateGameToEnd(r)
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setSimulating(false); onResult()
   }
@@ -367,7 +367,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       <ConnectionStatus players={room.players} presentIds={presentIds} isHost={isHost} roomCode={room.code} />
       {room.devMode && (
         <button onClick={simulateToEnd} disabled={simulating} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: '1rem', color: 'var(--color-text-warning)' }}>
-          {simulating ? 'Simulating…' : '🧪 Simulate to end of battle'}
+          {simulating ? 'Simulating…' : '🧪 Simulate to end of game'}
         </button>
       )}
 
