@@ -8,7 +8,7 @@ Full definitions, end-condition matrix, and authority model: see docs/glossary.m
 
 ---
 
-1.1.x — Foundation: Terminology, Tags, Combatants 2.0, The Forge (Combatants)
+1.1.x — Foundation: Terminology, Tags, Combatants 2.0, The Workshop (Combatants)
 
 The prerequisite release. Everything in 1.2.x and beyond builds on this
 schema and these systems. Nothing in 1.2.x starts until this ships.
@@ -25,6 +25,22 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
       Audit all existing UI copy and variable names against the glossary
         Confirm no "season" or "league" language appears prematurely in UI strings
         Confirm "battle" and "tournament" are fully retired from all surfaces
+      Retire "Bestiary" from all UI copy, variable names, function names, and comments.
+        Data and underlying queries unchanged — naming only.
+      Retire "Battle History" from all UI copy, variable names, and comments.
+      Retire "The Forge" from all UI copy, variable names, and comments.
+      File renames:
+        BestiaryScreen.jsx → CastScreen.jsx (or ArchiveScreen.jsx with Cast as
+          default tab — resolve during implementation; see Archive structure in 1.2.x)
+        HistoryScreen.jsx → ChroniclesScreen.jsx
+      Update HelpModal.jsx: "Battle history & series" → "The Chronicles",
+        "The Bestiary" → "The Cast"
+      Update home screen nav buttons: "Battle history" → "The Chronicles",
+        "Bestiary" → "The Archive"
+      Update user-guide.txt: all references to Battle History, Bestiary, and
+        The Forge updated to canonical names
+      The Fight Card: add flavor name to draft screen header copy. No structural
+        change. Component name and internal references unchanged.
 
   Schema Migration (prerequisite — nothing else in this release ships without it)
     combatants table
@@ -58,7 +74,7 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
       Merge duplicate tags after the fact — "spooky" + "spoooky" reconciled and
       applied to all affected records. Super Host role is defined in 1.2.x but the
       merge operation is built here alongside the tags system.
-    Bestiary becomes searchable and filterable by combatant tag once this ships.
+    The Cast becomes searchable and filterable by combatant tag once this ships.
 
   Combatants 2.0
     Bio history
@@ -78,15 +94,15 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
       Specific superlatives defined once the stat system has enough data to draw from.
     MVP record
       mvp_record jsonb added in schema migration above. Collect the data now.
-      Voting UI and Bestiary display ship in 1.3.x.
+      Voting UI and The Cast display ship in 1.3.x.
 
-  The Forge — Phase 1: Combatants
+  The Workshop — Phase 1: Combatants
     Logged-in users only. Guests who try to access see a single-tap login prompt — not
       a wall. Show the benefit, don't lecture.
 
     The Stash
-      Default state for everything created in The Forge.
-      Stashed items are only visible to the owner: in The Forge, in their profile,
+      Default state for everything created in The Workshop.
+      Stashed items are only visible to the owner: in The Workshop, in their profile,
         and in their own draft autocomplete. No other user or guest can see them.
       Stashed items can be freely edited and deleted.
       Once published, deletion is not allowed — it's part of the record.
@@ -99,7 +115,7 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
         group memberships (optional — assign to own or published groups),
         stash/publish toggle.
 
-    My Forge library
+    My Workshop
       All combatants the user has created — stashed and published.
       Filter tabs: All / Stashed / Published.
       Quick actions: Edit, Publish, Un-publish, Delete (stashed only).
@@ -119,7 +135,7 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
     Publish-on-game-completion
       When a stashed combatant appears in a completed game, it auto-publishes.
       A completed game is a permanent record. A combatant that fought is now part
-        of the story — keeping it stashed would create a Bestiary gap.
+        of the story — keeping it stashed would create a gap in The Cast.
       Publish happens at room end state, not at draft submit. Draft is reversible;
         game end is not.
       If a game is abandoned before completion, stashed combatants revert to stash.
@@ -132,7 +148,7 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
 
 ---
 
-1.2.x — Game Objects: Arenas, Groups, Super Hosts, Compendium, Open Lobbies
+1.2.x — Game Objects: Arenas, Groups, Super Hosts, The Archive, Open Lobbies
 
 Builds on the schema shipped in 1.1.x. Arenas are gated on a scope decision
 that must be made before implementation begins — don't start arena work until
@@ -143,7 +159,7 @@ that decision is locked.
        the round level (each round can have its own arena)?
     B. Can both be true — a default arena for the game, overrideable per round?
     This decision drives the round and room schema. Resolve it in a design session.
-    All arena feature work and The Forge: Create-an-Arena are blocked until it's resolved.
+    All arena feature work and The Workshop: Create-an-Arena are blocked until it's resolved.
 
   Arenas
     Core concept
@@ -179,9 +195,9 @@ that decision is locked.
       Editing an arena's description or rules for a one-off session without permanently
         altering the original requires a decision: fork, one-session override, or a
         separate "this session only" field. Don't build until resolved.
-    The Forge: Create-an-Arena (gated on scope decision above)
+    The Workshop: Create-an-Arena (gated on scope decision above)
       Name, bio, house rules, tags, stash/publish toggle.
-      My Forge library entry — same stash/publish/edit/delete patterns as combatants.
+      My Workshop entry — same stash/publish/edit/delete patterns as combatants.
       Publish-on-game-completion applies: a stashed arena used in a completed game
         auto-publishes on room close.
 
@@ -193,7 +209,7 @@ that decision is locked.
     Why it matters for the story
       When two members of the same group face off, that's a narrative event — a civil
         war, a betrayal, a family feud. The app surfaces it in the round view and ticker.
-      Groups give the Bestiary a new axis: browse by group, see dominant members,
+      Groups give The Cast a new axis: browse by group, see dominant members,
         see group win records (derived from member history, not stored separately).
     Group lifecycle
       Follows the same stash/publish rules as combatants and arenas.
@@ -205,14 +221,14 @@ that decision is locked.
     Display
       Group badges on combatant cards and detail pages.
       Round view: "civil war" or "group rivalry" flag when both combatants share a group.
-      Bestiary group view: members, combined record, most decorated member.
-    The Forge: Create-a-Group
+      The Cast group view: members, combined record, most decorated member.
+    The Workshop: Create-a-Group
       Name (required), description (required — what's the joke, what's the theme),
         tags (optional), stash/publish toggle.
       Member management: add/remove combatants (own or published).
-      Group detail page in Bestiary: members, combined record.
+      Group detail page in The Cast: members, combined record.
     Cleanup on delete
-      When a stashed combatant is deleted from The Forge, all combatant_groups rows
+      When a stashed combatant is deleted from The Workshop, all combatant_groups rows
         for that combatant are removed.
 
   Super Hosts
@@ -228,12 +244,33 @@ that decision is locked.
       Not a host override — they cannot control games in progress or alter round outcomes.
       The host still runs the game. Super Hosts curate the world outside it.
 
-  Compendium screen
-    Tags, Arenas, Bestiary, and Groups may warrant consolidation into a single browsable
-      screen rather than separate nav items or a buried admin area.
-    Decide on navigation structure before building the individual screens for Groups and
-      Arenas — building them as standalone screens and then consolidating is extra work.
-    Name candidates: Compendium, The Vault, The Archive — TBD.
+  The Archive
+    Tabbed destination screen. The Cast is the default tab — users arriving at
+      The Archive land on The Cast. Content and behavior identical to current
+      Bestiary/Cast; only location and name change.
+    Tabs: The Cast (default), Groups, Arenas, Tags
+    Unified search bar at Archive level — searches across all entity types
+      simultaneously. Returns combatants, groups, arenas, and tags in a single
+      results view.
+    Tag filtering applies across all tabs — selecting a tag on the Tags tab
+      filters The Cast, Groups, and Arenas to matching entries.
+    Groups tab: named collectives, member list, combined win/loss record, most
+      decorated member. Browsable and searchable.
+    Arenas tab: all published arenas, filterable by tag and preset pool.
+      Likes/dislikes visible. House rules shown on detail page.
+    Tags tab: browse all tags across entity types. Tap a tag to filter across
+      the full Archive.
+    Home screen nav updated: "The Archive" button replaces the current "Bestiary"
+      button. "The Chronicles" button replaces "Battle history". "The Workshop"
+      nav item added — replaces current Forge entry point.
+
+  The Workshop renaming
+    All remaining Forge references in UI copy updated to The Workshop.
+    My Workshop: the expanded library now shows combatants, arenas, and groups —
+      the UI label "My Workshop" takes its final form here when all three entity
+      types are present.
+    "Created in The Forge" → "Made in The Workshop" in any Cast attribution display.
+    Stash behaviour, publish flow, and all mechanics unchanged — naming only.
 
   Open Lobbies
     Option at lobby creation: make the lobby public.
@@ -309,7 +346,7 @@ heritage carryover between series — each series starts fresh.
         { gameCode, voteShare, coMvp }.
       Co-MVP: each tied combatant receives a separate entry, coMvp: true,
         voteShare split evenly.
-      Bestiary combatant detail: MVP history — "MVP in ROOM X — 67% of the vote"
+      The Cast combatant detail: MVP history — "MVP in ROOM X — 67% of the vote"
         per entry, derived from mvp_record.
       MVP count (mvp_record.length) feeds into season-level automated awards.
       mvp_record is populated from 1.1.x — data is ready when this UI ships.

@@ -122,8 +122,57 @@ at the game level.
 
 RETIRED TERMS
 
-  "battle"     → use "round" (single match) or "game" (full session)
-  "tournament" → use "game" or "series"
+  "battle"       → use "round" (single match) or "game" (full session)
+  "tournament"   → use "game" or "series"
+  "Bestiary"     → UI destination retired. Replaced by The Cast (primary tab inside The Archive)
+  "Battle History" → UI destination retired. Replaced by The Chronicles
+  "The Forge"    → UI destination retired. Replaced by The Workshop
+
+---
+
+CANONICAL DESTINATION NAMES
+
+The Chronicles
+  The sequential record of everything that happened. Contains games, series,
+  seasons, and leagues in the order they occurred. Used to relive a specific
+  game, continue a series, review standings, or reconstruct the story of a
+  season. The name implies ordered narrative — sequences of events, exactly
+  what you find. Replaces "Battle History." Home screen nav destination.
+
+The Archive
+  The world-browsing destination. Contains The Cast, Groups, Arenas, and Tags
+  under one roof with unified search across all entity types. Used to explore
+  the accumulated world the games have built — who fought, where they fought,
+  what groups they belonged to, what tags connect them. Replaces the unnamed
+  "Compendium" placeholder. Home screen nav destination.
+
+The Cast
+  The permanent record of every combatant who has ever performed in a game.
+  Lives inside The Archive as its primary tab. Every combatant has an entry —
+  bio, stats, lineage, group memberships, reactions, MVP record, evolution
+  history. Searchable and filterable by tag, group, and player within The
+  Archive. Replaces "Bestiary."
+
+The Workshop
+  The private creation space for logged-in users. Combatants, groups, and
+  arenas are made here before they enter the world. Items live in the Stash
+  until published or until a completed game auto-publishes them. Replaces "The
+  Forge." Home screen nav destination.
+
+The Fight Card
+  Flavor name for the draft screen — the game-flow moment when players assemble
+  their roster before a game begins. Not a home screen nav destination. Appears
+  as atmospheric naming on the draft screen itself. A fight card is the official
+  pre-event document listing every participant — which is exactly what the draft
+  produces. Cosmetic copy only. Draft screen component names and internal
+  references unchanged.
+
+Home screen nav (canonical):
+  Create a room
+  Join a room
+  The Chronicles
+  The Archive
+  The Workshop
 
 ---
 
