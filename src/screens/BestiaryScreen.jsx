@@ -28,12 +28,13 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
   useEffect(() => {
     setLoading(true)
     const sortDef = BESTIARY_SORTS.find(s => s.key === sort)
-    const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE }
+    // baseOnly filters variants server-side so pagination counts are accurate
+    const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE, baseOnly: view === 'characters' }
     const fn = query.trim()
       ? searchBestiary(query.trim(), opts)
       : listCombatants(opts)
     fn.then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
-  }, [sort, page, query])
+  }, [sort, page, query, view])
 
   function changeSort(key) {
     if (sort === key) return
@@ -44,11 +45,6 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { setQuery(val); setPage(0) }, 280)
   }
-
-  // In "characters" mode, hide variants — they're surfaced inside GlobalCombatantDetail.
-  const displayItems = view === 'characters'
-    ? items.filter(c => !c.lineage)
-    : items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -77,17 +73,15 @@ export default function BestiaryScreen({ onBack, onViewCombatant }) {
       </div>
 
       {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
-      {!loading && displayItems.length === 0 && (
+      {!loading && items.length === 0 && (
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
           {query.trim()
             ? `No results for "${query.trim()}".`
-            : view === 'characters' && items.length > 0
-              ? 'No base characters on this page — switch to "All forms" to see evolved variants.'
-              : 'No combatants yet — play some games first!'}
+            : 'No combatants yet — play some games first!'}
         </p>
       )}
 
-      {!loading && displayItems.map((c, idx) => {
+      {!loading && items.map((c, idx) => {
         const isVariant = !!c.lineage
         return (
           <button key={c.id} onClick={() => onViewCombatant(c)}

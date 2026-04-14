@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import PlayerStatsBlurb from '../components/PlayerStatsBlurb.jsx'
 import { btn, inp, tab } from '../styles.js'
-import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, setFavoriteCombatant } from '../supabase.js'
+import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, getPlayerRooms, setFavoriteCombatant } from '../supabase.js'
 
 const PROFILE_SORTS = [
   { key: 'wins',   label: 'Wins',   asc: false },
@@ -10,7 +10,7 @@ const PROFILE_SORTS = [
   { key: 'name',   label: 'A–Z',    asc: true  },
 ]
 
-export default function PlayerProfile({ profileId, playerId, onBack, onViewCombatant }) {
+export default function PlayerProfile({ profileId, playerId, onBack, onViewCombatant, onViewRoom }) {
   const isOwnProfile = profileId === playerId
 
   const [profile,   setProfile]   = useState(null)
@@ -23,11 +23,13 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
   const [loading,   setLoading]   = useState(true)
   const [combLoading, setCombLoading] = useState(true)
   const [savingFav, setSavingFav] = useState(null)
+  const [games, setGames] = useState([])
   const searchTimer = useRef(null)
 
   useEffect(() => {
     getUserProfile(profileId).then(setProfile)
     getPlayerRoomStats(profileId).then(setStats)
+    getPlayerRooms(profileId).then(setGames)
   }, [profileId])
 
   function loadCombatants(q, s, p) {
@@ -61,6 +63,37 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
         <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>{username}</div>
         <PlayerStatsBlurb stats={stats} favoriteName={profile?.favorite_combatant_name} />
       </div>
+
+      {games.length > 0 && (
+        <>
+          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            Games ({games.length})
+          </h3>
+          <div style={{ marginBottom: '1.5rem' }}>
+            {games.map(g => {
+              const dateStr = new Date(g.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+              const opponents = g.otherPlayers.length > 0 ? `vs ${g.otherPlayers.join(', ')}` : 'solo'
+              const clickable = !!onViewRoom
+              return (
+                <div key={g.id}
+                  onClick={clickable ? () => onViewRoom(g.id) : undefined}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, cursor: clickable ? 'pointer' : 'default' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', letterSpacing: '0.04em' }}>{g.code}</span>
+                      {g.seriesId && <span style={{ fontSize: 11, padding: '1px 5px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>Series</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{dateStr} · {opponents}</div>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>
+                    {g.roundWins}W – {g.roundLosses}L
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
         Combatants {combTotal > 0 ? `(${combTotal})` : ''}

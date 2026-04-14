@@ -578,35 +578,64 @@ export async function getAllCombatantsForExport() {
   } catch (e) { console.error('getAllCombatantsForExport exception', e); return [] }
 }
 
-// Paginated bestiary list — published only
-export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
+// Paginated bestiary list — published only.
+// baseOnly: when true, excludes variants (lineage IS NULL) so pagination is accurate
+// for the "characters" view in BestiaryScreen.
+export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
-    const { data, error, count } = await supabase
-      .from('combatants').select('*', { count: 'exact' })
-      .eq('published', true)
-      .order(sort, { ascending })
-      .range(from, to)
+    let q = supabase.from('combatants').select('*', { count: 'exact' }).eq('published', true)
+    if (baseOnly) q = q.is('lineage', null)
+    const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('listCombatants error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
   } catch (e) { console.error('listCombatants exception', e); return { items: [], total: 0 } }
 }
 
-// Full-field name/bio search across published combatants — used by BestiaryScreen
-export async function searchBestiary(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
+// Full-field name/bio search across published combatants — used by BestiaryScreen.
+// baseOnly: same as listCombatants — filters variants server-side for accurate pagination.
+export async function searchBestiary(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
-    const { data, error, count } = await supabase
-      .from('combatants').select('*', { count: 'exact' })
+    let q = supabase.from('combatants').select('*', { count: 'exact' })
       .eq('published', true)
       .or(`name.ilike.%${query}%,bio.ilike.%${query}%,owner_name.ilike.%${query}%`)
-      .order(sort, { ascending })
-      .range(from, to)
+    if (baseOnly) q = q.is('lineage', null)
+    const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('searchBestiary error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
   } catch (e) { console.error('searchBestiary exception', e); return { items: [], total: 0 } }
+}
+
+// Past games for a player — used on the profile screen to show game history.
+// Returns a summarized record per room rather than the full blob.
+// NOTE: Full table scan — see getPlayerRoomStats note for scale caveat.
+export async function getPlayerRooms(playerId) {
+  try {
+    const { data, error } = await supabase.from('rooms').select('data')
+    if (error) { console.error('getPlayerRooms error', error); return [] }
+    return (data || [])
+      .map(row => row.data)
+      .filter(r =>
+        r && !r.devMode &&
+        (r.rounds || []).some(rd => rd.winner || rd.draw) &&
+        (r.players || []).some(p => p.id === playerId && !p.isBot)
+      )
+      .map(r => {
+        const myCombatants  = r.combatants?.[playerId] || []
+        const roundWins     = myCombatants.reduce((n, c) => n + (c.wins   || 0), 0)
+        const roundLosses   = myCombatants.reduce((n, c) => n + (c.losses || 0), 0)
+        const otherPlayers  = (r.players || []).filter(p => p.id !== playerId && !p.isBot).map(p => p.name)
+        return {
+          id: r.id, code: r.code, createdAt: r.createdAt,
+          seriesId: r.seriesId || null, seriesIndex: r.seriesIndex || null,
+          otherPlayers, roundWins, roundLosses,
+        }
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+  } catch (e) { console.error('getPlayerRooms exception', e); return [] }
 }
 
 // Called once when the last round of a game is confirmed

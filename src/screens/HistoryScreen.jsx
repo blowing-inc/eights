@@ -17,6 +17,15 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
   const [roundIdx, setRoundIdx] = useState(0)
   const [rosterPlayer, setRosterPlayer] = useState(null)
   const [sheetCombatant, setSheetCombatant] = useState(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  function copyShareLink() {
+    const url = window.location.origin + window.location.pathname + '?room=' + room.code
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    })
+  }
 
   const totalRounds = room.players?.length > 0
     ? Math.min(...room.players.map(p => (room.combatants?.[p.id] || []).length))
@@ -44,6 +53,9 @@ function HistoryRoomDetail({ room, onBack, setViewCombatant, playerId, onNextBat
           style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ JSON</button>
         <button onClick={() => downloadFile(`eights-${room.code}-${new Date(room.createdAt).toISOString().slice(0,10)}.txt`, formatRoomAsText(room))}
           style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>⬇ Plain text</button>
+        <button onClick={copyShareLink} style={{ ...btn('ghost'), padding: '5px 12px', fontSize: 12 }}>
+          {linkCopied ? '✓ Copied' : '🔗 Share'}
+        </button>
       </div>
 
       {canReopen && (

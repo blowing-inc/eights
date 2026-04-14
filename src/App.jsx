@@ -20,6 +20,7 @@ import PlayerProfile from './screens/PlayerProfile.jsx'
 import BestiaryScreen from './screens/BestiaryScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
+import GameSummaryScreen from './screens/GameSummaryScreen.jsx'
 import HelpModal from './components/HelpModal.jsx'
 
 function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
@@ -65,7 +66,8 @@ const _urlJoinCode     = _params.get('join')?.toUpperCase()     || ''
 const _urlSpectateCode = _params.get('spectate')?.toUpperCase() || ''
 const _urlPid          = _params.get('pid')                     || ''
 const _urlCode         = _params.get('code')?.toUpperCase()     || ''
-if (_urlJoinCode || _urlSpectateCode || _urlPid || _urlCode) window.history.replaceState(null, '', window.location.pathname)
+const _urlRoomCode     = _params.get('room')?.toUpperCase()     || ''
+if (_urlJoinCode || _urlSpectateCode || _urlPid || _urlCode || _urlRoomCode) window.history.replaceState(null, '', window.location.pathname)
 
 export default function App() {
   const [screen, setScreen] = useState(_urlJoinCode || _urlSpectateCode || _urlCode ? 'join' : 'home')
@@ -133,6 +135,18 @@ export default function App() {
   const [viewPlayers, setViewPlayers] = useState(false)
   const [viewPlayerProfile, setViewPlayerProfile] = useState(null)
   const [viewHelp, setViewHelp] = useState(false)
+  const [viewRoomSummary, setViewRoomSummary] = useState(null)
+
+  async function openRoomSummary(roomId) {
+    const r = await sget('room:' + roomId)
+    if (r) setViewRoomSummary(r)
+  }
+
+  // Open a shareable ?room=CODE link directly to the game summary overlay
+  useEffect(() => {
+    if (!_urlRoomCode) return
+    openRoomSummary(_urlRoomCode)
+  }, [])
 
   function login(user) {
     localStorage.setItem('eights_user', JSON.stringify(user))
@@ -233,7 +247,7 @@ export default function App() {
   if (viewLobbies)
     content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : r.phase === 'draft' ? 'draft' : r.phase === 'vote' ? 'vote' : 'battle') }} />
   else if (viewPlayers && viewPlayerProfile)
-    content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => setViewGlobalCombatant(c)} />
+    content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => setViewGlobalCombatant(c)} onViewRoom={openRoomSummary} />
   else if (viewPlayers)
     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant)
@@ -265,5 +279,5 @@ export default function App() {
   else if (screen === 'vote')
     content = <VoteScreen room={room} playerId={playerId} setRoom={setRoom} onResult={() => nav('battle')} onViewPlayer={setViewPlayerProfile} onHome={goHome} isGuest={isGuest} onLogin={() => goAuth('vote')} />
 
-  return <>{userPill}{content}{viewHelp && <HelpModal onClose={() => setViewHelp(false)} />}</>
+  return <>{userPill}{content}{viewHelp && <HelpModal onClose={() => setViewHelp(false)} />}{viewRoomSummary && <GameSummaryScreen room={viewRoomSummary} onClose={() => setViewRoomSummary(null)} />}</>
 }
