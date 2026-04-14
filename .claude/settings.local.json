@@ -4,7 +4,9 @@
       "Bash(npx vitest:*)",
       "Bash(wc -l src/screens/*.jsx src/screens/admin/*.jsx src/supabase.js src/gameLogic.js src/adminLogic.js src/App.jsx)",
       "Bash(node /tmp/compare.js)",
-      "Bash(wc -l src/gameLogic.js src/adminLogic.js src/App.jsx src/screens/*.jsx src/components/*.jsx)"
+      "Bash(wc -l src/gameLogic.js src/adminLogic.js src/App.jsx src/screens/*.jsx src/components/*.jsx)",
+      "Bash(npx jest:*)",
+      "Bash(python3 -c ':*)"
     ]
   }
 }

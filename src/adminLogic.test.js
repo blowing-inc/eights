@@ -88,6 +88,34 @@ describe('recalcStatsFromRooms', () => {
     expect(() => recalcStatsFromRooms([null, undefined])).not.toThrow()
     expect(recalcStatsFromRooms([null, undefined])).toEqual({})
   })
+
+  it('handles a room with no rounds array', () => {
+    const room = { id: 'X', devMode: false } // no rounds key
+    expect(() => recalcStatsFromRooms([room])).not.toThrow()
+    expect(recalcStatsFromRooms([room])).toEqual({})
+  })
+
+  it('handles a round with no playerReactions', () => {
+    const round = { id: 'r1', number: 1, combatants: [c1, c2], winner: c1 } // no playerReactions
+    const result = recalcStatsFromRooms([makeRoom({ rounds: [round] })])
+    expect(result['c1'].wins).toBe(1)
+  })
+
+  it('handles a round with a winner but no combatants array', () => {
+    const round = { id: 'r1', number: 1, winner: c1 } // no combatants key
+    expect(() => recalcStatsFromRooms([makeRoom({ rounds: [round] })])).not.toThrow()
+    expect(recalcStatsFromRooms([makeRoom({ rounds: [round] })])).toEqual({})
+  })
+
+  it('counts cry reactions', () => {
+    const round = makeRound({
+      combatants: [c1, c2],
+      winnerId: 'c1',
+      reactions: { p1: { c2: 'cry' } },
+    })
+    const result = recalcStatsFromRooms([makeRoom({ rounds: [round] })])
+    expect(result['c2'].cry).toBe(1)
+  })
 })
 
 // ─── diffStats ────────────────────────────────────────────────────────────────
@@ -142,6 +170,19 @@ describe('diffStats', () => {
     const result = diffStats(recalculated, current)
     expect(Object.keys(result[0].diffs)).toEqual(['losses'])
   })
+
+  it('detects angry reaction discrepancy', () => {
+    const current = [{ id: 'c2', name: 'Beta', wins: 0, losses: 2, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }]
+    const result = diffStats(recalculated, current)
+    expect(result[0].diffs.angry).toEqual({ was: 0, now: 1 })
+  })
+
+  it('detects cry reaction discrepancy', () => {
+    const recalc = { c1: { wins: 3, losses: 1, heart: 2, angry: 0, cry: 3 } }
+    const current = [{ id: 'c1', name: 'Alpha', wins: 3, losses: 1, reactions_heart: 2, reactions_angry: 0, reactions_cry: 0 }]
+    const result = diffStats(recalc, current)
+    expect(result[0].diffs.cry).toEqual({ was: 0, now: 3 })
+  })
 })
 
 // ─── planMerge ────────────────────────────────────────────────────────────────
@@ -171,6 +212,12 @@ describe('planMerge', () => {
 
   it('returns zeros when keepId === dropId', () => {
     expect(planMerge('p1', 'p1', rooms, combatants)).toEqual({ affectedRooms: 0, affectedCombatants: 0 })
+  })
+
+  it('handles rooms with no players array', () => {
+    const roomsNoPlayers = [{ id: 'X' }] // no players key
+    const result = planMerge('p1', 'p2', roomsNoPlayers, combatants)
+    expect(result.affectedRooms).toBe(0)
   })
 })
 
@@ -244,5 +291,29 @@ describe('applyMergeToRoom', () => {
   it('handles rooms with no prevWinners or drafts', () => {
     const minimal = { ...baseRoom, prevWinners: undefined, drafts: undefined }
     expect(() => applyMergeToRoom(minimal, 'drop', 'keep')).not.toThrow()
+  })
+
+  it('handles rooms with no combatants map', () => {
+    const minimal = { ...baseRoom, combatants: undefined }
+    expect(() => applyMergeToRoom(minimal, 'drop', 'keep')).not.toThrow()
+    const result = applyMergeToRoom(minimal, 'drop', 'keep')
+    expect(result.combatants).toEqual({})
+  })
+
+  it('handles rooms with no players array', () => {
+    const minimal = { ...baseRoom, players: undefined }
+    const result = applyMergeToRoom(minimal, 'drop', 'keep')
+    expect(result.players).toEqual([])
+  })
+
+  it('preserves non-fromId draft keys unchanged', () => {
+    const room = {
+      ...baseRoom,
+      drafts: { drop: { names: ['X'] }, other: { names: ['Y'] } },
+    }
+    const result = applyMergeToRoom(room, 'drop', 'keep')
+    expect(result.drafts['keep']).toBeDefined()
+    expect(result.drafts['other']).toBeDefined()
+    expect(result.drafts['drop']).toBeUndefined()
   })
 })

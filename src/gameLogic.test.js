@@ -469,6 +469,38 @@ describe('buildTickerMessages', () => {
     expect(() => buildTickerMessages(undefined)).not.toThrow()
     expect(() => buildTickerMessages([null, undefined])).not.toThrow()
   })
+
+  it('generates a draw message when a draw round has 2+ combatants', () => {
+    const c1 = makeCombatant({ id: 'c1', name: 'LeftFighter' })
+    const c2 = makeCombatant({ id: 'c2', name: 'RightFighter' })
+    const room = {
+      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
+      combatants: { p1: [c1, c2] },
+      rounds: [
+        { id: 'rd1', number: 1, combatants: [c1, c2], draw: true, winner: null, picks: {}, createdAt: Date.now() },
+      ],
+      currentRound: 1, createdAt: Date.now(),
+    }
+    const msgs = buildTickerMessages([room])
+    const drawMsgs = msgs.filter(m => m.includes('LeftFighter') || m.includes('RightFighter'))
+    expect(drawMsgs.length).toBeGreaterThan(0)
+  })
+
+  it('skips draw rounds with fewer than 2 combatants', () => {
+    const room = {
+      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
+      combatants: {},
+      rounds: [
+        { id: 'rd1', number: 1, combatants: [], draw: true, winner: null, picks: {}, createdAt: Date.now() },
+        { id: 'rd2', number: 2, combatants: [makeCombatant({ id: 'c1', name: 'Solo' })], draw: true, winner: null, picks: {}, createdAt: Date.now() },
+      ],
+      currentRound: 2, createdAt: Date.now(),
+    }
+    // Should not throw and should return strings (draw messages not added for <2 combatants)
+    const msgs = buildTickerMessages([room])
+    expect(Array.isArray(msgs)).toBe(true)
+    msgs.forEach(m => expect(typeof m).toBe('string'))
+  })
 })
 
 // ─── makeBotCombatants ────────────────────────────────────────────────────────
@@ -824,6 +856,17 @@ describe('groupRoomsForHistory', () => {
     expect(result[1].room.id).toBe('x')
   })
 
+  it('stops chain walk when prevRoomId points outside the room set', () => {
+    // r2 has a prevRoomId that isn't in the list — chainRoot should stop at r2 itself
+    const r2 = room('r2', { prevRoomId: 'missing-room' })
+    const result = groupRoomsForHistory([r2])
+    // Still grouped as a series (solo chain) since prevRoomId is set — does not throw
+    expect(result).toHaveLength(1)
+    expect(result[0].type).toBe('series')
+    expect(result[0].rooms).toHaveLength(1)
+    expect(result[0].rooms[0].id).toBe('r2')
+  })
+
   it('mixed: series and standalone both appear', () => {
     const sid = 'sX'
     const rooms = [
@@ -882,6 +925,20 @@ describe('prepareNextBattle', () => {
     expect(newRoom.combatants).toEqual({})
     expect(newRoom.rounds).toEqual([])
     expect(newRoom.phase).toBe('draft')
+  })
+
+  it('pre-populates bot combatants when devMode is true', () => {
+    const room = {
+      ...baseRoom,
+      devMode: true,
+      players: [
+        { id: 'p1', name: 'Alice', isBot: false },
+        { id: 'bot1', name: 'Robo', isBot: true },
+      ],
+    }
+    const { newRoom } = prepareNextBattle(room, { newRoomCode: 'ROOM2', hostId: 'p1', now: 2000 })
+    expect(newRoom.combatants['bot1']).toBeDefined()
+    expect(newRoom.combatants['bot1'].length).toBeGreaterThan(0)
   })
 
   it('translates evolved winners to their active form in prevWinners', () => {
@@ -1579,6 +1636,25 @@ describe('computeSeriesStandings', () => {
   it('handles rooms with no completed rounds', () => {
     const rows = computeSeriesStandings([makeRoom([p1, p2], [])])
     expect(rows.find(r => r.playerId === 'p1')).toMatchObject({ wins: 0, losses: 0, draws: 0, games: 1 })
+  })
+
+  it('handles rooms with no rounds key at all', () => {
+    const room = { id: 'r1', players: [p1, p2], devMode: false }
+    expect(() => computeSeriesStandings([room])).not.toThrow()
+    const rows = computeSeriesStandings([room])
+    expect(rows.find(r => r.playerId === 'p1')).toMatchObject({ games: 1 })
+  })
+
+  it('does not credit a draw to a combatant whose owner is not in standings (e.g. bot)', () => {
+    const drawRound = {
+      draw: true,
+      combatants: [{ id: 'c1', ownerId: 'p1' }, { id: 'cbot', ownerId: 'bot1' }],
+    }
+    const rows = computeSeriesStandings([makeRoom([p1, bot], [drawRound])])
+    const alice = rows.find(r => r.playerId === 'p1')
+    // p1 gets a draw credit; bot1 is excluded from standings
+    expect(alice).toMatchObject({ draws: 1 })
+    expect(rows.find(r => r.playerId === 'bot1')).toBeUndefined()
   })
 })
 
