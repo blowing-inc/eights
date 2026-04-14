@@ -42,7 +42,10 @@ export default function AdminScreen({ onBack }) {
       const { data, error } = await supabase.functions.invoke('verify-admin-pin', { body: { pin } })
       setLoading(false)
       if (error || !data?.token) {
-        setPinError('Wrong admin PIN.')
+        const msg = data?.error === 'Too many attempts. Try again later.'
+          ? 'Too many attempts. Try again in 15 minutes.'
+          : 'Wrong admin PIN.'
+        setPinError(msg)
         setPin('')
         return
       }

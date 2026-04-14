@@ -18,6 +18,38 @@ const CORS_HEADERS = {
 
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
 
+// ─── Rate limiter ─────────────────────────────────────────────────────────────
+// In-memory per-IP tracking. Persists across warm invocations of the same
+// instance; resets on cold start. Sufficient to defeat single-source brute
+// force — a 5-digit PIN has 100k combinations and this limits to 5 attempts
+// per 15 minutes per IP.
+
+const MAX_ATTEMPTS = 5
+const WINDOW_MS    = 15 * 60 * 1000 // 15 minutes
+
+const ipAttempts = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+  const now   = Date.now()
+  const entry = ipAttempts.get(ip)
+
+  if (!entry || now > entry.resetAt) {
+    ipAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS })
+    return { allowed: true }
+  }
+  if (entry.count >= MAX_ATTEMPTS) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) }
+  }
+  entry.count++
+  return { allowed: true }
+}
+
+function clearRateLimit(ip: string) {
+  ipAttempts.delete(ip)
+}
+
+// ─── Crypto helpers ───────────────────────────────────────────────────────────
+
 async function hmacSign(payload: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -35,12 +67,30 @@ function b64urlEncode(str: string): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
+// ─── Handler ──────────────────────────────────────────────────────────────────
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
   }
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
+  }
+
+  // x-forwarded-for is set by Cloudflare (Supabase's edge network).
+  // Fall back to a fixed string so local dev doesn't break.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+
+  const { allowed, retryAfter } = checkRateLimit(ip)
+  if (!allowed) {
+    return new Response(JSON.stringify({ error: 'Too many attempts. Try again later.' }), {
+      status: 429,
+      headers: {
+        ...CORS_HEADERS,
+        'Content-Type': 'application/json',
+        'Retry-After': String(retryAfter),
+      },
+    })
   }
 
   const adminPin = Deno.env.get('ADMIN_PIN')?.trim()
@@ -69,6 +119,10 @@ Deno.serve(async (req: Request) => {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     })
   }
+
+  // Correct PIN — clear the rate limit counter so the owner doesn't get locked
+  // out after a few mistyped entries earlier in the same window.
+  clearRateLimit(ip)
 
   // Signed session token: base64url(payload).hmac(payload, adminPin)
   // Phase 2 admin functions can re-verify the signature without a DB round-trip.
