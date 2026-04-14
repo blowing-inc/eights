@@ -1,9 +1,10 @@
 release planning
 last updated: 2026-04-14
 
-Canonical progression: round → game → series → league
+Canonical progression: round → game → series → season → league
 "battle" is retired from technical usage — use "round" (single match) or "game" (full session)
 "tournament" is retired from technical usage — use "game" or "series"
+Full definitions, end-condition matrix, and authority model: see docs/glossary.md
 
 ---
 
@@ -16,8 +17,14 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
     Terminology — do this first, before any new code is written
       Retire "battle" as a technical term
       Retire "tournament" as a technical term
-      Codify the developer glossary: round → game → series → league
+      Codify the full developer glossary: round → game → series → season → league
+        Full definitions, end-condition matrix, resume behaviour, and authority
+        model are in docs/glossary.md. That file is the reference — keep it in
+        sync as layers are built.
       Update all internal variable names, comments, and UI copy to match
+      Audit all existing UI copy and variable names against the glossary
+        Confirm no "season" or "league" language appears prematurely in UI strings
+        Confirm "battle" and "tournament" are fully retired from all surfaces
 
   Schema Migration (prerequisite — nothing else in this release ships without it)
     combatants table
@@ -28,6 +35,9 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
         published=false → status='stashed'
       Drop `published` column after migration
       Add `tags text[]`
+      Add `mvp_record jsonb` — array of { gameCode, voteShare, coMvp } entries.
+        Replaces the previously planned mvp_votes int — the array gives us the
+        count plus per-game narrative detail. Default empty array for all existing rows.
       Populate bio_history on bio edits (the column exists; it's not being written to)
     New tables
       groups(id, name, description, owner_id, owner_name, status, tags, created_at, updated_at)
@@ -66,8 +76,9 @@ schema and these systems. Nothing in 1.2.x starts until this ships.
       Not displayed on the small card. Visible on combatant detail page only.
       Full list: things like "beat X opponents", "survived Y games", etc.
       Specific superlatives defined once the stat system has enough data to draw from.
-    MVP votes
-      Add `mvp_votes int` to combatants. Collect the data now. Voting UI ships in 1.3.x.
+    MVP record
+      mvp_record jsonb added in schema migration above. Collect the data now.
+      Voting UI and Bestiary display ship in 1.3.x.
 
   The Forge — Phase 1: Combatants
     Logged-in users only. Guests who try to access see a single-tap login prompt — not
@@ -238,32 +249,80 @@ that decision is locked.
 
 ---
 
-1.3.x — League
+1.3.x — Season
 
-Builds on the clean terminology and series concept from 1.1.x. The league is
-the tier above series: a structured season of games with a fixed player roster,
-dedicated stats, and end-of-season awards.
+Builds on the clean terminology and series concept from 1.1.x. Season is the
+layer above series: a structured container with a fixed player roster, declared
+series count, cumulative standings, and end-of-season awards. Requires no
+heritage carryover between series — each series starts fresh.
+
+  Schema
+    seasons table
+      id, name, league_id (nullable — supports standalone seasons), owner_id,
+      owner_name, status ('active' | 'ended' | 'cancelled'),
+      series_count (declared target), series_played (running count),
+      latest_evolutions_only (boolean — stored now, enforcement deferred),
+      created_at, updated_at
 
   Features
-    League
-      Canonical position in the progression: round → game → series → league.
-      Enrolled player roster — joining a league is an explicit opt-in.
-      League stats page: individual performance across all games in the league.
-      League standings and history page: notable moments, streaks, records.
-    Awards
-      Granted at league completion based on performance thresholds.
-      Should feel like chapter titles, not leaderboard ranks — designed per-league
-        once the shape of competitive play is better understood.
-    Arena integration
-      A league can designate a home arena — a recurring venue for the season.
-      Optional: sub-arenas within a league realm (e.g. Hyrule Castle has multiple
-        locations with different house rules). Build only if the base arena system
-        warrants it after 1.2.x ships.
+    Season creation flow
+      Name, player roster (explicit opt-in), declared series count,
+      "latest evolutions only" toggle (stored at creation; enforcement is
+      deferred — see glossary for scope).
+    Season standings page
+      Cumulative round wins / losses / draws per player across all series
+      in the season.
+    Season close logic
+      Auto-close when series_played reaches series_count at the end of a series.
+      Manual early-close available to season creator between series only.
+      A season cannot be closed mid-series.
+    Season resume
+      Creates a new fresh series under the same season_id.
+      series_played increments. No prev winners or heritage carryover.
+    Awards — fires on season close (both natural and early)
+      Automated awards — computed immediately on close:
+        most round wins
+        most traps set
+        most efficient trapper (minimum trap threshold TBD once data exists)
+        most evolutions triggered
+      Voted awards — ballot opens for season members on close:
+        favorite combatant (season-scoped, distinct from per-game MVP vote)
+        most creative combatant (season-scoped)
+      Awards should feel like chapter titles, not leaderboard ranks.
     MVP voting
-      End-of-game vote for MVP, nominated and voted on by players.
-      Results recorded in combatant and player history.
-      The `mvp_votes` field on combatants is already populated from 1.1.x —
-        the data is ready when this UI ships.
+      Optional flow on the game end screen. First nomination opens the process —
+        once open it cannot be cancelled, only closed early by the host.
+      Nomination pool: round winners shown by default; full combatant dropdown
+        available as secondary option for memorable losers.
+      Secret ballot — picks hidden until resolution. Live status strip shows who
+        has locked in a nomination or abstained (names visible, picks hidden).
+        Mirrors ConnectionStatus pattern.
+      Resolution paths:
+        1. Clear winner — auto-awarded, no prompt.
+        2. Tie after all players lock in — tiebreak runoff between tied nominees.
+           Runoff resolves cleanly → MVP awarded.
+           Runoff deadlocks, or not all players lock in before host closes →
+             co-MVP, auto-resolved, no further prompts.
+        3. Host closes early at any point — resolve with current votes; ties
+             auto-resolve as co-MVP.
+      On resolution: append to mvp_record on each winning combatant —
+        { gameCode, voteShare, coMvp }.
+      Co-MVP: each tied combatant receives a separate entry, coMvp: true,
+        voteShare split evenly.
+      Bestiary combatant detail: MVP history — "MVP in ROOM X — 67% of the vote"
+        per entry, derived from mvp_record.
+      MVP count (mvp_record.length) feeds into season-level automated awards.
+      mvp_record is populated from 1.1.x — data is ready when this UI ships.
+    Arena integration
+      A season can designate a home arena — a recurring venue for the run.
+      Optional: sub-arenas within a season realm. Build only if the base arena
+        system warrants it after 1.2.x ships.
+
+  Deferred
+    "Latest evolutions only" enforcement
+      Store the setting at season creation. Implement draft-time lock in a
+      follow-up once complexity is fully assessed. Do not block season launch
+      on this.
 
   Refactoring
     N/A
@@ -274,9 +333,46 @@ dedicated stats, and end-of-season awards.
 
 ---
 
-1.4.x — Users Lounge
+1.4.x — League
 
-A separate layer built on top of the compendium created in 1.1.x–1.3.x. The
+Builds on the season layer from 1.3.x. League is the top tier: a persistent
+named group that runs multiple seasons, with cumulative standings across all
+of them. Each new season starts fresh — no heritage carryover between seasons.
+
+  Schema
+    leagues table
+      id, name, owner_id, owner_name, status ('active' | 'ended' | 'cancelled'),
+      season_count (declared target), seasons_played (running count),
+      created_at, updated_at
+
+  Features
+    League creation flow
+      Name, player roster (explicit opt-in), declared season count.
+    League standings page
+      Cumulative stats and notable moments across all seasons in the league.
+    League close logic
+      Auto-close when seasons_played reaches season_count at the end of a season.
+      Manual early-close available to league creator between seasons only.
+      A league cannot be closed mid-season.
+    League resume
+      Creates a new fresh season under the same league. No carryover.
+      seasons_played increments.
+    Awards
+      Same automated + voted award pattern as season, but league-scoped.
+      Fires on league close.
+
+  Refactoring
+    N/A
+  QoL
+    N/A
+  Bugfixes
+    N/A
+
+---
+
+1.5.x — Users Lounge
+
+A separate layer built on top of the compendium created in 1.1.x–1.4.x. The
 items here are a vision, not a spec. A dedicated design doc is needed before
 any of this is planned for implementation.
 
