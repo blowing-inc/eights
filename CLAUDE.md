@@ -134,3 +134,81 @@ Every screen and flow must have a clear way out. Players and hosts should never 
 A lightweight, offline-assisted tournament tool for friends. Not a platform. Not a product. A shared artifact — the kind of thing you open years later and it still makes sense.
 
 Keep it small. Keep it whole.
+
+---
+
+## Development Workflow
+
+These conventions apply when working issues from the GitHub tracker.
+
+### Picking up an issue
+
+1. Check the lowest-numbered open milestone first: `gh milestone list --repo blowing-inc/eights`
+2. Within that milestone, take the first open unassigned issue: `gh issue list --milestone '<title>' --state open --repo blowing-inc/eights`
+3. Assign it to yourself before starting: `gh issue edit <number> --add-assignee @me --repo blowing-inc/eights`
+
+### Branch naming
+
+```
+<issue-number>-<short-title-slug>
+```
+
+Examples:
+- `12-terminology-retire-battle`
+- `23-schema-combatants-status-column`
+
+Always branch from `main` unless the issue body says otherwise.
+
+```bash
+git checkout main && git pull
+git checkout -b <branch-name>
+```
+
+### Doing the work
+
+- Read the full issue body before writing any code.
+- Cross-reference any linked design docs in `docs/` before making decisions.
+- All game logic goes in `gameLogic.js` as pure functions — no Supabase, no React, fully unit-testable.
+- If the issue touches the schema, write the migration SQL in `supabase/` and note any backfill requirements in the PR body.
+- Follow existing patterns in the file you're editing before introducing new ones.
+- The glossary (`docs/glossary.md`) is the canonical reference for all terminology — check it before naming anything.
+
+### Committing
+
+One logical commit per issue. Message format:
+
+```
+<Issue title> (closes #<number>)
+```
+
+Example:
+```
+Terminology refactor: retire 'battle' and 'tournament' (closes #12)
+```
+
+### Opening the PR
+
+```bash
+gh pr create \
+  --repo blowing-inc/eights \
+  --title "<issue title>" \
+  --body "Closes #<number>
+
+## What changed
+<brief summary>
+
+## Test notes
+<how to verify — what to look for in the UI or in unit tests>" \
+  --draft
+```
+
+Open as **draft** by default. Remove draft status when ready for review.
+
+### Definition of done
+
+Before marking a PR ready:
+- [ ] Issue acceptance criteria are all met
+- [ ] No new `console.error` or `TODO` left in changed files
+- [ ] If game logic changed: unit tests added or updated in the relevant `.test.js` file
+- [ ] If UI copy changed: verified against `docs/glossary.md`
+- [ ] If schema changed: migration SQL is present and backfill approach is documented
