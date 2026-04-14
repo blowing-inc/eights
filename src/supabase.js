@@ -34,6 +34,13 @@ export async function sdelete(roomId) {
   } catch (e) { console.error('sdelete exception', e) }
 }
 
+// Admin room delete — routes through admin-action Edge Function (service role key,
+// bypasses RLS). Use this from admin UI instead of sdelete, which is anon-keyed
+// and blocked by RLS.
+export async function adminDeleteGame(roomId) {
+  await callAdminAction('delete-game', { roomId: roomId.replace(/^room:/, '') })
+}
+
 // Fetch specific rooms by id array (for lobby tracking)
 export async function getRoomsByIds(ids) {
   if (!ids.length) return []
@@ -177,11 +184,8 @@ export async function setUserPin(username, pin) {
 // Admin: flag a user's PIN for reset
 export async function adminResetUser(username) {
   try {
-    const { error } = await supabase
-      .from('users').update({ needs_reset: true, updated_at: new Date().toISOString() })
-      .ilike('username', username)
-    if (error) console.error('adminResetUser error', error)
-  } catch (e) { console.error('adminResetUser exception', e) }
+    await callAdminAction('reset-user-pin', { username })
+  } catch (e) { console.error('adminResetUser error', e) }
 }
 
 // Admin: list all users (no pins)
@@ -481,6 +485,25 @@ export async function getHeritageChain(startRoomId) {
   return rooms
 }
 
+// ─── Admin action dispatcher ─────────────────────────────────────────────────
+//
+// Routes admin write operations through the admin-action Edge Function, which
+// verifies the session token and executes with the service role key (bypasses
+// RLS, enabling deletes that the anon key cannot perform).
+//
+// The session token is read from sessionStorage on every call so it's always
+// current without needing an explicit setter.
+
+async function callAdminAction(action, params) {
+  const token = sessionStorage.getItem('adminSession')
+  if (!token) throw new Error('No admin session.')
+  const { data, error } = await supabase.functions.invoke('admin-action', {
+    body: { action, token, params },
+  })
+  if (error) throw new Error(error.message)
+  return data
+}
+
 // ─── Admin combatant operations ──────────────────────────────────────────────
 
 // Search all combatants including unpublished — admin only
@@ -499,44 +522,29 @@ export async function adminSearchAllCombatants(query = '') {
 
 export async function adminDeleteCombatant(id) {
   try {
-    const { error } = await supabase.from('combatants').delete().eq('id', id)
-    if (error) console.error('adminDeleteCombatant error', error)
-  } catch (e) { console.error('adminDeleteCombatant exception', e) }
+    await callAdminAction('delete-combatant', { id })
+  } catch (e) { console.error('adminDeleteCombatant error', e) }
 }
 
 // Set exact stat values (used after recalculation)
 export async function adminSetCombatantStats(id, { wins, losses, heart, angry, cry }) {
   try {
-    const { error } = await supabase.from('combatants').update({
-      wins, losses,
-      reactions_heart: heart,
-      reactions_angry: angry,
-      reactions_cry:   cry,
-      updated_at: new Date().toISOString(),
-    }).eq('id', id)
-    if (error) console.error('adminSetCombatantStats error', error)
-  } catch (e) { console.error('adminSetCombatantStats exception', e) }
+    await callAdminAction('set-combatant-stats', { id, wins, losses, heart, angry, cry })
+  } catch (e) { console.error('adminSetCombatantStats error', e) }
 }
 
 // ─── Admin user operations ────────────────────────────────────────────────────
 
 // Transfer all room references from dropId → keepId, then delete the drop user.
 // Relies on applyMergeToRoom (pure) from adminLogic.js for the room transforms.
+// Client computes the room transforms; Edge Function applies all writes via service role.
 export async function adminMergeUsers(keepId, dropId, rooms, applyMergeToRoomFn) {
-  try {
-    // Update affected rooms
-    const affected = rooms.filter(r => (r.players || []).some(p => p.id === dropId))
-    for (const room of affected) {
-      const updated = applyMergeToRoomFn(room, dropId, keepId)
-      await sset('room:' + room.id, updated)
-    }
-    // Update combatants table
-    await supabase.from('combatants')
-      .update({ owner_id: keepId, updated_at: new Date().toISOString() })
-      .eq('owner_id', dropId)
-    // Delete the dropped user
-    await supabase.from('users').delete().eq('id', dropId)
-  } catch (e) { console.error('adminMergeUsers exception', e); throw e }
+  const affected = rooms.filter(r => (r.players || []).some(p => p.id === dropId))
+  const roomUpdates = affected.map(room => ({
+    id: room.id,
+    data: applyMergeToRoomFn(room, dropId, keepId),
+  }))
+  await callAdminAction('merge-users', { roomUpdates, dropUserId: dropId, keepId })
 }
 
 // Fetch all combatants (published or not) belonging to a specific owner_id.
@@ -553,19 +561,14 @@ export async function getCombatantsByOwnerId(ownerId) {
 // Re-attribute all history from a guest ID to a registered user account.
 // Parallel to adminMergeUsers but the source is a raw guest ID (no user row to delete).
 // replacePlayerIdInRoomFn must be replacePlayerIdInRoom from gameLogic.js.
+// Client computes the room transforms; Edge Function applies all writes via service role.
 export async function adminLinkGuestToUser(guestId, userId, ownerName, rooms, replacePlayerIdInRoomFn) {
-  try {
-    // Update all room blobs that contain the guest as a player
-    const affected = rooms.filter(r => (r.players || []).some(p => p.id === guestId))
-    for (const room of affected) {
-      const updated = replacePlayerIdInRoomFn(room, guestId, userId)
-      await sset('room:' + room.id, updated)
-    }
-    // Re-attribute combatants in the global table
-    await supabase.from('combatants')
-      .update({ owner_id: userId, owner_name: ownerName, updated_at: new Date().toISOString() })
-      .eq('owner_id', guestId)
-  } catch (e) { console.error('adminLinkGuestToUser exception', e); throw e }
+  const affected = rooms.filter(r => (r.players || []).some(p => p.id === guestId))
+  const roomUpdates = affected.map(room => ({
+    id: room.id,
+    data: replacePlayerIdInRoomFn(room, guestId, userId),
+  }))
+  await callAdminAction('link-guest', { roomUpdates, guestId, userId, ownerName })
 }
 
 // Full combatant table dump for admin export (includes unpublished)

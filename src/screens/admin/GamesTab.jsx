@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { btn } from '../../styles.js'
-import { slist, sset, sdelete } from '../../supabase.js'
+import { slist, sset, adminDeleteGame } from '../../supabase.js'
 
 const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote', 'voting']
 const PHASE_LABEL = { lobby: 'Lobby', draft: 'Drafting', battle: 'Battle', vote: 'Vote', voting: 'Vote', ended: 'Ended' }
@@ -28,7 +28,7 @@ export default function GamesTab() {
 
   async function deleteGame(room) {
     setWorking(room.id)
-    await sdelete(room.id)
+    await adminDeleteGame(room.id)
     setMsg(`Room ${room.code} deleted.`)
     setConfirmId(null); setWorking(null); load()
   }
