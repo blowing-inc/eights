@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
   }
 
-  const adminPin = Deno.env.get('ADMIN_PIN')
+  const adminPin = Deno.env.get('ADMIN_PIN')?.trim()
   if (!adminPin) {
     console.error('ADMIN_PIN secret is not set')
     return new Response(JSON.stringify({ error: 'Server misconfigured.' }), {
@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
   let pin: string
   try {
     const body = await req.json()
-    pin = String(body.pin ?? '')
+    pin = String(body.pin ?? '').trim()
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body.' }), {
       status: 400,
