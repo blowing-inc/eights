@@ -132,7 +132,7 @@ OPTIONAL UPGRADE: mergeNote
     mergeNote: string | null,   // e.g. "the room went silent when this happened"
   }
 
-  Displayed in the Bestiary beneath the origin story line, styled as a caption or
+  Displayed in The Cast beneath the origin story line, styled as a caption or
   aside. Preserved forever on the round record.
 
 
@@ -189,7 +189,7 @@ GAMELOGIC.JS CHANGES
                             | but for N combatants
 
 
-BESTIARY / HERITAGE DISPLAY
+THE CAST / HERITAGE DISPLAY
 -----------------------------
 - Merged combatants show the full origin story:
     "Born when Egg, Bacon, and Toast fought to a legendary draw and became one."
@@ -225,5 +225,5 @@ Given interdependencies, implement in this sequence:
   4. Merge evolution — new applyMerge, lineage coParentIds,
      round.merge schema, EvolutionForm reuse for naming
 
-  5. Bestiary / story updates — buildChainEvolutionStory merge nodes,
+  5. The Cast / story updates — buildChainEvolutionStory merge nodes,
      co-owner display on combatant detail page, mergeNote caption display

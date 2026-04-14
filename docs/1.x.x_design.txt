@@ -590,7 +590,47 @@ of them. Each new season starts fresh — no heritage carryover between seasons.
 
 ---
 
-1.5.x — Users Lounge
+1.5.x — Documentation & UX Pass
+
+By the time 1.4.x ships, the app will have changed significantly from its
+pre-1.1.x state. This release is a dedicated pass to bring all user-facing
+and contributor-facing documentation in sync with what actually shipped.
+No new features. No schema changes.
+
+  Scope
+    user-guide.txt
+      Update all terminology to canonical names (The Cast, The Chronicles,
+        The Archive, The Workshop, The Fight Card).
+      Update all flow descriptions to reflect current screens and mechanics
+        (draft, evolution, draw, series, season, league, awards, MVP).
+      Remove references to retired terms: Bestiary, Battle History, The Forge,
+        battle, tournament.
+
+    HelpModal.jsx
+      Full content audit against shipped features.
+      Ensure every major screen and flow is covered.
+      Tone pass — voice should match the app, not a manual.
+
+    Any in-app onboarding copy, empty states, and placeholder text
+      Audit for stale references and terminology drift.
+
+    CLAUDE.md
+      Audit against what actually shipped — remove anything that no longer
+        reflects the codebase, add anything that calcified into real practice.
+
+    README (if one exists)
+      Bring setup instructions and feature overview up to date.
+
+  Refactoring
+    N/A
+  QoL
+    N/A
+  Bugfixes
+    N/A
+
+---
+
+1.6.x — Users Lounge
 
 A separate layer built on top of the compendium created in 1.1.x–1.4.x. The
 items here are a vision, not a spec. A dedicated design doc is needed before
