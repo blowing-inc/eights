@@ -1,0 +1,235 @@
+THE FORGE
+User Creation Feature — Design Document
+Last updated: 2026-04-13
+Status: Design / pre-implementation
+
+---
+
+OVERVIEW
+
+The Forge is the feature that lets logged-in users create combatants, arenas,
+and groups outside of a live game. It's a personal workshop: create something,
+hold it in your stash until you're ready, then publish it to the world (or
+bring it into your next fight directly from stash).
+
+The name reflects intent: The Forge is where things are made. The Bestiary is
+where things are remembered. These are two different spaces with different
+purposes.
+
+This feature depends on the schema and concepts defined in:
+  docs/arenas-and-combatants-2.0.txt
+
+Read that doc first. Don't build The Forge until the Combatants 2.0 schema
+migration is complete.
+
+---
+
+WHO CAN USE THE FORGE
+
+  - Logged-in users only. No exceptions.
+  - Guests can view the Bestiary, browse published combatants/arenas/groups,
+    and participate in games. They cannot create, stash, or manage anything
+    in The Forge.
+  - The nudge-toward-login pattern (from the guest-handling design) applies:
+    if a guest tries to access The Forge, show a clear single-tap prompt to
+    log in. Don't lecture. Don't block — just show the benefit.
+
+---
+
+THE STASH
+
+"Stash" is the default state for anything created in The Forge.
+
+Rules:
+  - Stashed items are only visible to the owner: in The Forge, in their
+    profile, and in draft autocomplete during their own games.
+  - No other user or guest can see stashed items. Ever.
+  - Stashed items can be edited freely — they haven't been seen yet.
+  - Stashed items can be deleted. This is the only point in the lifecycle
+    where deletion is allowed. Once something is published, it's a record.
+
+Publish flow:
+  - Owner can publish from The Forge or from the item's detail page.
+  - Publishing is intentional — not automatic except via game completion
+    (see below).
+  - Publishing is reversible: a published item can be un-published back to
+    stash. But this hides it, it doesn't erase it. The record still exists.
+    If the item was ever used in a game, it is permanently accessible via
+    that game's history regardless of stash status.
+
+---
+
+PUBLISH-ON-GAME-COMPLETION
+
+When a stashed combatant is drafted into a game and that game reaches a
+completed state, the combatant is automatically published.
+
+Why: a completed game is a permanent record (Data Conservative). A combatant
+that fought in a real game is now part of the story. Keeping it stashed after
+the fact would create a confusing state where the Bestiary references a
+combatant that "doesn't exist" publicly.
+
+Timing: publish happens when the room reaches its end state (all rounds
+resolved, game closed), not at draft submit. Draft is reversible. Game end
+is not.
+
+Incomplete game handling:
+  - If a game is abandoned or deleted before completion, any stashed combatants
+    that were drafted revert to stash.
+  - From stash, the owner can delete them if they want. They can also just
+    leave them there and use them in a future game.
+  - No auto-deletion. No silent removal. Stash is the safe holding state.
+
+Group and arena publish-on-game:
+  - If a stashed arena is used in a game that completes, the arena is published.
+    Same logic as combatants.
+  - Groups follow the same pattern if/when groups are surfaced during games.
+
+---
+
+WHAT YOU CAN CREATE IN THE FORGE
+
+Phase 1: Combatants
+  - Name (required)
+  - Bio (required — even a single sentence; this is the story)
+  - Tags (optional, free-form)
+  - Group memberships (optional — assign to one or more published or own-stashed groups)
+  - Status: stash (default) or publish immediately
+
+Phase 2: Groups
+  - Name (required)
+  - Description (required — what's the joke, what's the theme)
+  - Tags (optional)
+  - Status: stash or publish
+  - Members can be added at creation or later
+
+Phase 3: Arenas
+  - Depends on arena design decisions in arenas-and-combatants-2.0.txt
+  - Don't build until tournament-level vs round-level scope is decided
+
+---
+
+MY FORGE: THE OWNER'S LIBRARY
+
+Every logged-in user has a "My Forge" view in their profile. This shows:
+  - All combatants they've created (both stashed and published)
+  - All groups they own
+  - All arenas they've created (when arenas are built)
+  - Filter tabs: All / Stashed / Published
+  - Quick actions: Edit, Publish, Un-publish, Delete (stashed only)
+
+This is the primary management surface. The Forge creation flow and My Forge
+are two sides of the same screen — creation leads directly into the library.
+
+---
+
+DRAFT AUTOCOMPLETE INTEGRATION
+
+Current behaviour:
+  - Draft autocomplete pulls from the published `combatants` table
+
+Required change:
+  - When the drafter is logged in, their stashed combatants are also included
+    in autocomplete results, with a visual indicator (e.g. a lock icon or
+    "stashed" label) so they know they're pulling from their private pool
+  - Stashed suggestions are only shown to the owner — not to other players
+    in the same draft session
+
+This is important: the stash being "private" in autocomplete reinforces the
+creative loop. You build something in The Forge, you see it appear in your
+drafts, you bring it to life.
+
+---
+
+BIO EDITING IN THE FORGE
+
+Combatants created in The Forge have editable bios. The bio_history mechanism
+(defined in arenas-and-combatants-2.0.txt) applies here.
+
+  - Every save of a new bio version appends the old bio to bio_history
+  - The Forge shows a collapsible "bio history" section on the combatant
+    edit screen, so the creator can see what they changed and when
+  - Free editing while stashed — no friction, no confirmation
+  - Once published, editing bio should feel slightly more intentional: a
+    one-step confirm ("update bio" button, not auto-save) since this affects
+    the public Bestiary
+
+---
+
+PRIORITIZED BUILD ORDER
+
+1. Schema migration (prerequisite — nothing else works without this)
+     - Add `source`, `status`, `tags` to combatants
+     - Migrate `published` boolean → status enum
+     - Create `groups` and `combatant_groups` tables
+     - Populate bio_history on bio edits
+
+2. The Forge: Create-a-Combatant
+     - Creation form: name, bio, tags, group picker, stash/publish toggle
+     - My Forge library view (stashed + published, filter tabs)
+     - Edit flow with bio_history append
+     - Delete (stashed only), publish, un-publish actions
+
+3. Draft autocomplete: stash integration
+     - When logged in, include owner's stashed combatants in suggestions
+     - Visual indicator for stashed suggestions
+
+4. Publish-on-game-completion
+     - Hook into room end state: auto-publish any stashed combatants that
+       appeared in the completed game
+     - Revert-to-stash on game abandonment
+
+5. The Forge: Create-a-Group
+     - Creation form: name, description, tags
+     - Member management: add/remove combatants (own or published)
+     - Group detail page in Bestiary: members, combined record
+
+6. The Forge: Create-an-Arena
+     - Gated on arena scope decision (see arenas-and-combatants-2.0.txt)
+     - Don't start until that decision is made
+
+---
+
+WHAT THE FORGE IS NOT
+
+  - Not a social network. Users don't follow each other. The Bestiary is the
+    shared space; The Forge is private workspace.
+  - Not a moderation surface. There's no reporting, flagging, or approval flow.
+    This is a tool for friends; trust is implicit.
+  - Not a template system. You can't fork or clone someone else's combatant.
+    Creation is personal.
+  - Not a marketplace. Nothing is featured, ranked, or promoted. Discovery
+    happens through the Bestiary and through games.
+
+---
+
+OPEN QUESTIONS
+
+  - Should the creation flow be a dedicated screen or a modal? Given that bio
+    and tags are involved, a full screen feels right. Modals are for quick
+    actions, not creative work.
+
+  - Should "My Forge" live under the user's profile, or be a top-level nav
+    destination? Profile feels right for now since it's personal. Revisit if
+    users are creating frequently enough that quick access matters.
+
+  - Can a user see the groups a published combatant belongs to if that group
+    is stashed? No — stashed groups are invisible to anyone but the owner.
+    The combatant's group list only shows published groups to others.
+
+  - What happens to group memberships when a combatant is deleted from stash?
+    Clean up: remove all combatant_groups rows for that combatant.
+
+  - Should publish be available in the draft flow itself? ("You're about to
+    draft a stashed combatant — publish it now or keep it private?")
+    Probably not. Keep the draft flow fast. Auto-publish on game end handles it.
+
+---
+
+SEE ALSO
+
+  - docs/arenas-and-combatants-2.0.txt — schema changes and concepts this
+    feature builds on
+  - docs/guest-handling-design.txt — guest nudge patterns to reuse here
+  - CLAUDE.md — design principles, especially Player Continuity First and
+    Data Conservative
