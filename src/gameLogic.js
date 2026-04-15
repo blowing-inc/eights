@@ -238,6 +238,46 @@ export function canEditCombatant(ownerId, playerId, hostId) {
   return ownerId === playerId || playerId === hostId
 }
 
+// ─── Ephemeral badges ─────────────────────────────────────────────────────────
+
+/**
+ * Derives ephemeral system badges from a combatant's in-game battle record.
+ * Not stored — computed fresh from the combatant's battles array each render.
+ *
+ * Returns an array of badge objects, each with a `type` and optional fields:
+ *   { type: 'on_fire',     count: number }   — won last 3+ rounds in a row
+ *   { type: 'cold_streak', count: number }   — lost last 3+ rounds in a row
+ *   { type: 'trapper' }                      — trapTriggered is true
+ *
+ * @param {object} combatant — in-room combatant with battles[] and trapTriggered
+ * @returns {Array}
+ */
+export function getEphemeralBadges(combatant) {
+  const badges = []
+  const battles = combatant?.battles || []
+
+  if (battles.length >= 3) {
+    // Count consecutive matching results from the end of the list
+    const lastResult = battles[battles.length - 1].result
+    if (lastResult === 'win' || lastResult === 'loss') {
+      let streak = 0
+      for (let i = battles.length - 1; i >= 0; i--) {
+        if (battles[i].result === lastResult) streak++
+        else break
+      }
+      if (streak >= 3) {
+        badges.push({ type: lastResult === 'win' ? 'on_fire' : 'cold_streak', count: streak })
+      }
+    }
+  }
+
+  if (combatant?.trapTriggered) {
+    badges.push({ type: 'trapper' })
+  }
+
+  return badges
+}
+
 // ─── Room lifecycle ───────────────────────────────────────────────────────────
 
 /**

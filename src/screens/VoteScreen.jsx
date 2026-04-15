@@ -9,7 +9,7 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
@@ -421,6 +421,8 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           const isEditing  = editingId === c.id
           const isEvolving = evolveFlow?.combatantId === c.id
 
+          const ephemeralBadges = getEphemeralBadges(c)
+
           return (
             <div key={c.id} style={{ background: isPicked ? 'var(--color-background-info)' : 'var(--color-background-secondary)', border: isPicked ? '2px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', overflow: 'hidden', transition: 'border 0.15s' }}>
 
@@ -439,6 +441,28 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                   <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', display: 'flex', alignItems: 'center', gap: 5 }}>
                     by {owner && !owner.isBot ? <AvatarWithHover player={owner} onViewProfile={onViewPlayer} /> : null}
                     {owner?.name}
+                  </div>
+                )}
+                {ephemeralBadges.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {ephemeralBadges.map(badge => {
+                      if (badge.type === 'on_fire') return (
+                        <span key="on_fire" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 99 }}>
+                          🔥 on fire{badge.count > 3 ? ` ×${badge.count}` : ''}
+                        </span>
+                      )
+                      if (badge.type === 'cold_streak') return (
+                        <span key="cold_streak" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99 }}>
+                          🧊 cold streak{badge.count > 3 ? ` ×${badge.count}` : ''}
+                        </span>
+                      )
+                      if (badge.type === 'trapper') return (
+                        <span key="trapper" style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-danger)', color: 'var(--color-text-danger)', border: '0.5px solid var(--color-border-danger)', borderRadius: 99 }}>
+                          🪤 trapper
+                        </span>
+                      )
+                      return null
+                    })}
                   </div>
                 )}
               </div>

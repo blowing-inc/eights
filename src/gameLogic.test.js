@@ -27,6 +27,7 @@ import {
   applyDraw,
   replacePlayerIdInRoom,
   buildEvolutionRound,
+  getEphemeralBadges,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1941,5 +1942,84 @@ describe('buildEvolutionRound', () => {
   it('throws when newName is blank', () => {
     expect(() => buildEvolutionRound(makeRound(), 'c1', 'v1', '   ', '', 'p1', 'p1'))
       .toThrow('newName is required')
+  })
+})
+
+describe('getEphemeralBadges', () => {
+  function makeBattles(results) {
+    return results.map((result, i) => ({ roundId: `r${i}`, opponent: 'Someone', result }))
+  }
+
+  it('returns empty array for a combatant with no battles', () => {
+    expect(getEphemeralBadges({ battles: [] })).toEqual([])
+  })
+
+  it('returns empty array when no battles field exists', () => {
+    expect(getEphemeralBadges({})).toEqual([])
+  })
+
+  it('returns no badge for 2 consecutive wins', () => {
+    const c = { battles: makeBattles(['win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('returns on_fire with count 3 for exactly 3 consecutive wins', () => {
+    const c = { battles: makeBattles(['win', 'win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }])
+  })
+
+  it('returns on_fire with count 5 for 5 consecutive wins', () => {
+    const c = { battles: makeBattles(['win', 'win', 'win', 'win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 5 }])
+  })
+
+  it('streak is broken by a non-win — 2 wins after a loss gives no badge', () => {
+    const c = { battles: makeBattles(['win', 'loss', 'win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('streak counts only tail run — 1 loss then 3 wins gives on_fire 3', () => {
+    const c = { battles: makeBattles(['win', 'win', 'loss', 'win', 'win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }])
+  })
+
+  it('returns no badge for 2 consecutive losses', () => {
+    const c = { battles: makeBattles(['loss', 'loss']) }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('returns cold_streak with count 3 for exactly 3 consecutive losses', () => {
+    const c = { battles: makeBattles(['loss', 'loss', 'loss']) }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'cold_streak', count: 3 }])
+  })
+
+  it('returns cold_streak with count 4 for 4 consecutive losses', () => {
+    const c = { battles: makeBattles(['win', 'loss', 'loss', 'loss', 'loss']) }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'cold_streak', count: 4 }])
+  })
+
+  it('draws break a win streak', () => {
+    const c = { battles: makeBattles(['win', 'win', 'win', 'draw', 'win', 'win']) }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('draws do not themselves trigger on_fire or cold_streak', () => {
+    const c = { battles: makeBattles(['draw', 'draw', 'draw']) }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('returns trapper badge when trapTriggered is true', () => {
+    const c = { battles: [], trapTriggered: true }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'trapper' }])
+  })
+
+  it('does not return trapper badge when trapTriggered is false', () => {
+    const c = { battles: [], trapTriggered: false }
+    expect(getEphemeralBadges(c)).toEqual([])
+  })
+
+  it('can return both on_fire and trapper', () => {
+    const c = { battles: makeBattles(['win', 'win', 'win']), trapTriggered: true }
+    expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }, { type: 'trapper' }])
   })
 })
