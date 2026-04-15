@@ -10,7 +10,7 @@ Each player secretly drafts a roster of combatants — fictional characters, ins
 
 - **Vite + React** — frontend
 - **Supabase** — persistent storage (Postgres, free tier is plenty)
-- **Vercel / Netlify** — recommended hosting (free)
+- **Cloudflare Pages** — production hosting via the shared `team-play.city` infrastructure
 
 ---
 
@@ -55,6 +55,30 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ---
 
+## Deploy to Cloudflare Pages
+
+Production deployment for `https://eights.team-play.city` is managed from the shared infrastructure repository:
+
+- Infra repo: `blowing-inc/team-play-city-infra`
+- Cloudflare Pages project: `eights`
+- Custom domain: `eights.team-play.city`
+
+Cloudflare Pages builds from `blowing-inc/eights` on pushes to `main`.
+
+### Required Cloudflare Pages environment variables
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+These values are managed in the shared infra repo, not in Cloudflare by hand.
+
+### GitHub Actions secrets for this repo
+
+This repository's `CI` workflow builds the production app during pull requests and on `main`, so set these GitHub Actions secrets in `blowing-inc/eights`:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
 ## Deploy to Vercel
 
 ```bash
@@ -76,6 +100,8 @@ npm run build
 ```
 
 Or connect your GitHub repo in the Netlify dashboard — set the build command to `npm run build` and publish directory to `dist`. Add the two env vars under **Site settings → Environment variables**.
+
+Cloudflare Pages is the canonical deployment target for `team-play.city` infrastructure. Vercel and Netlify remain optional alternatives for forks or personal deployments.
 
 ---
 
