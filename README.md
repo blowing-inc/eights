@@ -70,7 +70,7 @@ Cloudflare Pages builds from `blowing-inc/eights` on pushes to `main`.
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-These values are managed in the shared infra repo, not in Cloudflare by hand.
+These values are managed by the shared infra repo's Terraform workflow, not in Cloudflare by hand.
 
 ### GitHub Actions secrets for this repo
 
@@ -78,6 +78,15 @@ This repository's `CI` workflow builds the production app during pull requests a
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+
+### GitHub Actions secrets for the shared infra repo
+
+The shared infra repo also needs the same values so it can configure the Cloudflare Pages project:
+
+- Repo: `blowing-inc/team-play-city-infra`
+- Secrets:
+  - `EIGHTS_VITE_SUPABASE_URL`
+  - `EIGHTS_VITE_SUPABASE_ANON_KEY`
 
 ## Deploy to Vercel
 
