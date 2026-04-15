@@ -4,6 +4,8 @@ These principles apply to every feature decision. When in doubt, refer back here
 
 **Canonical terminology:** `docs/glossary.md` is the single source of truth for all game layer names, entity names, UI destination names, and lifecycle states. When this file conflicts with the glossary, the glossary wins.
 
+**Planned features and open tickets:** `docs/backlog.md` — read this before picking up any issue not already in the GitHub tracker. Contains open bugs, settings/admin items, the draw+merge design spec, and the full release roadmap (1.1.x–1.6.x).
+
 ---
 
 ## Narrative Driven
