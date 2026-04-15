@@ -241,7 +241,7 @@ export async function getPlayerCombatants({ ownerId, query = '', sort = 'wins', 
     const to   = from + pageSize - 1
     let q = supabase.from('combatants')
       .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry', { count: 'exact' })
-      .eq('owner_id', ownerId).eq('published', true)
+      .eq('owner_id', ownerId).eq('status', 'published')
     if (query.trim()) q = q.ilike('name', `%${query.trim()}%`)
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('getPlayerCombatants error', error); return { items: [], total: 0 } }
@@ -352,7 +352,7 @@ export async function searchCombatants(query, limit = 8) {
     const { data, error } = await supabase
       .from('combatants').select('id, name, bio, wins, losses, owner_name')
       .ilike('name', `%${query}%`)
-      .eq('published', true)
+      .eq('status', 'published')
       .order('wins', { ascending: false })
       .limit(limit)
     if (error) { console.error('searchCombatants error', error); return [] }
@@ -366,7 +366,7 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
     const { data, error } = await supabase
       .from('combatants').select('id, name, bio, wins, losses, owner_name')
       .eq('owner_id', ownerId)
-      .eq('published', true)
+      .eq('status', 'published')
       .order('updated_at', { ascending: false })
       .limit(limit)
     if (error) { console.error('getPlayerRecentCombatants error', error); return [] }
@@ -378,24 +378,24 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
 
 // Insert a new variant combatant. lineage = { rootId, parentId, generation, bornFrom }.
 // bornFrom is required — it's the lineage link that powers buildChainEvolutionStory.
-// Published starts false — same lifecycle as any new combatant.
+// Status starts 'stashed' — same lifecycle as any new combatant.
 export async function createVariantCombatant({ id, name, bio, ownerId, ownerName, lineage }) {
   try {
     const { error } = await supabase.from('combatants').insert({
       id, name, bio: bio || '', owner_id: ownerId, owner_name: ownerName,
-      lineage, published: false, updated_at: new Date().toISOString(),
+      lineage, status: 'stashed', updated_at: new Date().toISOString(),
     })
     if (error) console.error('createVariantCombatant error', error)
   } catch (e) { console.error('createVariantCombatant exception', e) }
 }
 
 // Returns the full lineage tree for a character: root + all variants, oldest first.
-// Includes unpublished — lineage display shouldn't hide in-progress forms.
+// Includes stashed — lineage display shouldn't hide in-progress forms.
 export async function getLineageTree(rootId) {
   try {
     const { data, error } = await supabase
       .from('combatants')
-      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, lineage, owner_id, owner_name, published')
+      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, lineage, owner_id, owner_name, status')
       .or(`id.eq.${rootId},lineage->>rootId.eq.${rootId}`)
       .order('created_at', { ascending: true })
     if (error) { console.error('getLineageTree error', error); return [] }
@@ -411,7 +411,7 @@ export async function getEligibleCombatants(ownerId) {
       .from('combatants')
       .select('id, name, bio, wins, losses, lineage, owner_name')
       .eq('owner_id', ownerId)
-      .eq('published', true)
+      .eq('status', 'published')
       .order('updated_at', { ascending: false })
     if (error) { console.error('getEligibleCombatants error', error); return [] }
     return data || []
@@ -506,11 +506,11 @@ async function callAdminAction(action, params) {
 
 // ─── Admin combatant operations ──────────────────────────────────────────────
 
-// Search all combatants including unpublished — admin only
+// Search all combatants including stashed — admin only
 export async function adminSearchAllCombatants(query = '') {
   try {
     let q = supabase.from('combatants')
-      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, owner_id, owner_name, published')
+      .select('id, name, bio, wins, losses, reactions_heart, reactions_angry, reactions_cry, owner_id, owner_name, status')
       .order('updated_at', { ascending: false })
       .limit(50)
     if (query.trim()) q = q.ilike('name', `%${query.trim()}%`)
@@ -547,12 +547,12 @@ export async function adminMergeUsers(keepId, dropId, rooms, applyMergeToRoomFn)
   await callAdminAction('merge-users', { roomUpdates, dropUserId: dropId, keepId })
 }
 
-// Fetch all combatants (published or not) belonging to a specific owner_id.
+// Fetch all combatants (stashed or published) belonging to a specific owner_id.
 // Used by the admin guest re-attribution tool to preview what will be moved.
 export async function getCombatantsByOwnerId(ownerId) {
   try {
     const { data, error } = await supabase
-      .from('combatants').select('id, name, published').eq('owner_id', ownerId)
+      .from('combatants').select('id, name, status').eq('owner_id', ownerId)
     if (error) { console.error('getCombatantsByOwnerId error', error); return [] }
     return data || []
   } catch (e) { console.error('getCombatantsByOwnerId exception', e); return [] }
@@ -588,7 +588,7 @@ export async function listCombatants({ sort = 'wins', ascending = false, page = 
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
-    let q = supabase.from('combatants').select('*', { count: 'exact' }).eq('published', true)
+    let q = supabase.from('combatants').select('*', { count: 'exact' }).eq('status', 'published')
     if (baseOnly) q = q.is('lineage', null)
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('listCombatants error', error); return { items: [], total: 0 } }
@@ -603,7 +603,7 @@ export async function searchCast(query, { sort = 'wins', ascending = false, page
     const from = page * pageSize
     const to   = from + pageSize - 1
     let q = supabase.from('combatants').select('*', { count: 'exact' })
-      .eq('published', true)
+      .eq('status', 'published')
       .or(`name.ilike.%${query}%,bio.ilike.%${query}%,owner_name.ilike.%${query}%`)
     if (baseOnly) q = q.is('lineage', null)
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
@@ -646,7 +646,7 @@ export async function publishCombatants(ids) {
   if (!ids.length) return
   try {
     const { error } = await supabase
-      .from('combatants').update({ published: true, updated_at: new Date().toISOString() })
+      .from('combatants').update({ status: 'published', updated_at: new Date().toISOString() })
       .in('id', ids)
     if (error) console.error('publishCombatants error', error)
   } catch (e) { console.error('publishCombatants exception', e) }

@@ -67,8 +67,10 @@ create policy "public update users" on users for update using (true);
 grant select, insert, update on table users to anon, authenticated;
 
 -- ─── Combatants ──────────────────────────────────────────────────────────────
--- Global bestiary. One row per combatant form (base + evolved variants).
--- published = false while the game is in progress; set to true on room end.
+-- Global cast. One row per combatant form (base + evolved variants).
+--
+-- source: 'game' = entered at draft time | 'created' = built in The Workshop
+-- status: 'stashed' = private to owner | 'published' = permanent public record
 --
 -- lineage is null for generation-0 combatants.
 -- For variants (evolved forms):
@@ -87,6 +89,9 @@ grant select, insert, update on table users to anon, authenticated;
 --
 -- round.evolution (stored in rooms.data JSON — no separate table):
 --   { fromId, fromName, toId, toName, toBio, ownerId, ownerName, authorId }
+--
+-- mvp_record: array of { gameCode, voteShare, coMvp } — one entry per MVP win.
+-- tags: free-form labels, lowercase, applied at creation or edit time.
 
 create table if not exists combatants (
   id               text        primary key,
@@ -101,16 +106,19 @@ create table if not exists combatants (
   reactions_heart  int         not null default 0,
   reactions_angry  int         not null default 0,
   reactions_cry    int         not null default 0,
-  published        boolean     not null default false,
-  lineage          jsonb       null,                   -- null for gen-0; see structure above
+  source           text        not null default 'game',   -- 'game' | 'created'
+  status           text        not null default 'stashed', -- 'stashed' | 'published'
+  tags             text[]      not null default '{}',
+  mvp_record       jsonb       not null default '[]',
+  lineage          jsonb       null,                      -- null for gen-0; see structure above
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
 
-create index if not exists combatants_wins_idx        on combatants (wins desc);
-create index if not exists combatants_owner_idx       on combatants (owner_id);
-create index if not exists combatants_name_idx        on combatants (name);
-create index if not exists combatants_published_idx   on combatants (published) where published = true;
+create index if not exists combatants_wins_idx    on combatants (wins desc);
+create index if not exists combatants_owner_idx   on combatants (owner_id);
+create index if not exists combatants_name_idx    on combatants (name);
+create index if not exists combatants_status_idx  on combatants (status) where status = 'published';
 
 -- Fast lookup: all variants whose root is X → used by getLineageTree
 create index if not exists combatants_lineage_root_idx

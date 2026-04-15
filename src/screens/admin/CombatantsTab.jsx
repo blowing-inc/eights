@@ -79,7 +79,7 @@ export default function CombatantsTab() {
                     <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 3, display: 'flex', gap: 10 }}>
                       <span>by {c.owner_name || '—'}</span>
                       <span>{c.wins}W / {c.losses}L</span>
-                      {!c.published && <span style={{ color: 'var(--color-text-warning)' }}>unpublished</span>}
+                      {c.status !== 'published' && <span style={{ color: 'var(--color-text-warning)' }}>stashed</span>}
                     </div>
                   </div>
                   {!isEditing && !isConfirm && (
