@@ -584,12 +584,14 @@ export async function getAllCombatantsForExport() {
 // Paginated Cast list — published only.
 // baseOnly: when true, excludes variants (lineage IS NULL) so pagination is accurate
 // for the "characters" view in ArchiveScreen.
-export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
+// tag: when set, filters to combatants whose tags array contains this exact tag.
+export async function listCombatants({ sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false, tag = null } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
     let q = supabase.from('combatants').select('*', { count: 'exact' }).eq('status', 'published')
     if (baseOnly) q = q.is('lineage', null)
+    if (tag)      q = q.contains('tags', [tag])
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('listCombatants error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
@@ -598,7 +600,8 @@ export async function listCombatants({ sort = 'wins', ascending = false, page = 
 
 // Full-field name/bio search across published combatants — used by ArchiveScreen.
 // baseOnly: same as listCombatants — filters variants server-side for accurate pagination.
-export async function searchCast(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false } = {}) {
+// tag: when set, additionally filters to combatants carrying this tag.
+export async function searchCast(query, { sort = 'wins', ascending = false, page = 0, pageSize = 20, baseOnly = false, tag = null } = {}) {
   try {
     const from = page * pageSize
     const to   = from + pageSize - 1
@@ -606,10 +609,34 @@ export async function searchCast(query, { sort = 'wins', ascending = false, page
       .eq('status', 'published')
       .or(`name.ilike.%${query}%,bio.ilike.%${query}%,owner_name.ilike.%${query}%`)
     if (baseOnly) q = q.is('lineage', null)
+    if (tag)      q = q.contains('tags', [tag])
     const { data, error, count } = await q.order(sort, { ascending }).range(from, to)
     if (error) { console.error('searchCast error', error); return { items: [], total: 0 } }
     return { items: data || [], total: count || 0 }
   } catch (e) { console.error('searchCast exception', e); return { items: [], total: 0 } }
+}
+
+// Tag autocomplete — returns distinct tags from published combatants matching the prefix.
+// Backed by the get_tag_suggestions SQL function (migration 20260416).
+export async function getTagSuggestions(prefix = '') {
+  try {
+    const { data, error } = await supabase.rpc('get_tag_suggestions', { prefix, limit_n: 10 })
+    if (error) { console.error('getTagSuggestions error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getTagSuggestions exception', e); return [] }
+}
+
+// Merge one tag into another across all combatants.
+// Replaces old_tag with new_tag on every row that carries it.
+// If a row already has new_tag, old_tag is simply removed to avoid duplicates.
+// Returns the count of affected rows (0 on error).
+// Backed by the merge_tags SQL function (migration 20260416).
+export async function mergeTagsGlobal(oldTag, newTag) {
+  try {
+    const { data, error } = await supabase.rpc('merge_tags', { old_tag: oldTag, new_tag: newTag })
+    if (error) { console.error('mergeTagsGlobal error', error); return 0 }
+    return data || 0
+  } catch (e) { console.error('mergeTagsGlobal exception', e); return 0 }
 }
 
 // Past games for a player — used on the profile screen to show game history.
