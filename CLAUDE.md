@@ -4,6 +4,8 @@ These principles apply to every feature decision. When in doubt, refer back here
 
 **Canonical terminology:** `docs/glossary.md` is the single source of truth for all game layer names, entity names, UI destination names, and lifecycle states. When this file conflicts with the glossary, the glossary wins.
 
+**Planned features and open tickets:** `docs/backlog.md` — read this before picking up any issue not already in the GitHub tracker. Contains open bugs, settings/admin items, the draw+merge design spec, and the full release roadmap (1.1.x–1.6.x).
+
 ---
 
 ## Narrative Driven
@@ -140,6 +142,13 @@ Keep it small. Keep it whole.
 ## Development Workflow
 
 These conventions apply when working issues from the GitHub tracker.
+
+### GitHub vs. backlog.md
+
+GitHub issues are the source of truth for task status and priority. `docs/backlog.md` holds design context for complex features — read the relevant section when picking up an issue, not as a task list.
+
+- If a section in `backlog.md` has a GitHub issue tracking it, the issue owns the status.
+- When a GitHub issue is closed, remove or trim the corresponding backlog section. The backlog should only retain content that wouldn't fit in the issue body: implementation specs, architectural decisions, tradeoffs.
 
 ### Picking up an issue
 
