@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
+import TagChips from '../components/TagChips.jsx'
 import { btn, tab, inp } from '../styles.js'
 import { listCombatants, searchCast } from '../supabase.js'
 
@@ -14,12 +15,13 @@ const CAST_SORTS = [
 const PAGE_SIZE = 20
 
 export default function ArchiveScreen({ onBack, onViewCombatant }) {
-  const [items, setItems] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [sort, setSort] = useState('wins')
-  const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState('')
+  const [items, setItems]       = useState([])
+  const [total, setTotal]       = useState(0)
+  const [page, setPage]         = useState(0)
+  const [sort, setSort]         = useState('wins')
+  const [loading, setLoading]   = useState(true)
+  const [query, setQuery]       = useState('')
+  const [activeTag, setActiveTag] = useState(null)
   const debounceRef = useRef(null)
   // "characters" hides variants (combatants with lineage set) so each character
   // appears once — story-first, not form-first. "all" shows every published form.
@@ -29,12 +31,12 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
     setLoading(true)
     const sortDef = CAST_SORTS.find(s => s.key === sort)
     // baseOnly filters variants server-side so pagination counts are accurate
-    const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE, baseOnly: view === 'characters' }
+    const opts = { sort, ascending: sortDef?.asc ?? false, page, pageSize: PAGE_SIZE, baseOnly: view === 'characters', tag: activeTag }
     const fn = query.trim()
       ? searchCast(query.trim(), opts)
       : listCombatants(opts)
     fn.then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
-  }, [sort, page, query, view])
+  }, [sort, page, query, view, activeTag])
 
   function changeSort(key) {
     if (sort === key) return
@@ -44,6 +46,14 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
   function handleSearch(val) {
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { setQuery(val); setPage(0) }, 280)
+  }
+
+  function filterByTag(tag) {
+    setActiveTag(tag); setPage(0)
+  }
+
+  function clearTagFilter() {
+    setActiveTag(null); setPage(0)
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -57,6 +67,26 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
         placeholder="Search by name, bio, or player…"
         onChange={e => handleSearch(e.target.value)}
       />
+
+      {/* Active tag filter pill */}
+      {activeTag && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Tag:</span>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px',
+            background: 'var(--color-background-info)',
+            border: '0.5px solid var(--color-border-info)',
+            borderRadius: 99, fontSize: 12, color: 'var(--color-text-info)',
+          }}>
+            {activeTag}
+            <button
+              onClick={clearTagFilter}
+              style={{ background: 'none', border: 'none', padding: '0 0 0 2px', cursor: 'pointer', color: 'var(--color-text-info)', fontSize: 13, lineHeight: 1 }}
+            >×</button>
+          </span>
+        </div>
+      )}
 
       {/* View toggle */}
       <div style={{ display: 'flex', gap: 6, marginBottom: '1rem' }}>
@@ -75,14 +105,17 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
       {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
       {!loading && items.length === 0 && (
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-          {query.trim()
-            ? `No results for "${query.trim()}".`
-            : 'No combatants yet — play some games first!'}
+          {activeTag
+            ? `No combatants tagged "${activeTag}".`
+            : query.trim()
+              ? `No results for "${query.trim()}".`
+              : 'No combatants yet — play some games first!'}
         </p>
       )}
 
       {!loading && items.map((c, idx) => {
         const isVariant = !!c.lineage
+        const tags = c.tags || []
         return (
           <button key={c.id} onClick={() => onViewCombatant(c)}
             style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', border: `0.5px solid ${isVariant ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`, borderRadius: 'var(--border-radius-md)', marginBottom: 8, cursor: 'pointer' }}>
@@ -115,6 +148,11 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
               </div>
             </div>
             {c.bio && <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0 32px', lineHeight: 1.4 }}>{c.bio.length > 90 ? c.bio.slice(0, 90) + '…' : c.bio}</p>}
+            {tags.length > 0 && (
+              <div style={{ marginTop: 6, paddingLeft: 32 }} onClick={e => e.stopPropagation()}>
+                <TagChips tags={tags} onFilter={filterByTag} />
+              </div>
+            )}
           </button>
         )
       })}

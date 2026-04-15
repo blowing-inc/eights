@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
+import TagChips from '../components/TagChips.jsx'
+import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
@@ -168,6 +170,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [editMode, setEditMode] = useState(false)
   const [editName, setEditName] = useState(init.name)
   const [editBio,  setEditBio]  = useState(init.bio || '')
+  const [editTags, setEditTags] = useState(init.tags || [])
   const [saving, setSaving] = useState(false)
   const [historyOpen,   setHistoryOpen]   = useState(false)
   const [lineageStory,  setLineageStory]  = useState([])  // heritage chain (where this combatant sits)
@@ -233,8 +236,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     const newBio  = editBio.trim()
     const entry = { name: c.name, bio: c.bio || '', updatedAt: new Date().toISOString(), updatedBy: playerName || 'unknown' }
     const newHistory = [...history, entry].slice(-20)
-    await updateGlobalCombatant(c.id, { name: newName, bio: newBio, bio_history: newHistory })
-    setC({ ...c, name: newName, bio: newBio, bio_history: newHistory })
+    await updateGlobalCombatant(c.id, { name: newName, bio: newBio, bio_history: newHistory, tags: editTags })
+    setC({ ...c, name: newName, bio: newBio, bio_history: newHistory, tags: editTags })
     setSaving(false); setEditMode(false)
   }
 
@@ -320,13 +323,22 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
             <input style={inp()} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name" />
             <label style={lbl}>Bio</label>
             <textarea style={{ ...inp(), width: '100%', resize: 'none', height: 80 }} value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Bio (optional)" />
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <label style={{ ...lbl, marginTop: 4 }}>Tags</label>
+            <TagInput value={editTags} onChange={setEditTags} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button style={btn('primary')} onClick={saveEdit} disabled={saving || !editName.trim()}>{saving ? 'Saving…' : 'Save'}</button>
-              <button style={btn()} onClick={() => { setEditName(c.name); setEditBio(c.bio || ''); setEditMode(false) }}>Cancel</button>
+              <button style={btn()} onClick={() => { setEditName(c.name); setEditBio(c.bio || ''); setEditTags(c.tags || []); setEditMode(false) }}>Cancel</button>
             </div>
           </>
         ) : (
-          <p style={{ color: c.bio ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontSize: 14, margin: 0 }}>{c.bio || 'No bio yet.'}</p>
+          <>
+            <p style={{ color: c.bio ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', fontSize: 14, margin: 0 }}>{c.bio || 'No bio yet.'}</p>
+            {(c.tags || []).length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <TagChips tags={c.tags} />
+              </div>
+            )}
+          </>
         )}
       </div>
 

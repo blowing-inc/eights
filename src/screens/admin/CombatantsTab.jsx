@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { btn, inp } from '../../styles.js'
-import { adminSearchAllCombatants, adminDeleteCombatant, updateGlobalCombatant } from '../../supabase.js'
+import { adminSearchAllCombatants, adminDeleteCombatant, updateGlobalCombatant, mergeTagsGlobal } from '../../supabase.js'
 
 export default function CombatantsTab() {
   const [query,      setQuery]      = useState('')
@@ -44,6 +44,8 @@ export default function CombatantsTab() {
   return (
     <>
       {msg && <Notice msg={msg} />}
+      <TagMerge />
+      <hr style={{ border: 'none', borderTop: '0.5px solid var(--color-border-tertiary)', margin: '1.5rem 0' }} />
       <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
         <input
           style={{ ...inp(), margin: 0, flex: 1, fontSize: 14 }}
@@ -131,6 +133,67 @@ function Notice({ msg }) {
   return (
     <div style={{ padding: '8px 12px', background: 'var(--color-background-success)', border: '0.5px solid var(--color-border-success)', borderRadius: 'var(--border-radius-md)', marginBottom: '1rem', fontSize: 13, color: 'var(--color-text-success)' }}>
       {msg}
+    </div>
+  )
+}
+
+// Tag merge — Super Host capability, temporarily admin-only until 1.2.x Super Host role ships.
+// Replaces old_tag with new_tag on every combatant that carries it.
+function TagMerge() {
+  const [oldTag,  setOldTag]  = useState('')
+  const [newTag,  setNewTag]  = useState('')
+  const [merging, setMerging] = useState(false)
+  const [result,  setResult]  = useState(null) // { count } | { error }
+
+  async function doMerge() {
+    const from = oldTag.trim().toLowerCase()
+    const into = newTag.trim().toLowerCase()
+    if (!from || !into || from === into) return
+    setMerging(true); setResult(null)
+    const count = await mergeTagsGlobal(from, into)
+    setResult({ count })
+    setMerging(false)
+    if (count > 0) { setOldTag(''); setNewTag('') }
+  }
+
+  return (
+    <div>
+      <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        Merge Tags
+      </h3>
+      <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 10px' }}>
+        Replaces a tag with another across all combatants — use this to consolidate typos or duplicates.
+        Will become a Super Host power in 1.2.x.
+      </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <input
+          style={{ ...inp(), margin: 0, flex: 1, minWidth: 120, fontSize: 14 }}
+          placeholder="Old tag (e.g. spoooky)"
+          value={oldTag}
+          onChange={e => setOldTag(e.target.value)}
+        />
+        <span style={{ fontSize: 14, color: 'var(--color-text-tertiary)', paddingTop: 10 }}>→</span>
+        <input
+          style={{ ...inp(), margin: 0, flex: 1, minWidth: 120, fontSize: 14 }}
+          placeholder="New tag (e.g. spooky)"
+          value={newTag}
+          onChange={e => setNewTag(e.target.value)}
+        />
+        <button
+          onClick={doMerge}
+          disabled={merging || !oldTag.trim() || !newTag.trim() || oldTag.trim() === newTag.trim()}
+          style={{ ...btn('primary'), width: 'auto', padding: '0 16px', fontSize: 13, flex: 'none' }}
+        >
+          {merging ? '…' : 'Merge'}
+        </button>
+      </div>
+      {result && (
+        <p style={{ fontSize: 12, margin: '6px 0 0', color: result.count > 0 ? 'var(--color-text-success)' : 'var(--color-text-tertiary)' }}>
+          {result.count > 0
+            ? `Done — updated ${result.count} combatant${result.count === 1 ? '' : 's'}.`
+            : 'No combatants found with that tag.'}
+        </p>
+      )}
     </div>
   )
 }
