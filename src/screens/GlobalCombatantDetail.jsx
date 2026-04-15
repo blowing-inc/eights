@@ -172,6 +172,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [editBio,  setEditBio]  = useState(init.bio || '')
   const [editTags, setEditTags] = useState(init.tags || [])
   const [saving, setSaving] = useState(false)
+  const [confirmPending, setConfirmPending] = useState(false)
   const [historyOpen,   setHistoryOpen]   = useState(false)
   const [lineageStory,  setLineageStory]  = useState([])  // heritage chain (where this combatant sits)
   const [lineageTree,   setLineageTree]   = useState([])  // raw tree data for heritage — needed for branching child map + navigation
@@ -231,6 +232,11 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
 
   async function saveEdit() {
     if (!editName.trim()) return
+    // Published combatants require a one-step confirm before writing.
+    if (c.status === 'published' && !confirmPending) {
+      setConfirmPending(true)
+      return
+    }
     setSaving(true)
     const newName = editName.trim()
     const newBio  = editBio.trim()
@@ -238,7 +244,12 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     const newHistory = [...history, entry].slice(-20)
     await updateGlobalCombatant(c.id, { name: newName, bio: newBio, bio_history: newHistory, tags: editTags })
     setC({ ...c, name: newName, bio: newBio, bio_history: newHistory, tags: editTags })
-    setSaving(false); setEditMode(false)
+    setSaving(false); setConfirmPending(false); setEditMode(false)
+  }
+
+  function cancelEdit() {
+    setEditName(c.name); setEditBio(c.bio || ''); setEditTags(c.tags || [])
+    setConfirmPending(false); setEditMode(false)
   }
 
   return (
@@ -325,9 +336,18 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
             <textarea style={{ ...inp(), width: '100%', resize: 'none', height: 80 }} value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Bio (optional)" />
             <label style={{ ...lbl, marginTop: 4 }}>Tags</label>
             <TagInput value={editTags} onChange={setEditTags} />
+            {confirmPending && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0', padding: '8px 10px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)' }}>
+                This combatant is published — edits become part of the permanent record.
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button style={btn('primary')} onClick={saveEdit} disabled={saving || !editName.trim()}>{saving ? 'Saving…' : 'Save'}</button>
-              <button style={btn()} onClick={() => { setEditName(c.name); setEditBio(c.bio || ''); setEditTags(c.tags || []); setEditMode(false) }}>Cancel</button>
+              <button style={btn('primary')} onClick={saveEdit} disabled={saving || !editName.trim()}>
+                {saving ? 'Saving…' : confirmPending ? 'Confirm save' : 'Save'}
+              </button>
+              <button style={btn()} onClick={confirmPending ? () => setConfirmPending(false) : cancelEdit}>
+                {confirmPending ? 'Go back' : 'Cancel'}
+              </button>
             </div>
           </>
         ) : (
