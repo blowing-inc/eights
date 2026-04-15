@@ -143,6 +143,13 @@ Keep it small. Keep it whole.
 
 These conventions apply when working issues from the GitHub tracker.
 
+### GitHub vs. backlog.md
+
+GitHub issues are the source of truth for task status and priority. `docs/backlog.md` holds design context for complex features — read the relevant section when picking up an issue, not as a task list.
+
+- If a section in `backlog.md` has a GitHub issue tracking it, the issue owns the status.
+- When a GitHub issue is closed, remove or trim the corresponding backlog section. The backlog should only retain content that wouldn't fit in the issue body: implementation specs, architectural decisions, tradeoffs.
+
 ### Picking up an issue
 
 1. Check the lowest-numbered open milestone first: `gh milestone list --repo blowing-inc/eights`
