@@ -668,6 +668,75 @@ export async function getPlayerRooms(playerId) {
   } catch (e) { console.error('getPlayerRooms exception', e); return [] }
 }
 
+// ─── Workshop operations ──────────────────────────────────────────────────────
+// All Workshop combatants have source='created'. Visibility is enforced at the
+// query layer: stashed rows are only fetched when querying with the owner's userId.
+// (See auth note in backlog.md — RLS policies can't use auth.uid() with PIN auth.)
+
+// Create a new combatant from The Workshop.
+// Status defaults to 'stashed' unless the caller explicitly passes 'published'.
+export async function createWorkshopCombatant({ id, name, bio, tags = [], ownerId, ownerName, status = 'stashed' }) {
+  try {
+    const { error } = await supabase.from('combatants').insert({
+      id, name, bio: bio || '', tags, owner_id: ownerId, owner_name: ownerName,
+      source: 'created', status, updated_at: new Date().toISOString(),
+    })
+    if (error) console.error('createWorkshopCombatant error', error)
+    return !error
+  } catch (e) { console.error('createWorkshopCombatant exception', e); return false }
+}
+
+// Fetch all combatants for a Workshop owner — stashed and published.
+// Stashed rows are private to the owner so we scope by owner_id; no status filter.
+export async function getWorkshopCombatants(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants')
+      .select('id, name, bio, bio_history, tags, wins, losses, draws, status, source, lineage, created_at, updated_at')
+      .eq('owner_id', ownerId)
+      .eq('source', 'created')
+      .order('updated_at', { ascending: false })
+    if (error) { console.error('getWorkshopCombatants error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getWorkshopCombatants exception', e); return [] }
+}
+
+// Update a Workshop combatant's name, bio, and tags.
+// Appends the previous bio to bio_history before saving the new one.
+// bioHistoryEntry: { name, bio, updatedAt, updatedBy } — the snapshot before this edit.
+export async function updateWorkshopCombatant(id, { name, bio, tags }, bioHistoryEntry, prevBioHistory = []) {
+  try {
+    const newHistory = [...prevBioHistory, bioHistoryEntry].slice(-20)
+    const { error } = await supabase.from('combatants').update({
+      name, bio: bio || '', tags, bio_history: newHistory,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) console.error('updateWorkshopCombatant error', error)
+    return !error
+  } catch (e) { console.error('updateWorkshopCombatant exception', e); return false }
+}
+
+// Flip a Workshop combatant between 'stashed' and 'published'.
+// Un-publishing does not erase history.
+export async function setWorkshopCombatantStatus(id, status) {
+  try {
+    const { error } = await supabase.from('combatants')
+      .update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('setWorkshopCombatantStatus error', error)
+    return !error
+  } catch (e) { console.error('setWorkshopCombatantStatus exception', e); return false }
+}
+
+// Delete a Workshop combatant. Only valid for stashed items — callers must
+// verify status === 'stashed' before calling. Published combatants are permanent.
+export async function deleteWorkshopCombatant(id) {
+  try {
+    const { error } = await supabase.from('combatants').delete().eq('id', id)
+    if (error) console.error('deleteWorkshopCombatant error', error)
+    return !error
+  } catch (e) { console.error('deleteWorkshopCombatant exception', e); return false }
+}
+
 // Called once when the last round of a game is confirmed
 export async function publishCombatants(ids) {
   if (!ids.length) return

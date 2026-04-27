@@ -21,6 +21,7 @@ import ArchiveScreen from './screens/ArchiveScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
 import GameSummaryScreen from './screens/GameSummaryScreen.jsx'
+import WorkshopScreen from './screens/WorkshopScreen.jsx'
 import HelpModal from './components/HelpModal.jsx'
 
 function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
@@ -135,6 +136,7 @@ export default function App() {
   const [viewPlayers, setViewPlayers] = useState(false)
   const [viewPlayerProfile, setViewPlayerProfile] = useState(null)
   const [viewHelp, setViewHelp] = useState(false)
+  const [viewWorkshop, setViewWorkshop] = useState(false)
   const [viewRoomSummary, setViewRoomSummary] = useState(null)
 
   async function openRoomSummary(roomId) {
@@ -244,7 +246,9 @@ export default function App() {
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
   let content = null
-  if (viewLobbies)
+  if (viewWorkshop)
+    content = <WorkshopScreen currentUser={currentUser} onBack={() => setViewWorkshop(false)} onLogin={() => goAuth('home')} />
+  else if (viewLobbies)
     content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : r.phase === 'draft' ? 'draft' : r.phase === 'vote' ? 'vote' : 'round') }} />
   else if (viewPlayers && viewPlayerProfile)
     content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => setViewGlobalCombatant(c)} onViewRoom={openRoomSummary} />
@@ -263,7 +267,7 @@ export default function App() {
   else if (screen === 'admin')
     content = <AdminScreen onBack={() => nav('home')} />
   else if (screen === 'home')
-    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onChronicles={() => setViewChronicles(true)} onArchive={() => setViewArchive(true)} onPlayers={() => setViewPlayers(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
+    content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onChronicles={() => setViewChronicles(true)} onArchive={() => setViewArchive(true)} onPlayers={() => setViewPlayers(true)} onWorkshop={() => setViewWorkshop(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
     content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => goAuth('create')} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
   else if (screen === 'join')
