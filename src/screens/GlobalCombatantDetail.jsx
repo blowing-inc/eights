@@ -316,9 +316,9 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
         const sup = computeSuperlatives(c, h2hRows)
         return sup.length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.5rem' }}>
-            {sup.map(s => (
-              <span key={s} style={{ fontSize: 12, padding: '3px 10px', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99 }}>
-                {s}
+            {sup.map(({ label, tooltip }) => (
+              <span key={label} title={tooltip} style={{ fontSize: 12, padding: '3px 10px', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99, cursor: 'help' }}>
+                {label}
               </span>
             ))}
           </div>

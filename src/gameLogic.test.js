@@ -2038,44 +2038,66 @@ describe('computeSuperlatives', () => {
     expect(computeSuperlatives(makeCombatantStats({ draws: 2 }), null)).toEqual([])
   })
 
+  // Helper: extract labels from the { label, tooltip } objects for readability.
+  function labels(sup) { return sup.map(s => s.label) }
+
   it('returns Undefeated when wins > 0 and losses === 0', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 3 }), null)
-    expect(sup).toContain('Undefeated')
+    expect(labels(sup)).toContain('Undefeated')
+  })
+
+  it('Undefeated tooltip includes win count', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3 }), null)
+    const entry = sup.find(s => s.label === 'Undefeated')
+    expect(entry.tooltip).toMatch('3W')
+  })
+
+  it('Undefeated tooltip includes draw count when draws present', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 2, draws: 1 }), null)
+    const entry = sup.find(s => s.label === 'Undefeated')
+    expect(entry.tooltip).toMatch('1D')
   })
 
   it('does not return Undefeated when there is at least one loss', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 1 }), null)
-    expect(sup).not.toContain('Undefeated')
+    expect(labels(sup)).not.toContain('Undefeated')
   })
 
   it('Undefeated is still returned when there are draws alongside wins', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 2, draws: 1 }), null)
-    expect(sup).toContain('Undefeated')
+    expect(labels(sup)).toContain('Undefeated')
   })
 
   it('returns win rate when >= 5 rounds and >= 70% wins', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 7, losses: 3 }), null)
-    expect(sup).toContain('70% win rate')
+    expect(labels(sup)).toContain('70% win rate')
+  })
+
+  it('win rate tooltip names the round counts', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 7, losses: 3 }), null)
+    const entry = sup.find(s => s.label === '70% win rate')
+    expect(entry.tooltip).toMatch('7')
+    expect(entry.tooltip).toMatch('10')
   })
 
   it('does not return win rate when fewer than 5 rounds', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 4, losses: 0 }), null)
-    expect(sup.some(s => s.includes('win rate'))).toBe(false)
+    expect(labels(sup).some(l => l.includes('win rate'))).toBe(false)
   })
 
   it('does not return win rate when below 70% threshold', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 6, losses: 4 }), null)
-    expect(sup.some(s => s.includes('win rate'))).toBe(false)
+    expect(labels(sup).some(l => l.includes('win rate'))).toBe(false)
   })
 
   it('returns MVP once when mvp_record has one entry', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 1, mvp_record: [{ gameCode: 'ABC' }] }), null)
-    expect(sup).toContain('MVP once')
+    expect(labels(sup)).toContain('MVP once')
   })
 
   it('returns MVP N times when mvp_record has multiple entries', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 2, mvp_record: [{}, {}] }), null)
-    expect(sup).toContain('MVP 2 times')
+    expect(labels(sup)).toContain('MVP 2 times')
   })
 
   it('returns Beat N opponents from h2h data', () => {
@@ -2085,23 +2107,46 @@ describe('computeSuperlatives', () => {
       { opponentName: 'Gamma', wins: 0, losses: 2 },
     ]
     const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 3 }), h2h)
-    expect(sup).toContain('Beat 2 opponents')
+    expect(labels(sup)).toContain('Beat 2 opponents')
+  })
+
+  it('Beat opponents tooltip includes beaten count and total faced', () => {
+    const h2h = [
+      { opponentName: 'Alpha', wins: 2, losses: 0 },
+      { opponentName: 'Beta',  wins: 1, losses: 1 },
+      { opponentName: 'Gamma', wins: 0, losses: 2 },
+    ]
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 3 }), h2h)
+    const entry = sup.find(s => s.label.startsWith('Beat'))
+    expect(entry.tooltip).toMatch('2')
+    expect(entry.tooltip).toMatch('3')
   })
 
   it('uses singular "opponent" when exactly one opponent was beaten', () => {
     const h2h = [{ opponentName: 'Alpha', wins: 1, losses: 0 }]
     const sup = computeSuperlatives(makeCombatantStats({ wins: 1 }), h2h)
-    expect(sup).toContain('Beat 1 opponent')
+    expect(labels(sup)).toContain('Beat 1 opponent')
   })
 
   it('does not include Beat opponents line when h2h is null', () => {
     const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 3 }), null)
-    expect(sup.some(s => s.startsWith('Beat'))).toBe(false)
+    expect(labels(sup).some(l => l.startsWith('Beat'))).toBe(false)
   })
 
   it('does not include Beat opponents when no opponents were beaten', () => {
     const h2h = [{ opponentName: 'Alpha', wins: 0, losses: 3 }]
     const sup = computeSuperlatives(makeCombatantStats({ wins: 0, losses: 3 }), h2h)
-    expect(sup.some(s => s.startsWith('Beat'))).toBe(false)
+    expect(labels(sup).some(l => l.startsWith('Beat'))).toBe(false)
+  })
+
+  it('each entry has both label and tooltip strings', () => {
+    const h2h = [{ opponentName: 'Alpha', wins: 2, losses: 1 }]
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 2, losses: 1 }), h2h)
+    sup.forEach(s => {
+      expect(typeof s.label).toBe('string')
+      expect(typeof s.tooltip).toBe('string')
+      expect(s.label.length).toBeGreaterThan(0)
+      expect(s.tooltip.length).toBeGreaterThan(0)
+    })
   })
 })

@@ -1052,15 +1052,15 @@ export function groupRoomsForHistory(rooms) {
 // ─── Achievement superlatives ─────────────────────────────────────────────────
 
 /**
- * Returns an array of narrative superlative strings for the combatant detail page.
+ * Returns an array of { label, tooltip } objects for the combatant detail page.
  *
  * Superlatives are shown on the detail page only — not on small cards.
- * The list is intentionally conservative: only emit a string when the stat
+ * The list is intentionally conservative: only emit an entry when the stat
  * is unambiguously worth surfacing (thresholds below).
  *
  * @param {object} c        - combatant record (wins, losses, draws, mvp_record)
  * @param {Array|null} h2h  - head-to-head rows from getCombatantRoundHistory, or null if not yet loaded
- * @returns {string[]}
+ * @returns {{ label: string, tooltip: string }[]}
  */
 export function computeSuperlatives(c, h2h) {
   const superlatives = []
@@ -1074,25 +1074,40 @@ export function computeSuperlatives(c, h2h) {
   // Unique opponents beaten — requires h2h data
   if (h2h && h2h.length > 0) {
     const beaten = h2h.filter(r => r.wins > 0).length
+    const faced  = h2h.length
     if (beaten > 0) {
-      superlatives.push(`Beat ${beaten} ${beaten === 1 ? 'opponent' : 'opponents'}`)
+      superlatives.push({
+        label:   `Beat ${beaten} ${beaten === 1 ? 'opponent' : 'opponents'}`,
+        tooltip: `Won at least one matchup against ${beaten} of ${faced} distinct ${faced === 1 ? 'opponent' : 'opponents'} faced`,
+      })
     }
   }
 
   // Undefeated — at least one win, zero losses (draws don't break it)
   if (wins > 0 && losses === 0) {
-    superlatives.push('Undefeated')
+    const detail = draws > 0 ? ` (${wins}W ${draws}D)` : ` (${wins}W)`
+    superlatives.push({
+      label:   'Undefeated',
+      tooltip: `Has never lost a round${detail}`,
+    })
   }
 
   // Win rate — only surface when meaningful (≥5 rounds, ≥70% wins)
   if (total >= 5 && wins / total >= 0.7) {
-    superlatives.push(`${Math.round((wins / total) * 100)}% win rate`)
+    const pct = Math.round((wins / total) * 100)
+    superlatives.push({
+      label:   `${pct}% win rate`,
+      tooltip: `Won ${wins} of ${total} rounds played`,
+    })
   }
 
   // MVP wins — voting ships 1.3.x; field is captured in schema now
   const mvpCount = (c.mvp_record || []).length
   if (mvpCount > 0) {
-    superlatives.push(`MVP ${mvpCount === 1 ? 'once' : `${mvpCount} times`}`)
+    superlatives.push({
+      label:   `MVP ${mvpCount === 1 ? 'once' : `${mvpCount} times`}`,
+      tooltip: `Named most valuable combatant by player vote ${mvpCount === 1 ? 'once' : `${mvpCount} times`}`,
+    })
   }
 
   return superlatives
