@@ -6,9 +6,9 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants, createWorkshopCombatant } from '../supabase.js'
 import {
-  ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
+  uid, ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
   normalizeRoomSettings, buildActiveFormMap,
@@ -29,6 +29,12 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [globalIds, setGlobalIds] = useState(() => Array(rosterSize).fill(null).map((_, i) => existing[i]?.id || savedDraft?.globalIds?.[i] || null))
   const [traps, setTraps] = useState(() => Array(rosterSize).fill(null).map((_, i) => existing[i]?.trapTarget || savedDraft?.traps?.[i] || null))
   const [trapPickerFor, setTrapPickerFor] = useState(null) // slot index with picker open, or null
+  // stashSourceIds[i]: the global id of the stash item that was loaded into slot i.
+  // Persists even if the user edits the name (which clears globalIds[i]), so "Stash"
+  // can update the original record rather than create a duplicate.
+  const [stashSourceIds, setStashSourceIds] = useState(() => Array(rosterSize).fill(null))
+  const [confirmClearFor, setConfirmClearFor] = useState(null) // slot index showing clear confirm, or null
+  const [stashing, setStashing] = useState(false)
   const [submitted, setSubmitted] = useState(existing.length === rosterSize)
   const [forceStarting, setForceStarting] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -116,6 +122,31 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const filledIds = globalIds.filter(Boolean)
   const duplicateIds = new Set(filledIds.filter((id, i) => filledIds.indexOf(id) !== i))
   const hasDuplicates = duplicateNames.size > 0 || duplicateIds.size > 0
+
+  function clearSlotData(i) {
+    const n = [...names]; n[i] = ''; setNames(n)
+    const b = [...bios]; b[i] = ''; setBios(b)
+    const g = [...globalIds]; g[i] = null; setGlobalIds(g)
+    const t = [...traps]; t[i] = null; setTraps(t)
+    const s = [...stashSourceIds]; s[i] = null; setStashSourceIds(s)
+  }
+
+  async function stashSlot(i) {
+    if (!names[i].trim() || !playerId || isGuest) return
+    setStashing(true)
+    const ownerName = ownerLabel(myPlayer?.name, isGuest)
+    // If a stash item was loaded (possibly with a renamed name), update it; otherwise create new.
+    const stashTargetId = stashSourceIds[i] || (stashedCombatants.some(s => s.id === globalIds[i]) ? globalIds[i] : null)
+    if (stashTargetId) {
+      await upsertGlobalCombatant({ id: stashTargetId, name: names[i], bio: bios[i] || '', ownerId: playerId, ownerName })
+    } else {
+      await createWorkshopCombatant({ id: uid(), name: names[i], bio: bios[i] || '', ownerId: playerId, ownerName })
+    }
+    getPlayerStashedCombatants(playerId).then(setStashedCombatants)
+    clearSlotData(i)
+    setConfirmClearFor(null)
+    setStashing(false)
+  }
 
   async function submit() {
     if (names.some(n => !n.trim())) return
@@ -258,12 +289,16 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       )}
 
       {Array(rosterSize).fill(0).map((_, i) => {
-        const isPrevWinnerSlot = myPrevWinners.some(w => slotMatchesPrevWinner(names, globalIds, i, w))
-        const isNewCombatant   = names[i].trim() && !isPrevWinnerSlot && !globalIds[i]
-        const trap             = traps[i]
-        const trapPickerOpen   = trapPickerFor === i
-        const isDuplicate      = (names[i].trim() && duplicateNames.has(names[i].trim().toLowerCase())) ||
-                                 (globalIds[i] && duplicateIds.has(globalIds[i]))
+        const isPrevWinnerSlot    = myPrevWinners.some(w => slotMatchesPrevWinner(names, globalIds, i, w))
+        const isNewCombatant      = names[i].trim() && !isPrevWinnerSlot && !globalIds[i]
+        const trap                = traps[i]
+        const trapPickerOpen      = trapPickerFor === i
+        const isDuplicate         = (names[i].trim() && duplicateNames.has(names[i].trim().toLowerCase())) ||
+                                    (globalIds[i] && duplicateIds.has(globalIds[i]))
+        // Stash is offered when the slot isn't linked to a published global record.
+        // Covers: brand-new entries, stash-loaded items (with or without name edits).
+        const isLinkedToPublished = !!globalIds[i] && !stashedCombatants.some(s => s.id === globalIds[i])
+        const canStashSlot        = !isGuest && !!names[i].trim() && !isLinkedToPublished && !isPrevWinnerSlot
 
         return (
           <div key={i} style={{ marginBottom: 16, padding: '12px 14px', background: isPrevWinnerSlot ? 'var(--color-background-success)' : 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: isDuplicate ? '1.5px solid var(--color-border-danger)' : isPrevWinnerSlot ? '1.5px solid var(--color-border-success)' : '0.5px solid var(--color-border-tertiary)' }}>
@@ -272,7 +307,13 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
               <FighterAutocomplete
                 value={names[i]}
                 onChange={v => { const n = [...names]; n[i] = v; setNames(n); const g = [...globalIds]; g[i] = null; setGlobalIds(g) }}
-                onSelect={f => { const n = [...names]; n[i] = f.name; setNames(n); const b = [...bios]; b[i] = f.bio || ''; setBios(b); const g = [...globalIds]; g[i] = f.id; setGlobalIds(g) }}
+                onSelect={f => {
+                  const n = [...names]; n[i] = f.name; setNames(n)
+                  const b = [...bios]; b[i] = f.bio || ''; setBios(b)
+                  const g = [...globalIds]; g[i] = f.id; setGlobalIds(g)
+                  const s = [...stashSourceIds]; s[i] = stashedCombatants.some(sc => sc.id === f.id) ? f.id : null; setStashSourceIds(s)
+                  setConfirmClearFor(null)
+                }}
                 placeholder={`Combatant ${i + 1}`}
                 playerId={playerId}
                 substitutions={substitutions}
@@ -286,7 +327,14 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-success)', color: 'var(--color-text-success)', borderRadius: 99, border: '0.5px solid var(--color-border-success)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏆 champion</span>
               )}
               {!isPrevWinnerSlot && globalIds[i] && (
-                <CombatantStatsPill globalId={globalIds[i]} label="↩ loaded" pillStyle={{ background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)' }} />
+                <CombatantStatsPill globalId={globalIds[i]} label="↩ loaded" pillStyle={{ background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)' }} tooltip="Pulled from an existing record — name and bio are pre-filled from their history." />
+              )}
+              {names[i].trim() && (
+                <button
+                  onClick={() => setConfirmClearFor(confirmClearFor === i ? null : i)}
+                  style={{ background: 'transparent', border: 'none', fontSize: 16, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '2px 6px', lineHeight: 1, flexShrink: 0 }}
+                  title="Clear this entry"
+                >×</button>
               )}
             </div>
 
@@ -296,6 +344,29 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
               value={bios[i]}
               onChange={e => { const b = [...bios]; b[i] = e.target.value; setBios(b) }}
             />
+
+            {confirmClearFor === i && (
+              <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>Clear this slot?</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {canStashSlot && (
+                    <button
+                      onClick={() => stashSlot(i)}
+                      disabled={stashing}
+                      style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12, color: 'var(--color-text-info)', borderColor: 'var(--color-border-info)' }}
+                    >{stashing ? 'Stashing…' : '🔒 Stash it'}</button>
+                  )}
+                  <button
+                    onClick={() => { clearSlotData(i); setConfirmClearFor(null) }}
+                    style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12, color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}
+                  >Clear</button>
+                  <button
+                    onClick={() => setConfirmClearFor(null)}
+                    style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12 }}
+                  >Never mind</button>
+                </div>
+              </div>
+            )}
 
             {/* Trap controls — only for brand-new combatants in a Next Game */}
             {isNewCombatant && otherPrevWinners.length > 0 && (

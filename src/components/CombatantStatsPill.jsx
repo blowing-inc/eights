@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { getCombatant } from '../supabase.js'
 
 // Tap/click the 📊 button to open a stats card. Works on desktop and mobile.
-export default function CombatantStatsPill({ globalId, label, pillStyle }) {
+export default function CombatantStatsPill({ globalId, label, pillStyle, tooltip }) {
   const [open, setOpen]   = useState(false)
   const [stats, setStats] = useState(null)
   const wrapRef = useRef(null)
@@ -21,7 +21,7 @@ export default function CombatantStatsPill({ globalId, label, pillStyle }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3 }} title={tooltip}>
       <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 99, whiteSpace: 'nowrap', ...pillStyle }}>{label}</span>
       <button onClick={toggle} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, padding: '4px', color: 'var(--color-text-secondary)', lineHeight: 1, flexShrink: 0 }} title="View stats">📊</button>
       {open && (
