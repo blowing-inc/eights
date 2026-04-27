@@ -4,7 +4,7 @@ import TagChips from '../components/TagChips.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget } from '../supabase.js'
-import { buildStoryFromLineageTree } from '../gameLogic.js'
+import { buildStoryFromLineageTree, computeSuperlatives } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 
@@ -204,6 +204,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
         if (story.length > 1) setOwnChainStory(story)
       })
     }
+    // Load h2h eagerly so superlatives can show on first render.
+    getCombatantRoundHistory(c.id).then(setH2hRows)
   }, [rootId, c.id])
 
   function nameSlug() {
@@ -224,9 +226,6 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   }
 
   function toggleH2h() {
-    if (!h2hOpen && h2hRows === null) {
-      getCombatantRoundHistory(c.id).then(setH2hRows)
-    }
     setH2hOpen(o => !o)
   }
 
@@ -311,6 +310,20 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           </div>
         ))}
       </div>
+
+      {/* ── Superlatives ─────────────────────────────────────────────────── */}
+      {(() => {
+        const sup = computeSuperlatives(c, h2hRows)
+        return sup.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: '1.5rem' }}>
+            {sup.map(s => (
+              <span key={s} style={{ fontSize: 12, padding: '3px 10px', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 99 }}>
+                {s}
+              </span>
+            ))}
+          </div>
+        ) : null
+      })()}
 
       {(c.reactions_heart > 0 || c.reactions_angry > 0 || c.reactions_cry > 0) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
