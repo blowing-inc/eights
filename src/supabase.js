@@ -374,6 +374,20 @@ export async function getPlayerRecentCombatants(ownerId, limit = 8) {
   } catch (e) { console.error('getPlayerRecentCombatants exception', e); return [] }
 }
 
+// Player's stashed (private) combatants — shown only to the owner in their own draft autocomplete
+export async function getPlayerStashedCombatants(ownerId, limit = 20) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants').select('id, name, bio, wins, losses, owner_name')
+      .eq('owner_id', ownerId)
+      .eq('status', 'stashed')
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+    if (error) { console.error('getPlayerStashedCombatants error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getPlayerStashedCombatants exception', e); return [] }
+}
+
 // ─── Lineage / variant combatants ────────────────────────────────────────────
 
 // Insert a new variant combatant. lineage = { rootId, parentId, generation, bornFrom }.
