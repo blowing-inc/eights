@@ -6,7 +6,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants } from '../supabase.js'
 import {
   ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
@@ -19,6 +19,8 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const { rosterSize } = normalizeRoomSettings(init.settings)
   // substitutions: { [originalId]: combatant } — active-form overrides for heritage games
   const [substitutions, setSubstitutions] = useState({})
+  // stashedCombatants: logged-in player's private stash — shown only in their own autocomplete
+  const [stashedCombatants, setStashedCombatants] = useState([])
   const myPlayer = room.players.find(p => p.id === playerId)
   const existing = room.combatants[playerId] || []
   const savedDraft = existing.length === 0 ? (room.drafts?.[playerId] ?? null) : null
@@ -95,6 +97,12 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       setSubstitutions(subs)
     })
   }, [init.prevRoomId])
+
+  // Fetch the player's stashed combatants so they appear in their own autocomplete.
+  // Guests have no stash, so skip if isGuest.
+  useEffect(() => {
+    if (!isGuest && playerId) getPlayerStashedCombatants(playerId).then(setStashedCombatants)
+  }, [playerId, isGuest])
 
   const biosRequired = normalizeRoomSettings(room.settings).biosRequired
   const myPrevWinners = room.prevWinners?.[playerId] || []
@@ -269,6 +277,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 playerId={playerId}
                 substitutions={substitutions}
                 pinnedItems={myPrevWinners.map(w => ({ ...w, wins: w.wins || 0, losses: w.losses || 0, owner_name: myPlayer?.name || '' }))}
+                stashedItems={stashedCombatants}
               />
               {isPrevWinnerSlot && globalIds[i] && (
                 <CombatantStatsPill globalId={globalIds[i]} label="🏆 champion" pillStyle={{ background: 'var(--color-background-success)', color: 'var(--color-text-success)', border: '0.5px solid var(--color-border-success)' }} />
