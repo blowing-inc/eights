@@ -32,7 +32,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   // stashSourceIds[i]: the global id of the stash item that was loaded into slot i.
   // Persists even if the user edits the name (which clears globalIds[i]), so "Stash"
   // can update the original record rather than create a duplicate.
-  const [stashSourceIds, setStashSourceIds] = useState(() => Array(rosterSize).fill(null))
+  const [stashSourceIds, setStashSourceIds] = useState(() => Array(rosterSize).fill(null).map((_, i) => savedDraft?.stashSourceIds?.[i] || null))
   const [confirmClearFor, setConfirmClearFor] = useState(null) // slot index showing clear confirm, or null
   const [stashing, setStashing] = useState(false)
   const [submitted, setSubmitted] = useState(existing.length === rosterSize)
@@ -65,13 +65,13 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       setSaveStatus('saving')
       const r = await sget('room:' + room.id)
       if (!r) { setSaveStatus(null); return }
-      const updated = { ...r, drafts: { ...(r.drafts || {}), [playerId]: { names, bios, globalIds, traps } } }
+      const updated = { ...r, drafts: { ...(r.drafts || {}), [playerId]: { names, bios, globalIds, traps, stashSourceIds } } }
       await sset('room:' + r.id, updated)
       setLocal(updated); setRoom(updated)
       setSaveStatus('saved')
     }, 2000)
     return () => clearTimeout(saveTimer.current)
-  }, [names, bios, globalIds, traps, submitted])
+  }, [names, bios, globalIds, traps, stashSourceIds, submitted])
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
@@ -129,6 +129,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     const g = [...globalIds]; g[i] = null; setGlobalIds(g)
     const t = [...traps]; t[i] = null; setTraps(t)
     const s = [...stashSourceIds]; s[i] = null; setStashSourceIds(s)
+    if (trapPickerFor === i) setTrapPickerFor(null)
   }
 
   async function stashSlot(i) {
