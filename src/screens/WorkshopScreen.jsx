@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagInput from '../components/TagInput.jsx'
 import TagChips from '../components/TagChips.jsx'
@@ -10,6 +10,9 @@ import {
   updateWorkshopCombatant,
   setWorkshopCombatantStatus,
   deleteWorkshopCombatant,
+  getGroupsForPicker,
+  getCombatantGroupIds,
+  setCombatantGroups,
 } from '../supabase.js'
 
 // ─── Guest gate ───────────────────────────────────────────────────────────────
@@ -33,28 +36,87 @@ function GuestGate({ onLogin }) {
   )
 }
 
+// ─── Group picker ─────────────────────────────────────────────────────────────
+
+function GroupPicker({ selectedIds, onChange, ownerId }) {
+  const [available, setAvailable] = useState(null)  // null = loading
+
+  useEffect(() => {
+    getGroupsForPicker(ownerId).then(setAvailable)
+  }, [ownerId])
+
+  if (available === null) return <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>Loading groups…</p>
+
+  if (available.length === 0) return (
+    <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+      No groups yet. Create groups in the Workshop to assign combatants to them.
+    </p>
+  )
+
+  function toggle(id) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+      {available.map(g => {
+        const active = selectedIds.includes(g.id)
+        return (
+          <button
+            key={g.id}
+            onClick={() => toggle(g.id)}
+            style={{
+              ...btn('ghost'),
+              padding: '4px 12px',
+              fontSize: 12,
+              background:  active ? 'var(--color-background-info)' : 'transparent',
+              color:       active ? 'var(--color-text-info)'       : 'var(--color-text-secondary)',
+              borderColor: active ? 'var(--color-border-info)'     : 'var(--color-border-tertiary)',
+            }}
+          >
+            {g.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Create / Edit form ───────────────────────────────────────────────────────
 
 function CombatantForm({ existing, onSave, onCancel, currentUser }) {
-  const isEdit     = !!existing
+  const isEdit      = !!existing
   const isPublished = existing?.status === 'published'
 
-  const [name,    setName]    = useState(existing?.name    || '')
-  const [bio,     setBio]     = useState(existing?.bio     || '')
-  const [tags,    setTags]    = useState(existing?.tags    || [])
-  const [status,  setStatus]  = useState(existing?.status  || 'stashed')
-  const [saving,  setSaving]  = useState(false)
-  const [confirm, setConfirm] = useState(false)  // bio-edit confirm for published
-  const [error,   setError]   = useState('')
+  const [name,       setName]       = useState(existing?.name   || '')
+  const [bio,        setBio]        = useState(existing?.bio    || '')
+  const [tags,       setTags]       = useState(existing?.tags   || [])
+  const [groupIds,     setGroupIds]     = useState([])
+  const initialGroupIds               = useRef(null)  // set once when memberships load
+  const [status,       setStatus]     = useState(existing?.status || 'stashed')
+  const [saving,       setSaving]     = useState(false)
+  const [confirm,      setConfirm]    = useState(false)  // bio-edit confirm for published
+  const [error,        setError]      = useState('')
 
-  const bioChanged  = isEdit && bio.trim() !== (existing.bio || '').trim()
-  const nameChanged = isEdit && name.trim() !== existing.name.trim()
-  const tagsChanged = isEdit && JSON.stringify(tags) !== JSON.stringify(existing.tags || [])
-  const hasChanges  = !isEdit || nameChanged || bioChanged || tagsChanged
+  // Load existing group memberships when editing
+  useEffect(() => {
+    if (existing?.id) {
+      getCombatantGroupIds(existing.id).then(ids => {
+        setGroupIds(ids)
+        initialGroupIds.current = ids
+      })
+    }
+  }, [existing?.id])
+
+  const bioChanged    = isEdit && bio.trim() !== (existing.bio || '').trim()
+  const nameChanged   = isEdit && name.trim() !== existing.name.trim()
+  const tagsChanged   = isEdit && JSON.stringify(tags) !== JSON.stringify(existing.tags || [])
+  const groupsChanged = isEdit && initialGroupIds.current !== null &&
+    JSON.stringify([...groupIds].sort()) !== JSON.stringify([...initialGroupIds.current].sort())
+  const hasChanges    = !isEdit || nameChanged || bioChanged || tagsChanged || groupsChanged
 
   function validate() {
-    if (!name.trim())       { setError('Name is required.'); return false }
-    if (!bio.trim())        { setError('Bio is required — even a single line.'); return false }
+    if (!name.trim()) { setError('Name is required.'); return false }
     return true
   }
 
@@ -72,23 +134,28 @@ function CombatantForm({ existing, onSave, onCancel, currentUser }) {
         updatedAt: new Date().toISOString(),
         updatedBy: currentUser.username,
       }
-      const ok = await updateWorkshopCombatant(
-        existing.id,
-        { name: name.trim(), bio: bio.trim(), tags },
-        bioHistoryEntry,
-        existing.bio_history || [],
-      )
+      const [ok] = await Promise.all([
+        updateWorkshopCombatant(
+          existing.id,
+          { name: name.trim(), bio: bio.trim(), tags },
+          bioHistoryEntry,
+          existing.bio_history || [],
+        ),
+        setCombatantGroups(existing.id, groupIds, currentUser.id),
+      ])
       if (!ok) { setError('Save failed. Try again.'); setSaving(false); return }
-      onSave({ ...existing, name: name.trim(), bio: bio.trim(), tags, bio_history: [...(existing.bio_history || []), bioHistoryEntry].slice(-20) })
+      onSave({ ...existing, name: name.trim(), bio: bio.trim(), tags, groupIds, bio_history: [...(existing.bio_history || []), bioHistoryEntry].slice(-20) })
     } else {
-      const id = uid()
-      const ok = await createWorkshopCombatant({
+      const id  = uid()
+      const ok  = await createWorkshopCombatant({
         id, name: name.trim(), bio: bio.trim(), tags,
         ownerId: currentUser.id, ownerName: currentUser.username,
         status,
       })
       if (!ok) { setError('Save failed. Try again.'); setSaving(false); return }
-      onSave({ id, name: name.trim(), bio: bio.trim(), tags, status, source: 'created', wins: 0, losses: 0, draws: 0, bio_history: [], owner_id: currentUser.id, owner_name: currentUser.username, lineage: null })
+      // Set group memberships after the combatant row exists
+      if (groupIds.length) await setCombatantGroups(id, groupIds, currentUser.id)
+      onSave({ id, name: name.trim(), bio: bio.trim(), tags, groupIds, status, source: 'created', wins: 0, losses: 0, draws: 0, bio_history: [], owner_id: currentUser.id, owner_name: currentUser.username, lineage: null })
     }
     setSaving(false)
   }
@@ -109,7 +176,7 @@ function CombatantForm({ existing, onSave, onCancel, currentUser }) {
         autoFocus={!isEdit}
       />
 
-      <label style={lbl}>Bio *</label>
+      <label style={lbl}>Bio</label>
       <textarea
         style={{ ...inp(), minHeight: 80, resize: 'vertical', fontFamily: 'var(--font-sans)' }}
         placeholder="Give them a line. Even one sentence."
@@ -117,11 +184,19 @@ function CombatantForm({ existing, onSave, onCancel, currentUser }) {
         onChange={e => { setBio(e.target.value); setError(''); setConfirm(false) }}
         maxLength={500}
       />
+      {!bio.trim() && (
+        <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '-8px 0 12px' }}>
+          No bio yet — you can add one before they fight.
+        </p>
+      )}
 
       <label style={lbl}>Tags</label>
       <div style={{ marginBottom: 12 }}>
         <TagInput value={tags} onChange={setTags} />
       </div>
+
+      <label style={lbl}>Groups</label>
+      <GroupPicker selectedIds={groupIds} onChange={setGroupIds} ownerId={currentUser.id} />
 
       {!isEdit && (
         <div style={{ marginBottom: 16 }}>
@@ -131,7 +206,7 @@ function CombatantForm({ existing, onSave, onCancel, currentUser }) {
               onClick={() => setStatus('stashed')}
               style={{ ...tab(status === 'stashed'), fontSize: 13, padding: '6px 14px' }}
             >
-              🔒 Stash (private)
+              Stash (private)
             </button>
             <button
               onClick={() => setStatus('published')}

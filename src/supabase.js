@@ -673,6 +673,54 @@ export async function getPlayerRooms(playerId) {
 // query layer: stashed rows are only fetched when querying with the owner's userId.
 // (See auth note in backlog.md — RLS policies can't use auth.uid() with PIN auth.)
 
+// ─── Group helpers (used by Create-a-Combatant group picker) ─────────────────
+
+// Fetch all groups available to a user for the group picker:
+// their own groups (any status) plus any published groups not already included.
+// Returns array of { id, name, owner_id }.
+export async function getGroupsForPicker(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('groups')
+      .select('id, name, owner_id, status')
+      .or(`owner_id.eq.${ownerId},status.eq.published`)
+      .order('name', { ascending: true })
+    if (error) { console.error('getGroupsForPicker error', error); return [] }
+    // Dedupe by id (owner's stashed groups may also be published)
+    const seen = new Set()
+    return (data || []).filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true })
+  } catch (e) { console.error('getGroupsForPicker exception', e); return [] }
+}
+
+// Fetch group_ids for a combatant — used when opening the edit form.
+export async function getCombatantGroupIds(combatantId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatant_groups')
+      .select('group_id')
+      .eq('combatant_id', combatantId)
+    if (error) { console.error('getCombatantGroupIds error', error); return [] }
+    return (data || []).map(r => r.group_id)
+  } catch (e) { console.error('getCombatantGroupIds exception', e); return [] }
+}
+
+// Replace all group memberships for a combatant.
+// Deletes existing rows, then inserts the new set. addedBy is the userId.
+export async function setCombatantGroups(combatantId, groupIds, addedBy) {
+  try {
+    const { error: delErr } = await supabase
+      .from('combatant_groups')
+      .delete()
+      .eq('combatant_id', combatantId)
+    if (delErr) { console.error('setCombatantGroups delete error', delErr); return false }
+    if (!groupIds.length) return true
+    const rows = groupIds.map(group_id => ({ combatant_id: combatantId, group_id, added_by: addedBy }))
+    const { error: insErr } = await supabase.from('combatant_groups').insert(rows)
+    if (insErr) console.error('setCombatantGroups insert error', insErr)
+    return !insErr
+  } catch (e) { console.error('setCombatantGroups exception', e); return false }
+}
+
 // Create a new combatant from The Workshop.
 // Status defaults to 'stashed' unless the caller explicitly passes 'published'.
 export async function createWorkshopCombatant({ id, name, bio, tags = [], ownerId, ownerName, status = 'stashed' }) {
@@ -729,8 +777,12 @@ export async function setWorkshopCombatantStatus(id, status) {
 
 // Delete a Workshop combatant. Only valid for stashed items — callers must
 // verify status === 'stashed' before calling. Published combatants are permanent.
+// Removes combatant_groups rows first (no cascade FK, so done at app level).
 export async function deleteWorkshopCombatant(id) {
   try {
+    // Clean up group memberships before deleting the combatant
+    const { error: grpErr } = await supabase.from('combatant_groups').delete().eq('combatant_id', id)
+    if (grpErr) console.error('deleteWorkshopCombatant group cleanup error', grpErr)
     const { error } = await supabase.from('combatants').delete().eq('id', id)
     if (error) console.error('deleteWorkshopCombatant error', error)
     return !error
