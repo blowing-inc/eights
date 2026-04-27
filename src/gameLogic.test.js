@@ -28,6 +28,7 @@ import {
   replacePlayerIdInRoom,
   buildEvolutionRound,
   getEphemeralBadges,
+  computeSuperlatives,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2021,5 +2022,86 @@ describe('getEphemeralBadges', () => {
   it('can return both on_fire and trapper', () => {
     const c = { battles: makeBattles(['win', 'win', 'win']), trapTriggered: true }
     expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }, { type: 'trapper' }])
+  })
+})
+
+describe('computeSuperlatives', () => {
+  function makeCombatantStats(overrides = {}) {
+    return { wins: 0, losses: 0, draws: 0, mvp_record: [], ...overrides }
+  }
+
+  it('returns empty array when combatant has never fought', () => {
+    expect(computeSuperlatives(makeCombatantStats(), null)).toEqual([])
+  })
+
+  it('returns empty array when combatant has only draws and no wins', () => {
+    expect(computeSuperlatives(makeCombatantStats({ draws: 2 }), null)).toEqual([])
+  })
+
+  it('returns Undefeated when wins > 0 and losses === 0', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3 }), null)
+    expect(sup).toContain('Undefeated')
+  })
+
+  it('does not return Undefeated when there is at least one loss', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 1 }), null)
+    expect(sup).not.toContain('Undefeated')
+  })
+
+  it('Undefeated is still returned when there are draws alongside wins', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 2, draws: 1 }), null)
+    expect(sup).toContain('Undefeated')
+  })
+
+  it('returns win rate when >= 5 rounds and >= 70% wins', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 7, losses: 3 }), null)
+    expect(sup).toContain('70% win rate')
+  })
+
+  it('does not return win rate when fewer than 5 rounds', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 4, losses: 0 }), null)
+    expect(sup.some(s => s.includes('win rate'))).toBe(false)
+  })
+
+  it('does not return win rate when below 70% threshold', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 6, losses: 4 }), null)
+    expect(sup.some(s => s.includes('win rate'))).toBe(false)
+  })
+
+  it('returns MVP once when mvp_record has one entry', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 1, mvp_record: [{ gameCode: 'ABC' }] }), null)
+    expect(sup).toContain('MVP once')
+  })
+
+  it('returns MVP N times when mvp_record has multiple entries', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 2, mvp_record: [{}, {}] }), null)
+    expect(sup).toContain('MVP 2 times')
+  })
+
+  it('returns Beat N opponents from h2h data', () => {
+    const h2h = [
+      { opponentName: 'Alpha', wins: 2, losses: 0 },
+      { opponentName: 'Beta',  wins: 1, losses: 1 },
+      { opponentName: 'Gamma', wins: 0, losses: 2 },
+    ]
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 3 }), h2h)
+    expect(sup).toContain('Beat 2 opponents')
+  })
+
+  it('uses singular "opponent" when exactly one opponent was beaten', () => {
+    const h2h = [{ opponentName: 'Alpha', wins: 1, losses: 0 }]
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 1 }), h2h)
+    expect(sup).toContain('Beat 1 opponent')
+  })
+
+  it('does not include Beat opponents line when h2h is null', () => {
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 3, losses: 3 }), null)
+    expect(sup.some(s => s.startsWith('Beat'))).toBe(false)
+  })
+
+  it('does not include Beat opponents when no opponents were beaten', () => {
+    const h2h = [{ opponentName: 'Alpha', wins: 0, losses: 3 }]
+    const sup = computeSuperlatives(makeCombatantStats({ wins: 0, losses: 3 }), h2h)
+    expect(sup.some(s => s.startsWith('Beat'))).toBe(false)
   })
 })

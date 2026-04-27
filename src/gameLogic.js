@@ -1048,3 +1048,52 @@ export function groupRoomsForHistory(rooms) {
 
   return items.sort((a, b) => b.latestAt - a.latestAt)
 }
+
+// ─── Achievement superlatives ─────────────────────────────────────────────────
+
+/**
+ * Returns an array of narrative superlative strings for the combatant detail page.
+ *
+ * Superlatives are shown on the detail page only — not on small cards.
+ * The list is intentionally conservative: only emit a string when the stat
+ * is unambiguously worth surfacing (thresholds below).
+ *
+ * @param {object} c        - combatant record (wins, losses, draws, mvp_record)
+ * @param {Array|null} h2h  - head-to-head rows from getCombatantRoundHistory, or null if not yet loaded
+ * @returns {string[]}
+ */
+export function computeSuperlatives(c, h2h) {
+  const superlatives = []
+  const wins   = c.wins   || 0
+  const losses = c.losses || 0
+  const draws  = c.draws  || 0
+  const total  = wins + losses + draws
+
+  if (total === 0) return superlatives
+
+  // Unique opponents beaten — requires h2h data
+  if (h2h && h2h.length > 0) {
+    const beaten = h2h.filter(r => r.wins > 0).length
+    if (beaten > 0) {
+      superlatives.push(`Beat ${beaten} ${beaten === 1 ? 'opponent' : 'opponents'}`)
+    }
+  }
+
+  // Undefeated — at least one win, zero losses (draws don't break it)
+  if (wins > 0 && losses === 0) {
+    superlatives.push('Undefeated')
+  }
+
+  // Win rate — only surface when meaningful (≥5 rounds, ≥70% wins)
+  if (total >= 5 && wins / total >= 0.7) {
+    superlatives.push(`${Math.round((wins / total) * 100)}% win rate`)
+  }
+
+  // MVP wins — voting ships 1.3.x; field is captured in schema now
+  const mvpCount = (c.mvp_record || []).length
+  if (mvpCount > 0) {
+    superlatives.push(`MVP ${mvpCount === 1 ? 'once' : `${mvpCount} times`}`)
+  }
+
+  return superlatives
+}
