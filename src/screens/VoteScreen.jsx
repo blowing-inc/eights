@@ -11,6 +11,12 @@ import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish } from '../gameLogic.js'
 
+export function resolveAllAdvanceSelection(selectedIds, allowMerges) {
+  return allowMerges
+    ? { type: 'prompt_merge', drawFlow: { step: 3, selectedIds } }
+    : { type: 'confirm_draw', combatantIds: selectedIds, drawOutcome: 'all_advance' }
+}
+
 // Form for naming a merged combatant. Used both by the host (inline) and
 // by the primary owner when the host delegates. Parent bios are shown as
 // collapsible reference cards, collapsed by default.
@@ -936,10 +942,14 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
               Neither advances
             </button>
             <button
-              onClick={() => allowMerges
-                ? setDrawFlow({ step: 3, selectedIds: drawFlow.selectedIds })
-                : confirmDraw(drawFlow.selectedIds, 'all_advance')
-              }
+              onClick={() => {
+                const resolution = resolveAllAdvanceSelection(drawFlow.selectedIds, allowMerges)
+                if (resolution.type === 'prompt_merge') {
+                  setDrawFlow(resolution.drawFlow)
+                } else {
+                  confirmDraw(resolution.combatantIds, resolution.drawOutcome)
+                }
+              }}
               style={{ ...btn(), flex: 1, fontSize: 13, padding: '10px 8px' }}
             >
               All advance
