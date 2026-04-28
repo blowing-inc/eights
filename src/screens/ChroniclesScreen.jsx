@@ -9,7 +9,7 @@ import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js
 // NOTE: The round display logic in ChroniclesRoomDetail is partially duplicated with RoundCard
 // in GameSummaryScreen.jsx. If you're updating either, consider extracting a shared component.
 function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNextGame }) {
-  const completedRounds = (room.rounds || []).filter(r => r.winner || r.merge)
+  const completedRounds = (room.rounds || []).filter(r => r.winner || r.merge || r.drawOutcome === 'all_advance')
   const allRounds = room.rounds || []
   const players = (room.players || []).filter(p => !p.isBot)
   const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
@@ -67,16 +67,23 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
 
       {completedRounds.length > 0 && (
         <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)', marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Winners</h3>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Results</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {completedRounds.map(r => (
+            {completedRounds.map(r => {
+              const drawIds      = r.draw === true ? null : r.draw?.combatantIds ?? null
+              const advancers    = r.drawOutcome === 'all_advance'
+                ? (r.combatants || []).filter(c => !drawIds || drawIds.includes(c.id))
+                : []
+              return (
               <button key={r.id} onClick={() => setRoundIdx(allRounds.indexOf(r))}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0', textAlign: 'left' }}>
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 56 }}>Round {r.number}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                   {r.winner
                     ? <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
-                    : <span style={{ fontSize: 14, color: 'var(--color-text-info)', fontWeight: 500 }}>⚡ {r.merge?.toName}</span>}
+                    : r.merge
+                      ? <span style={{ fontSize: 14, color: 'var(--color-text-info)', fontWeight: 500 }}>⚡ {r.merge.toName}</span>
+                      : <span style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 500 }}>🤝 {advancers.map(c => c.name).join(' + ')}</span>}
                   {r.winner && r.evolution && (
                     <span style={{ fontSize: 11, color: 'var(--color-text-info)', whiteSpace: 'nowrap' }}>
                       → {r.evolution.toName}
@@ -86,10 +93,13 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
                   {r.winner
                     ? `by ${(room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'}`
-                    : r.merge?.primaryOwnerName ? `by ${r.merge.primaryOwnerName}` : ''}
+                    : r.merge?.primaryOwnerName
+                      ? `by ${r.merge.primaryOwnerName}`
+                      : 'via Draw'}
                 </span>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
