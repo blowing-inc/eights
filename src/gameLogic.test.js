@@ -25,6 +25,7 @@ import {
   prepareNextGame,
   computeSeriesStandings,
   applyDraw,
+  applyMerge,
   replacePlayerIdInRoom,
   buildEvolutionRound,
   getEphemeralBadges,
@@ -2054,6 +2055,134 @@ describe('undoRound (all_advance draw)', () => {
       combatants: {
         p1: [{ id: 'c1', wins: 0, draws: 0, losses: 0, battles: [] }],
         p2: [{ id: 'c2', wins: 0, draws: 0, losses: 0, battles: [] }],
+      },
+    }
+    const result = undoRound(noWins, round)
+    expect(result.p1[0].wins).toBe(0)
+  })
+})
+
+// ─── applyMerge ───────────────────────────────────────────────────────────────
+
+describe('applyMerge', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', name: 'A', wins: 1, losses: 0, draws: 0, battles: [] }],
+      p2: [{ id: 'c2', name: 'B', wins: 0, losses: 1, draws: 0, battles: [] }],
+      p3: [{ id: 'c3', name: 'C', wins: 0, losses: 0, draws: 0, battles: [] }],
+    },
+  }
+  const round = {
+    id: 'r1',
+    combatants: [
+      { id: 'c1', name: 'A', ownerId: 'p1' },
+      { id: 'c2', name: 'B', ownerId: 'p2' },
+      { id: 'c3', name: 'C', ownerId: 'p3' },
+    ],
+    merge: {
+      fromIds:   ['c1', 'c2', 'c3'],
+      fromNames: ['A', 'B', 'C'],
+      toId:      'merged-1',
+      toName:    'ABC',
+    },
+  }
+
+  it('increments wins for all parent combatants', () => {
+    const result = applyMerge(room, round)
+    expect(result.p1[0].wins).toBe(2)
+    expect(result.p2[0].wins).toBe(1)
+    expect(result.p3[0].wins).toBe(1)
+  })
+
+  it('does not touch losses or draws', () => {
+    const result = applyMerge(room, round)
+    expect(result.p1[0].losses).toBe(0)
+    expect(result.p2[0].losses).toBe(1)
+    expect(result.p1[0].draws).toBe(0)
+  })
+
+  it('appends win battle records with correct opponent list', () => {
+    const result = applyMerge(room, round)
+    expect(result.p1[0].battles).toHaveLength(1)
+    expect(result.p1[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'win' })
+    expect(result.p1[0].battles[0].opponent).toContain('B')
+    expect(result.p1[0].battles[0].opponent).toContain('C')
+    expect(result.p1[0].battles[0].opponent).not.toContain('A')
+  })
+
+  it('does not affect combatants not in fromIds', () => {
+    const roomWithExtra = {
+      combatants: {
+        ...room.combatants,
+        p4: [{ id: 'c4', name: 'D', wins: 5, losses: 0, draws: 0, battles: [] }],
+      },
+    }
+    const partialRound = {
+      ...round,
+      combatants: [...round.combatants, { id: 'c4', name: 'D', ownerId: 'p4' }],
+      merge: { ...round.merge, fromIds: ['c1', 'c2'], fromNames: ['A', 'B'] },
+    }
+    const result = applyMerge(roomWithExtra, partialRound)
+    expect(result.p4[0].wins).toBe(5)
+    expect(result.p4[0].battles).toHaveLength(0)
+  })
+
+  it('does not mutate input', () => {
+    const original = JSON.parse(JSON.stringify(room))
+    applyMerge(room, round)
+    expect(room).toEqual(original)
+  })
+
+  it('returns unchanged combatants when round has no merge', () => {
+    const result = applyMerge(room, { ...round, merge: undefined })
+    expect(result).toEqual(room.combatants)
+  })
+})
+
+describe('undoRound (merge)', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', wins: 2, losses: 0, draws: 0, battles: [{ roundId: 'r1', result: 'win' }] }],
+      p2: [{ id: 'c2', wins: 1, losses: 1, draws: 0, battles: [{ roundId: 'r1', result: 'win' }] }],
+      p3: [{ id: 'c3', wins: 1, losses: 0, draws: 0, battles: [{ roundId: 'r1', result: 'win' }] }],
+    },
+  }
+  const round = {
+    id: 'r1',
+    combatants: [
+      { id: 'c1', ownerId: 'p1' },
+      { id: 'c2', ownerId: 'p2' },
+      { id: 'c3', ownerId: 'p3' },
+    ],
+    merge: { fromIds: ['c1', 'c2', 'c3'], toId: 'merged-1', toName: 'ABC' },
+  }
+
+  it('decrements wins for all merge parents', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].wins).toBe(1)
+    expect(result.p2[0].wins).toBe(0)
+    expect(result.p3[0].wins).toBe(0)
+  })
+
+  it('does not touch losses or draws', () => {
+    const result = undoRound(room, round)
+    expect(result.p2[0].losses).toBe(1)
+    expect(result.p1[0].draws).toBe(0)
+  })
+
+  it('removes battle records for that round', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].battles).toHaveLength(0)
+    expect(result.p2[0].battles).toHaveLength(0)
+    expect(result.p3[0].battles).toHaveLength(0)
+  })
+
+  it('clamps wins to 0, never negative', () => {
+    const noWins = {
+      combatants: {
+        p1: [{ id: 'c1', wins: 0, losses: 0, draws: 0, battles: [] }],
+        p2: [{ id: 'c2', wins: 0, losses: 0, draws: 0, battles: [] }],
+        p3: [{ id: 'c3', wins: 0, losses: 0, draws: 0, battles: [] }],
       },
     }
     const result = undoRound(noWins, round)
