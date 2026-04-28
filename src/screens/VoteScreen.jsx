@@ -9,7 +9,105 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish } from '../gameLogic.js'
+
+// Form for naming a merged combatant. Used both by the host (inline) and
+// by the primary owner when the host delegates. Parent bios are shown as
+// collapsible reference cards, collapsed by default.
+function MergeForm({ parents, primaryOwnerName, hostIsOwner, error, submitting, onSubmit, onDelegate, onBack, onCancel, cancelLabel = 'Cancel' }) {
+  const [name,      setName]      = useState('')
+  const [bio,       setBio]       = useState('')
+  const [mergeNote, setMergeNote] = useState('')
+  const [expanded,  setExpanded]  = useState({})
+
+  return (
+    <div style={{ padding: '12px 16px 14px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 10px' }}>
+        Name the merged combatant
+      </p>
+
+      {/* Parent bio reference cards — collapsed by default */}
+      {parents.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          {parents.map(c => (
+            <div key={c.id} style={{ marginBottom: 6, border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden' }}>
+              <button
+                onClick={() => setExpanded(prev => ({ ...prev, [c.id]: !prev[c.id] }))}
+                style={{ width: '100%', background: 'var(--color-background-tertiary)', border: 'none', padding: '8px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--color-text-secondary)' }}
+              >
+                <span>{c.name}</span>
+                <span>{expanded[c.id] ? '▲' : '▼'}</span>
+              </button>
+              {expanded[c.id] && (
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--color-text-secondary)', background: 'var(--color-background-secondary)' }}>
+                  {c.bio || <em style={{ color: 'var(--color-text-tertiary)' }}>No bio</em>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Name (required)</div>
+      <input
+        style={{ ...inp(), margin: '0 0 4px', fontSize: 14, borderColor: error ? 'var(--color-border-danger)' : undefined }}
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="What are they called now?"
+        autoFocus
+      />
+      {error && (
+        <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 8px', lineHeight: 1.4 }}>{error}</p>
+      )}
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Bio</div>
+      <textarea
+        style={{ ...inp(), margin: '0 0 8px', resize: 'none', height: 64, fontSize: 13, width: '100%' }}
+        value={bio}
+        onChange={e => setBio(e.target.value)}
+        placeholder="What did the combination produce?"
+      />
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Table note <span style={{ fontStyle: 'italic' }}>(optional)</span></div>
+      <textarea
+        style={{ ...inp(), margin: '0 0 10px', resize: 'none', height: 48, fontSize: 13, width: '100%' }}
+        value={mergeNote}
+        onChange={e => setMergeNote(e.target.value)}
+        placeholder="What was the table's reaction?"
+      />
+
+      {!hostIsOwner && onDelegate && (
+        <button
+          onClick={onDelegate}
+          style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: 8 }}
+        >
+          Let {primaryOwnerName || 'the owner'} write it
+        </button>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: onBack ? 6 : 0 }}>
+        <button
+          onClick={() => onSubmit(name.trim(), bio.trim(), mergeNote.trim() || null)}
+          disabled={!name.trim() || submitting}
+          style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '9px' }}
+        >
+          {submitting ? 'Checking…' : 'Confirm merge ⚡'}
+        </button>
+        <button onClick={onCancel} style={{ ...btn('ghost'), fontSize: 13, padding: '9px 14px' }}>
+          {cancelLabel}
+        </button>
+      </div>
+      {onBack && (
+        <button
+          onClick={onBack}
+          style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 6 }}
+        >
+          ← Back
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
@@ -32,11 +130,16 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [presentIds,       setPresentIds]       = useState([])
   const [voteNudgeDone,    setVoteNudgeDone]    = useState(false)  // one-time guest nudge after first pick
 
-  // Draw flow state machine.
-  // null                                — no draw flow in progress
-  // { step: 1, selectedIds: string[] } — step 1: who is drawing?
-  // { step: 2, selectedIds: string[] } — step 2: what happens?
-  const [drawFlow, setDrawFlow] = useState(null)
+  // Draw / merge flow state machine.
+  // null                                                           — no flow in progress
+  // { step: 1, selectedIds }                                       — who is drawing?
+  // { step: 2, selectedIds }                                       — what happens?
+  // { step: 3, selectedIds }                                       — merge or not? (all_advance only)
+  // { step: 4, selectedIds, primaryOwnerId }                       — who controls the merge?
+  // { step: 5, selectedIds, primaryOwnerId }                       — merge form (host writing)
+  const [drawFlow,       setDrawFlow]       = useState(null)
+  const [mergeError,     setMergeError]     = useState(null)
+  const [mergeSubmitting, setMergeSubmitting] = useState(false)
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
@@ -175,6 +278,142 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     } else {
       setDrawFlow({ step: 1, selectedIds: round.combatants.map(c => c.id) })
     }
+  }
+
+  // ── Merge flow ────────────────────────────────────────────────────────────
+
+  // Returns the primaryOwnerId default for a given set of drawing combatant ids:
+  // owner of the combatant with the most wins, first in draw order if tied.
+  function defaultPrimaryOwner(selectedIds) {
+    const drawers = round.combatants.filter(c => selectedIds.includes(c.id))
+    const inRoom  = (ownerId) => {
+      const list = room.combatants[ownerId] || []
+      return list.find(c => selectedIds.includes(c.id))
+    }
+    const sorted = [...drawers].sort((a, b) => {
+      const wA = (inRoom(a.ownerId)?.wins || 0)
+      const wB = (inRoom(b.ownerId)?.wins || 0)
+      return wB - wA
+    })
+    return sorted[0]?.ownerId || drawers[0]?.ownerId
+  }
+
+  // Pushes merge naming to the primary owner by writing mergePending to the round.
+  async function pushMergeToOwner(fromIds, primaryOwnerId) {
+    setDrawFlow(null)
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rdIdx = r.currentRound - 1
+    const rounds = [...r.rounds]
+    rounds[rdIdx] = { ...r.rounds[rdIdx], mergePending: { fromIds, primaryOwnerId, requestedFrom: primaryOwnerId } }
+    const updated = { ...r, rounds }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+  }
+
+  // Clears mergePending and falls back to a plain all_advance draw (no merged combatant).
+  async function skipMerge(fromIds) {
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rdIdx = r.currentRound - 1
+    const rd = { ...r.rounds[rdIdx] }
+    delete rd.mergePending
+    const rounds = [...r.rounds]; rounds[rdIdx] = rd
+    const updated = { ...r, rounds }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    await confirmDraw(fromIds, 'all_advance')
+  }
+
+  // Creates the global merged combatant and resolves the round with round.merge.
+  async function handleMerge(fromIds, primaryOwnerId, newName, newBio, mergeNote, authorId) {
+    setMergeSubmitting(true)
+    setMergeError(null)
+    const nameTaken = await checkCombatantNameExists(newName)
+    if (nameTaken) {
+      setMergeError(`"${newName}" already exists — the merged combatant must have a new name.`)
+      setMergeSubmitting(false)
+      return
+    }
+    setMergeSubmitting(false)
+
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const rdIdx = r.currentRound - 1
+    const rd    = r.rounds[rdIdx]
+
+    const parents = fromIds.map(id => rd.combatants.find(c => c.id === id)).filter(Boolean)
+    const primaryParent = parents.find(c => c.ownerId === primaryOwnerId) || parents[0]
+    const coParents     = parents.filter(c => c.id !== primaryParent.id)
+
+    // Fetch all parent global records to compute accurate lineage (generation, rootId).
+    const globalParents = await Promise.all(parents.map(c => getCombatant(c.id)))
+    const globalPrimary = globalParents.find(g => g?.id === primaryParent.id)
+    const maxGen        = Math.max(...globalParents.map(g => g?.lineage?.generation || 0))
+    const lineage = {
+      rootId:      globalPrimary?.lineage?.rootId || primaryParent.id,
+      parentId:    primaryParent.id,
+      coParentIds: coParents.map(c => c.id),
+      generation:  maxGen + 1,
+      bornFrom: {
+        type:         'merge',
+        parentNames:  parents.map(c => c.name),
+        parentIds:    fromIds,
+        roundNumber:  rd.number,
+        gameCode:     r.code,
+        parentName:   primaryParent.name,
+        opponentName: null,
+      },
+    }
+
+    const newId = uid()
+    await createVariantCombatant({
+      id: newId, name: newName, bio: newBio || '',
+      ownerId: primaryParent.ownerId, ownerName: primaryParent.ownerName, lineage,
+    })
+
+    const merge = {
+      fromIds,
+      fromNames:        parents.map(c => c.name),
+      toId:             newId,
+      toName:           newName,
+      toBio:            newBio || '',
+      primaryOwnerId:   primaryParent.ownerId,
+      primaryOwnerName: primaryParent.ownerName,
+      coOwnerIds:       coParents.map(c => c.ownerId),
+      coOwnerNames:     coParents.map(c => c.ownerName),
+      authorId,
+      mergeNote:        mergeNote || null,
+    }
+
+    const updatedRound = {
+      ...rd,
+      draw:        { combatantIds: fromIds },
+      drawOutcome: 'all_advance',
+      merge,
+      winner:      null,
+      resolvedAt:  Date.now(),
+    }
+    delete updatedRound.evolutionPending
+    delete updatedRound.mergePending
+
+    const rounds     = [...r.rounds]; rounds[rdIdx] = updatedRound
+    const combatants = applyMerge(r, updatedRound)
+    const updated    = { ...r, rounds, combatants, phase: 'battle' }
+    await sset('room:' + r.id, updated)
+    setDrawFlow(null)
+    setRoom(updated); onResult()
+
+    ;(async () => {
+      for (const c of parents) {
+        const { heart, angry, cry } = tallyReactions(updatedRound.playerReactions, c.id)
+        await incrementCombatantStats(c.id, { wins: 1, heart, angry, cry })
+      }
+      if (isFinalRound(r)) {
+        const { rosterSize } = normalizeRoomSettings(r.settings)
+        await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
+      }
+    })()
   }
 
   // Host skips evolution — clears pending state and confirms win normally.
@@ -341,6 +580,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const allVoted       = realPlayers.every(p => picks[p.id])
   const showPickers    = !blindVoting || allVoted
   const evolutionPending = round.evolutionPending || null
+  const mergePending     = round.mergePending     || null
 
   // The combatant whose evolution the current player has been asked to write
   const ownerPromptWinner = evolutionPending?.requestedFrom === playerId
@@ -350,6 +590,13 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   // Name of the owner the host is waiting on (for the host waiting state)
   const waitingOwnerName = isHost && evolutionPending && evolutionPending.requestedFrom !== playerId
     ? room.players.find(p => p.id === evolutionPending.requestedFrom)?.name || 'the owner'
+    : null
+
+  // Merge delegation: owner prompted to name the merged combatant
+  const mergeOwnerPrompt = mergePending?.requestedFrom === playerId ? mergePending : null
+  // Host waiting state for merge delegation
+  const waitingMergeOwnerName = isHost && mergePending && mergePending.requestedFrom !== playerId
+    ? room.players.find(p => p.id === mergePending.requestedFrom)?.name || 'the owner'
     : null
 
   const trapAnnouncement = (() => {
@@ -686,7 +933,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
               Neither advances
             </button>
             <button
-              onClick={() => confirmDraw(drawFlow.selectedIds, 'all_advance')}
+              onClick={() => setDrawFlow({ step: 3, selectedIds: drawFlow.selectedIds })}
               style={{ ...btn(), flex: 1, fontSize: 13, padding: '10px 8px' }}
             >
               All advance
@@ -703,6 +950,140 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           </button>
         </div>
       )}
+
+      {/* ── Draw flow: step 3 — merge or not? (all_advance) ──────────────── */}
+      {isHost && !evolveFlow && !evolutionPending && drawFlow?.step === 3 && (
+        <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>Merge into a new combatant?</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+            {drawFlow.selectedIds.map(id => round.combatants.find(c => c.id === id)?.name).filter(Boolean).join(' & ')} all advance.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button
+              onClick={() => setDrawFlow({ step: 4, selectedIds: drawFlow.selectedIds, primaryOwnerId: defaultPrimaryOwner(drawFlow.selectedIds) })}
+              style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '10px 8px' }}
+            >
+              Merge ⚡
+            </button>
+            <button
+              onClick={() => confirmDraw(drawFlow.selectedIds, 'all_advance')}
+              style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '10px 8px' }}
+            >
+              No merge, all just win
+            </button>
+          </div>
+          <button
+            onClick={() => setDrawFlow({ step: 2, selectedIds: drawFlow.selectedIds })}
+            style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 4 }}
+          >
+            ← Back
+          </button>
+          <button onClick={() => setDrawFlow(null)} style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* ── Draw flow: step 4 — who controls the merged combatant? ───────── */}
+      {isHost && !evolveFlow && !evolutionPending && drawFlow?.step === 4 && (() => {
+        const drawers = round.combatants.filter(c => drawFlow.selectedIds.includes(c.id))
+        return (
+          <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>Who controls the merged combatant?</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>Co-owners are credited but don't get a draft slot from this merge.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {drawers.map(c => {
+                const owner    = room.players.find(p => p.id === c.ownerId)
+                const selected = drawFlow.primaryOwnerId === c.ownerId
+                return (
+                  <button
+                    key={c.ownerId}
+                    onClick={() => setDrawFlow({ ...drawFlow, primaryOwnerId: c.ownerId })}
+                    style={{ ...btn(selected ? 'primary' : 'ghost'), textAlign: 'left', fontSize: 14, padding: '10px 14px' }}
+                  >
+                    {selected ? '✓ ' : ''}{owner?.name || c.ownerName} <span style={{ fontSize: 12, color: selected ? undefined : 'var(--color-text-tertiary)' }}>({c.name})</span>
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              onClick={() => setDrawFlow({ step: 5, selectedIds: drawFlow.selectedIds, primaryOwnerId: drawFlow.primaryOwnerId })}
+              style={{ ...btn('primary'), width: '100%', fontSize: 13, padding: '8px', marginBottom: 8 }}
+            >
+              Next →
+            </button>
+            <button
+              onClick={() => setDrawFlow({ step: 3, selectedIds: drawFlow.selectedIds })}
+              style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 4 }}
+            >
+              ← Back
+            </button>
+            <button onClick={() => setDrawFlow(null)} style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+              Cancel
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ── Draw flow: step 5 — merge form (host writes) ─────────────────── */}
+      {isHost && !evolveFlow && !evolutionPending && drawFlow?.step === 5 && (() => {
+        const parents         = round.combatants.filter(c => drawFlow.selectedIds.includes(c.id))
+        const primaryOwner    = room.players.find(p => p.id === drawFlow.primaryOwnerId)
+        const hostIsOwner     = drawFlow.primaryOwnerId === playerId
+        return (
+          <MergeForm
+            parents={parents}
+            primaryOwnerName={primaryOwner?.name || ''}
+            hostIsOwner={hostIsOwner}
+            error={mergeError}
+            submitting={mergeSubmitting}
+            onSubmit={(name, bio, note) => handleMerge(drawFlow.selectedIds, drawFlow.primaryOwnerId, name, bio, note, playerId)}
+            onDelegate={() => pushMergeToOwner(drawFlow.selectedIds, drawFlow.primaryOwnerId)}
+            onBack={() => setDrawFlow({ step: 4, selectedIds: drawFlow.selectedIds, primaryOwnerId: drawFlow.primaryOwnerId })}
+            onCancel={() => { setDrawFlow(null); setMergeError(null) }}
+          />
+        )
+      })()}
+
+      {/* ── Merge delegation: host waiting for owner ──────────────────────── */}
+      {isHost && mergePending && waitingMergeOwnerName && (
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            ⚡ Waiting for <strong>{waitingMergeOwnerName}</strong> to name the merged combatant…
+          </p>
+          <button
+            onClick={() => skipMerge(mergePending.fromIds)}
+            style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-tertiary)', marginBottom: 6 }}
+          >
+            Skip merge — all just win
+          </button>
+        </div>
+      )}
+
+      {/* ── Merge delegation: owner prompted to name the merge ────────────── */}
+      {mergeOwnerPrompt && !isHost && (() => {
+        const parents = round.combatants.filter(c => mergeOwnerPrompt.fromIds.includes(c.id))
+        return (
+          <div style={{ marginBottom: '1.5rem', border: '1.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', background: 'var(--color-background-info)' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-info)' }}>⚡ Your combatants are merging</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>The host wants you to name the merged combatant.</div>
+            </div>
+            <MergeForm
+              parents={parents}
+              primaryOwnerName={room.players.find(p => p.id === playerId)?.name || ''}
+              hostIsOwner={true}
+              error={mergeError}
+              submitting={mergeSubmitting}
+              onSubmit={(name, bio, note) => handleMerge(mergeOwnerPrompt.fromIds, mergeOwnerPrompt.primaryOwnerId, name, bio, note, playerId)}
+              onDelegate={null}
+              onBack={null}
+              onCancel={() => skipMerge(mergeOwnerPrompt.fromIds)}
+              cancelLabel="Decline — all just win"
+            />
+          </div>
+        )
+      })()}
 
       {/* ── Round chat ────────────────────────────────────────────────────── */}
       <div style={{ marginTop: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>

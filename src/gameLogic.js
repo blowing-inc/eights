@@ -402,11 +402,22 @@ export function applyDraw(room, round) {
  */
 export function undoRound(room, round) {
   const combatants = JSON.parse(JSON.stringify(room.combatants))
-  if (!round?.winner && !round?.draw) return combatants
+  if (!round?.winner && !round?.draw && !round?.merge) return combatants
 
   Object.keys(combatants).forEach(pid => {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
+
+      if (round.merge) {
+        // Merge: all parents got wins. Reverse wins for each parent.
+        if (!round.merge.fromIds.includes(c.id)) return c
+        return {
+          ...c,
+          wins:    Math.max(0, (c.wins || 0) - 1),
+          battles: (c.battles || []).filter(b => b.roundId !== round.id),
+        }
+      }
+
       if (round.draw) {
         const isLegacy   = round.draw === true  // object draw is always non-legacy
         const drawIds    = isLegacy ? null : (round.draw?.combatantIds ?? [])
@@ -420,12 +431,48 @@ export function undoRound(room, round) {
           battles: (c.battles || []).filter(b => b.roundId !== round.id),
         }
       }
+
       const wasWin = round.winner.id === c.id
       return {
         ...c,
         wins:    Math.max(0, c.wins   - (wasWin ? 1 : 0)),
         losses:  Math.max(0, c.losses - (wasWin ? 0 : 1)),
         battles: (c.battles || []).filter(b => b.roundId !== round.id),
+      }
+    })
+  })
+  return combatants
+}
+
+// ─── Merge evolution ─────────────────────────────────────────────────────────
+
+/**
+ * Applies wins to all N merge parent combatants and appends their battle records.
+ * Does NOT create the merged combatant — that is handled by the caller via
+ * createVariantCombatant. Does NOT mutate the input — returns a new deep-copied map.
+ */
+export function applyMerge(room, round) {
+  const combatants = JSON.parse(JSON.stringify(room.combatants))
+  const merge = round.merge
+  if (!merge) return combatants
+
+  Object.keys(combatants).forEach(pid => {
+    combatants[pid] = combatants[pid].map(c => {
+      if (!merge.fromIds.includes(c.id)) return c
+      const opponents = round.combatants
+        .filter(rc => rc.id !== c.id && merge.fromIds.includes(rc.id))
+        .map(rc => rc.name)
+      return {
+        ...c,
+        wins: (c.wins || 0) + 1,
+        battles: [
+          ...(c.battles || []),
+          {
+            roundId:  round.id,
+            opponent: opponents.join(', '),
+            result:   'win',
+          },
+        ],
       }
     })
   })
@@ -540,7 +587,8 @@ export function getCombatantsToPublish(combatants, rounds, rosterSize) {
     .filter(list => list.length === rosterSize)
     .flat().map(c => c.id)
   const variantIds = rounds.filter(r => r.evolution).map(r => r.evolution.toId)
-  return [...new Set([...rosterIds, ...variantIds])]
+  const mergeIds   = rounds.filter(r => r.merge).map(r => r.merge.toId)
+  return [...new Set([...rosterIds, ...variantIds, ...mergeIds])]
 }
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
