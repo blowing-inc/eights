@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import VoteScreen, { resolveAllAdvanceSelection } from './VoteScreen.jsx'
+import VoteScreen from './VoteScreen.jsx'
+import { resolveAllAdvanceSelection } from '../gameLogic.js'
 
 vi.mock('../supabase.js', () => ({
   sget: vi.fn(),
@@ -88,12 +89,12 @@ describe('resolveAllAdvanceSelection', () => {
 describe('VoteScreen room setting gates', () => {
   it('shows the Evolve action when allowEvolutions is enabled', () => {
     const html = renderVoteScreen(makeRoom({ allowEvolutions: true }))
-    expect(html).toContain('Evolve')
+    expect(html).toContain('Evolve ⚡')
   })
 
   it('hides the Evolve action when allowEvolutions is disabled', () => {
     const html = renderVoteScreen(makeRoom({ allowEvolutions: false }))
-    expect(html).not.toContain('Evolve')
+    expect(html).not.toContain('Evolve ⚡')
   })
 
   it('shows Declare draw when allowDraws is enabled', () => {
@@ -105,4 +106,7 @@ describe('VoteScreen room setting gates', () => {
     const html = renderVoteScreen(makeRoom({ allowDraws: false }))
     expect(html).not.toContain('Declare draw')
   })
+
+  // allowMerges gates the draw flow's "All advance" branch at runtime (drawFlow.step === 2),
+  // not the initial render. That branching is covered by the resolveAllAdvanceSelection unit tests above.
 })

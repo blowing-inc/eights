@@ -361,6 +361,15 @@ export function applyWinner(room, round, winnerId) {
   return combatants
 }
 
+// Returns the next state when the host taps "All advance" in the draw flow.
+// When merges are enabled the flow proceeds to the merge-name step (step 3).
+// When disabled it short-circuits to a plain all_advance confirmation.
+export function resolveAllAdvanceSelection(selectedIds, allowMerges) {
+  return allowMerges
+    ? { type: 'prompt_merge', drawFlow: { step: 3, selectedIds } }
+    : { type: 'confirm_draw', combatantIds: selectedIds, drawOutcome: 'all_advance' }
+}
+
 /**
  * Applies draw (and optional partial loss) outcomes and appends round records.
  * round.draw === true  → all combatants in round.combatants drew (legacy).

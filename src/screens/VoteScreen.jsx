@@ -9,13 +9,7 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish } from '../gameLogic.js'
-
-export function resolveAllAdvanceSelection(selectedIds, allowMerges) {
-  return allowMerges
-    ? { type: 'prompt_merge', drawFlow: { step: 3, selectedIds } }
-    : { type: 'confirm_draw', combatantIds: selectedIds, drawOutcome: 'all_advance' }
-}
+import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
 
 // Form for naming a merged combatant. Used both by the host (inline) and
 // by the primary owner when the host delegates. Parent bios are shown as
