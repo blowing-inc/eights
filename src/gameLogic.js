@@ -362,12 +362,15 @@ export function applyWinner(room, round, winnerId) {
  * Applies draw (and optional partial loss) outcomes and appends round records.
  * round.draw === true  → all combatants in round.combatants drew (legacy).
  * round.draw.combatantIds → those ids drew; remaining combatants in round took a loss.
+ * round.drawOutcome === 'all_advance' → drawers get wins instead of draws.
+ * round.drawOutcome === 'no_advance' (default/missing) → drawers get draws.
  * Does NOT mutate the input — returns a new deep-copied map.
  */
 export function applyDraw(room, round) {
   const combatants = JSON.parse(JSON.stringify(room.combatants))
-  const isLegacy = !round.draw || round.draw === true
-  const drawIds  = isLegacy ? null : (round.draw?.combatantIds ?? [])
+  const isLegacy   = !round.draw || round.draw === true
+  const drawIds    = isLegacy ? null : (round.draw?.combatantIds ?? [])
+  const allAdvance = round.drawOutcome === 'all_advance'
 
   Object.keys(combatants).forEach(pid => {
     combatants[pid] = combatants[pid].map(c => {
@@ -375,14 +378,15 @@ export function applyDraw(room, round) {
       const drew = isLegacy || drawIds.includes(c.id)
       return {
         ...c,
-        draws:  drew ? (c.draws  || 0) + 1 : (c.draws  || 0),
-        losses: drew ? (c.losses || 0)     : (c.losses || 0) + 1,
+        wins:   allAdvance && drew ? (c.wins   || 0) + 1 : (c.wins   || 0),
+        draws:  !allAdvance && drew ? (c.draws  || 0) + 1 : (c.draws  || 0),
+        losses: drew ? (c.losses || 0) : (c.losses || 0) + 1,
         battles: [
           ...(c.battles || []),
           {
             roundId:  round.id,
             opponent: round.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '),
-            result:   drew ? 'draw' : 'loss',
+            result:   drew ? (allAdvance ? 'win' : 'draw') : 'loss',
           },
         ],
       }
@@ -404,12 +408,14 @@ export function undoRound(room, round) {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
       if (round.draw) {
-        const isLegacy = round.draw === true  // object draw is always non-legacy
-        const drawIds  = isLegacy ? null : (round.draw?.combatantIds ?? [])
-        const drew     = isLegacy || drawIds.includes(c.id)
+        const isLegacy   = round.draw === true  // object draw is always non-legacy
+        const drawIds    = isLegacy ? null : (round.draw?.combatantIds ?? [])
+        const drew       = isLegacy || drawIds.includes(c.id)
+        const allAdvance = round.drawOutcome === 'all_advance'
         return {
           ...c,
-          draws:   drew ? Math.max(0, (c.draws  || 0) - 1) : (c.draws  || 0),
+          wins:    allAdvance && drew ? Math.max(0, (c.wins   || 0) - 1) : (c.wins   || 0),
+          draws:   !allAdvance && drew ? Math.max(0, (c.draws  || 0) - 1) : (c.draws  || 0),
           losses:  drew ? (c.losses || 0) : Math.max(0, (c.losses || 0) - 1),
           battles: (c.battles || []).filter(b => b.roundId !== round.id),
         }
