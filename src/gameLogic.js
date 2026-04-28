@@ -26,6 +26,9 @@ export function normalizeRoomSettings(settings) {
     anonymousCombatants:  false,
     blindVoting:          false,
     biosRequired:         false,
+    allowEvolutions:      true,
+    allowDraws:           true,
+    allowMerges:          true,
     ...settings,
   }
 }
