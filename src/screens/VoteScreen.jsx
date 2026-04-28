@@ -32,6 +32,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [presentIds,       setPresentIds]       = useState([])
   const [voteNudgeDone,    setVoteNudgeDone]    = useState(false)  // one-time guest nudge after first pick
 
+  // Draw flow state machine.
+  // null                                — no draw flow in progress
+  // { step: 1, selectedIds: string[] } — step 1: who is drawing?
+  // { step: 2, selectedIds: string[] } — step 2: what happens?
+  const [drawFlow, setDrawFlow] = useState(null)
+
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
 
@@ -128,12 +134,17 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setEvolveFlow(null)
   }
 
-  async function declareDraw() {
+  // Resolves the round as a draw with the given combatant subset and outcome.
+  // combatantIds — which combatants drew (all combatant ids for a full draw).
+  // drawOutcome  — 'no_advance' (draws stat) or 'all_advance' (wins stat).
+  async function confirmDraw(combatantIds, drawOutcome) {
+    setDrawFlow(null)
     const r = await sget('room:' + room.id)
     if (!r) return
     const rdIdx = r.currentRound - 1
     const rd = r.rounds[rdIdx]
-    const updatedRound = { ...rd, draw: true, winner: null, resolvedAt: Date.now() }
+    const updatedRound = { ...rd, draw: { combatantIds }, winner: null, resolvedAt: Date.now() }
+    if (drawOutcome === 'all_advance') updatedRound.drawOutcome = drawOutcome
     delete updatedRound.evolutionPending
     const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
     const combatants = applyDraw(r, updatedRound)
@@ -142,15 +153,28 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     setRoom(updated); onResult()
 
     ;(async () => {
-      for (const c of updatedRound.combatants) {
+      for (const c of rd.combatants) {
         const { heart, angry, cry } = tallyReactions(updatedRound.playerReactions, c.id)
-        await incrementCombatantStats(c.id, { draws: 1, heart, angry, cry })
+        const drew = combatantIds.includes(c.id)
+        const stat = drew
+          ? (drawOutcome === 'all_advance' ? { wins: 1 } : { draws: 1 })
+          : { losses: 1 }
+        await incrementCombatantStats(c.id, { ...stat, heart, angry, cry })
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
       }
     })()
+  }
+
+  // Opens the draw flow for 3+ combatant rounds, or resolves immediately for 2.
+  function startDrawFlow() {
+    if (round.combatants.length < 3) {
+      confirmDraw(round.combatants.map(c => c.id), 'no_advance')
+    } else {
+      setDrawFlow({ step: 1, selectedIds: round.combatants.map(c => c.id) })
+    }
   }
 
   // Host skips evolution — clears pending state and confirms win normally.
@@ -603,10 +627,81 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       )}
 
       {/* ── Declare draw (host only, no evolution in progress) ───────────── */}
-      {isHost && !evolveFlow && !evolutionPending && (
-        <button onClick={declareDraw} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginTop: 8, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}>
+      {isHost && !evolveFlow && !evolutionPending && !drawFlow && (
+        <button onClick={startDrawFlow} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginTop: 8, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}>
           🤝 Declare draw
         </button>
+      )}
+
+      {/* ── Draw flow: step 1 — who is drawing? (3+ combatants only) ─────── */}
+      {isHost && !evolveFlow && !evolutionPending && drawFlow?.step === 1 && (
+        <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 10px' }}>Who is drawing?</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {round.combatants.map(c => {
+              const selected = drawFlow.selectedIds.includes(c.id)
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    const next = selected
+                      ? drawFlow.selectedIds.filter(id => id !== c.id)
+                      : [...drawFlow.selectedIds, c.id]
+                    setDrawFlow({ ...drawFlow, selectedIds: next })
+                  }}
+                  style={{ ...btn(selected ? 'primary' : 'ghost'), textAlign: 'left', fontSize: 14, padding: '10px 14px' }}
+                >
+                  {selected ? '✓ ' : ''}{c.name}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setDrawFlow({ step: 2, selectedIds: drawFlow.selectedIds })}
+              disabled={drawFlow.selectedIds.length < 2}
+              style={{ ...btn('primary'), flex: 2, fontSize: 13, padding: '8px' }}
+            >
+              Next →
+            </button>
+            <button onClick={() => setDrawFlow(null)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Draw flow: step 2 — what happens? ────────────────────────────── */}
+      {isHost && !evolveFlow && !evolutionPending && drawFlow?.step === 2 && (
+        <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)' }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 4px' }}>What happens?</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+            {drawFlow.selectedIds.map(id => round.combatants.find(c => c.id === id)?.name).filter(Boolean).join(' & ')} drew.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button
+              onClick={() => confirmDraw(drawFlow.selectedIds, 'no_advance')}
+              style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '10px 8px' }}
+            >
+              Neither advances
+            </button>
+            <button
+              onClick={() => confirmDraw(drawFlow.selectedIds, 'all_advance')}
+              style={{ ...btn(), flex: 1, fontSize: 13, padding: '10px 8px' }}
+            >
+              All advance
+            </button>
+          </div>
+          <button
+            onClick={() => setDrawFlow({ step: 1, selectedIds: drawFlow.selectedIds })}
+            style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 4 }}
+          >
+            ← Back
+          </button>
+          <button onClick={() => setDrawFlow(null)} style={{ ...btn('ghost'), width: '100%', fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* ── Round chat ────────────────────────────────────────────────────── */}
