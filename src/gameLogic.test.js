@@ -1794,6 +1794,132 @@ describe('canUndoLastRound (draw)', () => {
   })
 })
 
+// ─── applyDraw partial draw ───────────────────────────────────────────────────
+
+describe('applyDraw (partial draw)', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', name: 'A', wins: 0, losses: 0, draws: 0, battles: [] }],
+      p2: [{ id: 'c2', name: 'B', wins: 0, losses: 0, draws: 0, battles: [] }],
+      p3: [{ id: 'c3', name: 'C', wins: 0, losses: 0, draws: 0, battles: [] }],
+    },
+  }
+  const round = {
+    id: 'r1',
+    draw: { combatantIds: ['c1', 'c2'] },
+    combatants: [
+      { id: 'c1', name: 'A', ownerId: 'p1' },
+      { id: 'c2', name: 'B', ownerId: 'p2' },
+      { id: 'c3', name: 'C', ownerId: 'p3' },
+    ],
+  }
+
+  it('increments draws only for combatants in combatantIds', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].draws).toBe(1)
+    expect(result.p2[0].draws).toBe(1)
+    expect(result.p3[0].draws).toBe(0)
+  })
+
+  it('increments losses for combatants not in combatantIds', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].losses).toBe(0)
+    expect(result.p2[0].losses).toBe(0)
+    expect(result.p3[0].losses).toBe(1)
+  })
+
+  it('appends draw battle records for drawers and loss record for the rest', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'draw' })
+    expect(result.p2[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'draw' })
+    expect(result.p3[0].battles[0]).toMatchObject({ roundId: 'r1', result: 'loss' })
+  })
+
+  it('does not mutate input', () => {
+    const original = JSON.parse(JSON.stringify(room))
+    applyDraw(room, round)
+    expect(room).toEqual(original)
+  })
+})
+
+describe('applyDraw (legacy boolean)', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', name: 'A', wins: 0, losses: 2, draws: 0, battles: [] }],
+      p2: [{ id: 'c2', name: 'B', wins: 0, losses: 1, draws: 0, battles: [] }],
+    },
+  }
+  const round = {
+    id: 'r1',
+    draw: true,
+    combatants: [{ id: 'c1', name: 'A', ownerId: 'p1' }, { id: 'c2', name: 'B', ownerId: 'p2' }],
+  }
+
+  it('increments draws for all combatants and does not touch losses', () => {
+    const result = applyDraw(room, round)
+    expect(result.p1[0].draws).toBe(1)
+    expect(result.p2[0].draws).toBe(1)
+    expect(result.p1[0].losses).toBe(2)
+    expect(result.p2[0].losses).toBe(1)
+  })
+})
+
+describe('undoRound (partial draw)', () => {
+  const room = {
+    combatants: {
+      p1: [{ id: 'c1', draws: 1, losses: 0, battles: [{ roundId: 'r1', result: 'draw' }] }],
+      p2: [{ id: 'c2', draws: 1, losses: 0, battles: [{ roundId: 'r1', result: 'draw' }] }],
+      p3: [{ id: 'c3', draws: 0, losses: 1, battles: [{ roundId: 'r1', result: 'loss' }] }],
+    },
+  }
+  const round = {
+    id: 'r1',
+    draw: { combatantIds: ['c1', 'c2'] },
+    combatants: [
+      { id: 'c1', ownerId: 'p1' },
+      { id: 'c2', ownerId: 'p2' },
+      { id: 'c3', ownerId: 'p3' },
+    ],
+  }
+
+  it('decrements draws for drawers and losses for the rest', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].draws).toBe(0)
+    expect(result.p2[0].draws).toBe(0)
+    expect(result.p3[0].losses).toBe(0)
+  })
+
+  it('does not decrement draws for the loser', () => {
+    const result = undoRound(room, round)
+    expect(result.p3[0].draws).toBe(0)
+  })
+
+  it('does not decrement losses for drawers', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].losses).toBe(0)
+    expect(result.p2[0].losses).toBe(0)
+  })
+
+  it('removes battle records for the round from all combatants', () => {
+    const result = undoRound(room, round)
+    expect(result.p1[0].battles).toHaveLength(0)
+    expect(result.p2[0].battles).toHaveLength(0)
+    expect(result.p3[0].battles).toHaveLength(0)
+  })
+
+  it('clamps losses to 0 never negative', () => {
+    const noLoss = {
+      combatants: {
+        p1: [{ id: 'c1', draws: 1, losses: 0, battles: [] }],
+        p2: [{ id: 'c2', draws: 1, losses: 0, battles: [] }],
+        p3: [{ id: 'c3', draws: 0, losses: 0, battles: [] }],
+      },
+    }
+    const result = undoRound(noLoss, round)
+    expect(result.p3[0].losses).toBe(0)
+  })
+})
+
 // ─── replacePlayerIdInRoom ────────────────────────────────────────────────────
 
 describe('replacePlayerIdInRoom', () => {

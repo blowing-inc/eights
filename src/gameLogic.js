@@ -359,24 +359,30 @@ export function applyWinner(room, round, winnerId) {
 }
 
 /**
- * Both combatants drew — increments draws for each and appends round records.
+ * Applies draw (and optional partial loss) outcomes and appends round records.
+ * round.draw === true  → all combatants in round.combatants drew (legacy).
+ * round.draw.combatantIds → those ids drew; remaining combatants in round took a loss.
  * Does NOT mutate the input — returns a new deep-copied map.
  */
 export function applyDraw(room, round) {
   const combatants = JSON.parse(JSON.stringify(room.combatants))
+  const isLegacy = !round.draw || round.draw === true
+  const drawIds  = isLegacy ? null : (round.draw?.combatantIds ?? [])
 
   Object.keys(combatants).forEach(pid => {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
+      const drew = isLegacy || drawIds.includes(c.id)
       return {
         ...c,
-        draws: (c.draws || 0) + 1,
+        draws:  drew ? (c.draws  || 0) + 1 : (c.draws  || 0),
+        losses: drew ? (c.losses || 0)     : (c.losses || 0) + 1,
         battles: [
           ...(c.battles || []),
           {
             roundId:  round.id,
             opponent: round.combatants.filter(rc => rc.id !== c.id).map(rc => rc.name).join(', '),
-            result:   'draw',
+            result:   drew ? 'draw' : 'loss',
           },
         ],
       }
@@ -398,9 +404,13 @@ export function undoRound(room, round) {
     combatants[pid] = combatants[pid].map(c => {
       if (!round.combatants.find(rc => rc.id === c.id)) return c
       if (round.draw) {
+        const isLegacy = round.draw === true  // object draw is always non-legacy
+        const drawIds  = isLegacy ? null : (round.draw?.combatantIds ?? [])
+        const drew     = isLegacy || drawIds.includes(c.id)
         return {
           ...c,
-          draws:   Math.max(0, (c.draws || 0) - 1),
+          draws:   drew ? Math.max(0, (c.draws  || 0) - 1) : (c.draws  || 0),
+          losses:  drew ? (c.losses || 0) : Math.max(0, (c.losses || 0) - 1),
           battles: (c.battles || []).filter(b => b.roundId !== round.id),
         }
       }
