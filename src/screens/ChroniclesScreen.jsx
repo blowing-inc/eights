@@ -127,7 +127,8 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {(rd.combatants || []).map(c => {
                   const isWinner = rd.winner?.id === c.id
-                  const isDraw   = !rd.winner && rd.draw
+                  const drawIds  = rd.draw === true ? null : rd.draw?.combatantIds ?? null
+                  const isDraw   = !rd.winner && !!rd.draw && (drawIds === null || drawIds.includes(c.id))
                   const owner = (room.players || []).find(p => p.id === c.ownerId)
                   const voters = Object.entries(rd.picks || {})
                     .filter(([, cid]) => cid === c.id)
