@@ -1355,6 +1355,46 @@ describe('getLineageStats', () => {
     const result = getLineageStats('c1', [sparse])
     expect(result).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 1 })
   })
+
+  it('includes co-parent branch stats for merged combatants', () => {
+    // Egg (c1) + Bacon (b1) + Toast (t1) merge into Breakfast (bk)
+    // bk lineage: rootId=c1, coParentIds=[b1,t1]
+    const egg      = { id: 'c1', wins: 3, losses: 1, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const bacon    = { id: 'b1', wins: 2, losses: 0, reactions_heart: 1, reactions_angry: 0, reactions_cry: 0 }
+    const toast    = { id: 't1', wins: 1, losses: 1, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const breakfast = { id: 'bk', wins: 1, losses: 0, reactions_heart: 2, reactions_angry: 0, reactions_cry: 0,
+      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b1', 't1'], generation: 1 } }
+    const result = getLineageStats('c1', [egg, bacon, toast, breakfast])
+    // Should include Egg + Breakfast (primary) + Bacon + Toast (co-parents)
+    expect(result.wins).toBe(7)    // 3+2+1+1
+    expect(result.losses).toBe(2)  // 1+0+1+0
+    expect(result.heart).toBe(3)   // 0+1+0+2
+    expect(result.forms).toBe(4)
+  })
+
+  it('does not double-count combatants in co-parent branches', () => {
+    const egg      = { id: 'c1', wins: 3, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const bacon    = { id: 'b1', wins: 2, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const breakfast = { id: 'bk', wins: 1, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
+      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b1'], generation: 1 } }
+    const result = getLineageStats('c1', [egg, bacon, breakfast])
+    expect(result.wins).toBe(6)   // 3+2+1
+    expect(result.forms).toBe(3)  // egg, bacon, breakfast — no duplicates
+  })
+
+  it('co-parent lineage variants are also included', () => {
+    // Bacon (b1) evolved to Bacon+ (b2), then Bacon+ merged with Egg (c1)
+    const egg     = { id: 'c1', wins: 3, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const bacon   = { id: 'b1', wins: 2, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const baconPlus = { id: 'b2', wins: 1, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
+      lineage: { rootId: 'b1', parentId: 'b1', generation: 1 } }
+    const breakfast = { id: 'bk', wins: 0, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
+      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b2'], generation: 1 } }
+    const result = getLineageStats('c1', [egg, bacon, baconPlus, breakfast])
+    // Primary: egg + breakfast. Co-parent: b2, which has rootId b1 → also include bacon.
+    expect(result.forms).toBe(4)
+    expect(result.wins).toBe(6)   // 3+0+2+1
+  })
 })
 
 // ─── buildActiveFormMap ───────────────────────────────────────────────────────
@@ -1500,6 +1540,81 @@ describe('buildChainEvolutionStory', () => {
     const room3 = makeEvolvedRoom('C', [{ fromId: 'c3', fromName: 'C', toId: 'c4', toName: 'D', roundNumber: 1 }])
     const story = buildChainEvolutionStory([room1, room2, room3], 'c1')
     expect(story.map(s => s.generation)).toEqual([0, 1, 2, 3])
+  })
+
+  function makeMergeRoom(code, { fromIds, fromNames, toId, toName, roundNumber = 1 }) {
+    return {
+      code,
+      rounds: [{
+        id: 'rd' + roundNumber, number: roundNumber,
+        combatants: fromIds.map((id, i) => ({ id, name: fromNames[i] })),
+        draw: { combatantIds: fromIds },
+        merge: { fromIds, fromNames, toId, toName, primaryOwnerId: 'p1', primaryOwnerName: 'Alice', coOwnerIds: [], coOwnerNames: [], mergeNote: null },
+      }],
+    }
+  }
+
+  it('direct merge: rootId is one of the merge parents', () => {
+    const room = makeMergeRoom('XKQT', {
+      fromIds: ['c1', 'b1', 't1'], fromNames: ['Egg', 'Bacon', 'Toast'],
+      toId: 'bk', toName: 'Breakfast', roundNumber: 3,
+    })
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story).toHaveLength(2)
+    expect(story[0]).toEqual({ combatantId: 'c1', name: 'Egg', generation: 0, bornFrom: null })
+    expect(story[1].combatantId).toBe('bk')
+    expect(story[1].name).toBe('Breakfast')
+    expect(story[1].generation).toBe(1)
+  })
+
+  it('merge bornFrom has type merge, parentNames, parentIds, roundNumber, gameCode', () => {
+    const room = makeMergeRoom('XKQT', {
+      fromIds: ['c1', 'b1', 't1'], fromNames: ['Egg', 'Bacon', 'Toast'],
+      toId: 'bk', toName: 'Breakfast', roundNumber: 3,
+    })
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story[1].bornFrom).toEqual({
+      type:        'merge',
+      parentNames: ['Egg', 'Bacon', 'Toast'],
+      parentIds:   ['c1', 'b1', 't1'],
+      roundNumber: 3,
+      gameCode:    'XKQT',
+    })
+  })
+
+  it('evolution then merge: root evolves, evolved form merges', () => {
+    const room1 = makeEvolvedRoom('GAME1', [
+      { fromId: 'c1', fromName: 'Egg', toId: 'c2', toName: 'Egg+', roundNumber: 1 },
+    ])
+    const room2 = makeMergeRoom('GAME2', {
+      fromIds: ['c2', 'b1'], fromNames: ['Egg+', 'Bacon'],
+      toId: 'bk', toName: 'Breakfast', roundNumber: 2,
+    })
+    const story = buildChainEvolutionStory([room1, room2], 'c1')
+    expect(story).toHaveLength(3)
+    expect(story.map(s => s.name)).toEqual(['Egg', 'Egg+', 'Breakfast'])
+    expect(story[1].bornFrom.opponentName).toBeDefined()  // evolution bornFrom
+    expect(story[2].bornFrom.type).toBe('merge')
+    expect(story[2].bornFrom.parentNames).toEqual(['Egg+', 'Bacon'])
+  })
+
+  it('ignores merge where no parent is in known IDs', () => {
+    const room = makeMergeRoom('XKQT', {
+      fromIds: ['z1', 'z2'], fromNames: ['Z1', 'Z2'],
+      toId: 'zm', toName: 'ZMerged', roundNumber: 1,
+    })
+    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
+  })
+
+  it('merge using secondary parent: story still follows known ancestor', () => {
+    const room = makeMergeRoom('XKQT', {
+      fromIds: ['b1', 'c1', 't1'], fromNames: ['Bacon', 'Egg', 'Toast'],
+      toId: 'bk', toName: 'Breakfast', roundNumber: 1,
+    })
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story).toHaveLength(2)
+    expect(story[0].name).toBe('Egg')  // rootId=c1's name from fromNames
+    expect(story[1].name).toBe('Breakfast')
   })
 })
 

@@ -111,6 +111,13 @@ function InRoomView({ combatant: c }) {
   )
 }
 
+function joinNames(names) {
+  if (!names || names.length === 0) return 'unknown'
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
+}
+
 // ── Full global view (mirrors GlobalCombatantDetail content, sans Screen wrapper) ──
 
 function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
@@ -144,8 +151,17 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant }) {
       <div key={node.combatantId}>
         {node.bornFrom && (
           <div style={{ paddingLeft: indent + 8, padding: '3px 0 3px ' + (indent + 8) + 'px', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-            ⚡ beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
-            {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
+            {node.bornFrom.type === 'merge' ? (
+              <>
+                ⚡ <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{joinNames(node.bornFrom.parentNames)}</strong> merged
+                {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
+              </>
+            ) : (
+              <>
+                ⚡ beat <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{node.bornFrom.opponentName || 'an opponent'}</strong>
+                {node.bornFrom.gameCode && <> in {node.bornFrom.gameCode} R{node.bornFrom.roundNumber}</>} →
+              </>
+            )}
           </div>
         )}
         <div

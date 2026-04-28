@@ -741,9 +741,38 @@ export function buildTickerMessages(rooms) {
  * @returns {{ wins, losses, heart, angry, cry, forms }}
  */
 export function getLineageStats(rootId, allCombatants) {
-  const family = (allCombatants || []).filter(c =>
-    c.id === rootId || c.lineage?.rootId === rootId
-  )
+  const all = allCombatants || []
+
+  // Primary family: root itself and all descendants sharing the same rootId
+  const seen = new Set()
+  const family = []
+  for (const c of all) {
+    if (c.id === rootId || c.lineage?.rootId === rootId) {
+      seen.add(c.id)
+      family.push(c)
+    }
+  }
+
+  // Collect co-parent root IDs from any merged combatant in the primary family
+  const coParentRoots = new Set()
+  for (const c of family) {
+    for (const cpId of (c.lineage?.coParentIds || [])) {
+      if (seen.has(cpId)) continue
+      const cp = all.find(x => x.id === cpId)
+      coParentRoots.add(cp?.lineage?.rootId || cpId)
+    }
+  }
+
+  // Add co-parent lineage branches without double-counting
+  for (const c of all) {
+    if (seen.has(c.id)) continue
+    const cRoot = c.lineage?.rootId || c.id
+    if (coParentRoots.has(c.id) || coParentRoots.has(cRoot)) {
+      seen.add(c.id)
+      family.push(c)
+    }
+  }
+
   return family.reduce((acc, c) => ({
     wins:   acc.wins   + (c.wins             || 0),
     losses: acc.losses + (c.losses           || 0),
@@ -856,17 +885,34 @@ export function buildChainEvolutionStory(rooms, rootId) {
 
   for (const room of (rooms || [])) {
     for (const round of (room.rounds || [])) {
-      if (!round.evolution) continue
-      const { fromId, fromName, toId, toName } = round.evolution
-      if (!knownIds.has(fromId)) continue
-      const opponent = (round.combatants || []).find(c => c.id !== fromId)
-      events.push({
-        fromId, fromName, toId, toName,
-        roundNumber:  round.number,
-        gameCode:     room.code,
-        opponentName: opponent?.name || null,
-      })
-      knownIds.add(toId)
+      if (round.evolution) {
+        const { fromId, fromName, toId, toName } = round.evolution
+        if (!knownIds.has(fromId)) continue
+        const opponent = (round.combatants || []).find(c => c.id !== fromId)
+        events.push({
+          type: 'evolution',
+          fromId, fromName, toId, toName,
+          roundNumber:  round.number,
+          gameCode:     room.code,
+          opponentName: opponent?.name || null,
+        })
+        knownIds.add(toId)
+      } else if (round.merge) {
+        const { fromIds, fromNames, toId, toName } = round.merge
+        const ancestorIdx = (fromIds || []).findIndex(id => knownIds.has(id))
+        if (ancestorIdx === -1) continue
+        events.push({
+          type:     'merge',
+          fromId:   fromIds[ancestorIdx],
+          fromName: (fromNames || [])[ancestorIdx] || '',
+          fromIds:  fromIds || [],
+          fromNames: fromNames || [],
+          toId, toName,
+          roundNumber: round.number,
+          gameCode:    room.code,
+        })
+        knownIds.add(toId)
+      }
     }
   }
 
@@ -884,13 +930,21 @@ export function buildChainEvolutionStory(rooms, rootId) {
       combatantId: e.toId,
       name:        e.toName,
       generation:  i + 1,
-      bornFrom: {
-        roundNumber:  e.roundNumber,
-        gameCode:     e.gameCode,
-        opponentName: e.opponentName,
-        parentId:     e.fromId,
-        parentName:   e.fromName,
-      },
+      bornFrom: e.type === 'merge'
+        ? {
+            type:        'merge',
+            parentNames: e.fromNames,
+            parentIds:   e.fromIds,
+            roundNumber: e.roundNumber,
+            gameCode:    e.gameCode,
+          }
+        : {
+            roundNumber:  e.roundNumber,
+            gameCode:     e.gameCode,
+            opponentName: e.opponentName,
+            parentId:     e.fromId,
+            parentName:   e.fromName,
+          },
     })
   })
 

@@ -8,6 +8,13 @@ import { buildStoryFromLineageTree, computeSuperlatives } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 
+function joinNames(names) {
+  if (!names || names.length === 0) return 'unknown'
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
+}
+
 // Renders a lineage tree (handles both linear chains and branching).
 // rawTree: raw combatant rows from getLineageTree — used for the parent→children map
 //          (branching support) and for navigation data when a node is tapped.
@@ -121,26 +128,72 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant, onV
                 {i > 0 && (
                   <div style={{ borderTop: '1px solid var(--color-border-tertiary)', margin: '6px 0' }} />
                 )}
-                {/* Evolution event */}
+                {/* Evolution / merge event */}
                 {child.bornFrom && (
                   <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, padding: '4px 0', fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-                    <span>⚡ beat</span>
-                    <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{child.bornFrom.opponentName || 'an opponent'}</strong>
-                    {child.bornFrom.gameCode && (() => {
-                      const code     = child.bornFrom.gameCode
-                      const roomData = validRooms?.[code]          // undefined = loading, null = gone, object = exists
-                      const exists   = roomData != null
-                      const gone     = validRooms !== null && roomData === null
-                      return (
-                        <span
-                          onClick={exists ? e => { e.stopPropagation(); onViewRoom(roomData, child.bornFrom.roundNumber) } : undefined}
-                          title={gone ? 'Game no longer in database' : exists ? 'View game summary' : undefined}
-                          style={{ fontStyle: 'normal', padding: '1px 5px', background: gone ? 'transparent' : 'var(--color-background-tertiary)', border: `0.5px solid ${gone ? 'var(--color-border-tertiary)' : 'var(--color-border-secondary)'}`, borderRadius: 4, fontSize: 10, color: gone ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)', letterSpacing: '0.03em', cursor: exists ? 'pointer' : 'default', textDecoration: exists ? 'underline dotted' : 'none' }}
-                        >
-                          {code} R{child.bornFrom.roundNumber}{exists ? ' ↗' : gone ? ' –' : ''}
-                        </span>
-                      )
-                    })()}
+                    {child.bornFrom.type === 'merge' ? (
+                      <>
+                        <span>⚡</span>
+                        <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{joinNames(child.bornFrom.parentNames)}</strong>
+                        <span>merged</span>
+                        {child.bornFrom.gameCode && (() => {
+                          const code      = child.bornFrom.gameCode
+                          const roomData  = validRooms?.[code]
+                          const exists    = roomData != null
+                          const gone      = validRooms !== null && roomData === null
+                          const mergeRound = exists ? (roomData.rounds || []).find(r => r.number === child.bornFrom.roundNumber) : null
+                          const mergeNote  = mergeRound?.merge?.mergeNote || null
+                          const allOwners  = [
+                            mergeRound?.merge?.primaryOwnerName,
+                            ...(mergeRound?.merge?.coOwnerNames || []),
+                          ].filter(Boolean)
+                          const uniqueOwners = [...new Set(allOwners)]
+                          return (
+                            <>
+                              <span
+                                onClick={exists ? e => { e.stopPropagation(); onViewRoom(roomData, child.bornFrom.roundNumber) } : undefined}
+                                title={gone ? 'Game no longer in database' : exists ? 'View game summary' : undefined}
+                                style={{ fontStyle: 'normal', padding: '1px 5px', background: gone ? 'transparent' : 'var(--color-background-tertiary)', border: `0.5px solid ${gone ? 'var(--color-border-tertiary)' : 'var(--color-border-secondary)'}`, borderRadius: 4, fontSize: 10, color: gone ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)', letterSpacing: '0.03em', cursor: exists ? 'pointer' : 'default', textDecoration: exists ? 'underline dotted' : 'none' }}
+                              >
+                                {code} R{child.bornFrom.roundNumber}{exists ? ' ↗' : gone ? ' –' : ''}
+                              </span>
+                              {uniqueOwners.length > 0 && (
+                                <span style={{ fontStyle: 'normal', color: 'var(--color-text-tertiary)' }}>
+                                  · by {uniqueOwners.join(', ')}
+                                </span>
+                              )}
+                              {mergeNote && (
+                                <span style={{ display: 'block', width: '100%', marginTop: 2, fontStyle: 'italic', color: 'var(--color-text-tertiary)' }}>
+                                  "{mergeNote}"
+                                </span>
+                              )}
+                            </>
+                          )
+                        })()}
+                        <span>→</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>⚡ beat</span>
+                        <strong style={{ fontStyle: 'normal', color: 'var(--color-text-secondary)' }}>{child.bornFrom.opponentName || 'an opponent'}</strong>
+                        {child.bornFrom.gameCode && (() => {
+                          const code     = child.bornFrom.gameCode
+                          const roomData = validRooms?.[code]
+                          const exists   = roomData != null
+                          const gone     = validRooms !== null && roomData === null
+                          return (
+                            <span
+                              onClick={exists ? e => { e.stopPropagation(); onViewRoom(roomData, child.bornFrom.roundNumber) } : undefined}
+                              title={gone ? 'Game no longer in database' : exists ? 'View game summary' : undefined}
+                              style={{ fontStyle: 'normal', padding: '1px 5px', background: gone ? 'transparent' : 'var(--color-background-tertiary)', border: `0.5px solid ${gone ? 'var(--color-border-tertiary)' : 'var(--color-border-secondary)'}`, borderRadius: 4, fontSize: 10, color: gone ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)', letterSpacing: '0.03em', cursor: exists ? 'pointer' : 'default', textDecoration: exists ? 'underline dotted' : 'none' }}
+                            >
+                              {code} R{child.bornFrom.roundNumber}{exists ? ' ↗' : gone ? ' –' : ''}
+                            </span>
+                          )
+                        })()}
+                        <span>→</span>
+                      </>
+                    )}
                   </div>
                 )}
                 {renderNode(child)}
