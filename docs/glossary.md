@@ -1,5 +1,5 @@
 glossary
-last updated: 2026-04-14
+last updated: 2026-04-28
 
 The canonical definitions for all game layers, lifecycle states, and structural
 concepts. This is the reference document. When a term here conflicts with UI
@@ -119,6 +119,22 @@ at the game level.
   Series    | Series creator (usually host of first game)
   Season    | Season creator
   League    | League creator
+
+---
+
+ROOM SETTINGS
+
+Settings stored on a room at creation. All are booleans unless noted.
+Defaults enforced by normalizeRoomSettings in gameLogic.js.
+
+  rosterSize         integer  default: 8     Combatants each player drafts; determines round count.
+  spectatorsAllowed  boolean  default: true  When true, a separate spectate link is available in the lobby.
+  anonymousCombatants boolean default: false When true, owner names are hidden during voting.
+  blindVoting        boolean  default: false When true, votes are hidden until all players have submitted.
+  biosRequired       boolean  default: false When true, players must write a bio before locking their draft.
+  allowEvolutions    boolean  default: true  When false, the Evolve option is hidden after wins; winners confirm as-is.
+  allowDraws         boolean  default: true  When false, the host cannot declare a draw — only winner confirmation is available.
+  allowMerges        boolean  default: true  When false, draws cannot trigger a merge flow even if allowDraws is on.
 
 ---
 

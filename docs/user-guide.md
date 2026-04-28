@@ -35,6 +35,9 @@ Tap "Create a room" on the home screen. You'll set your name and configure the r
 | Anonymous combatants | Hides the owner's name on each combatant card during the voting round. Useful if you want voting to be purely on the combatant, not the player. |
 | Blind voting | Individual votes are hidden until everyone has picked. Prevents pile-ons. The result is revealed all at once when the last vote is cast. |
 | Bios required | Forces every player to write a short bio for each combatant before locking in their roster. Recommended if your group leans into the narrative. |
+| Allow evolutions | When off, the Evolve option is hidden after wins. Winners are confirmed as-is. Evolutions are a fun ceremony — turn this off for faster games. |
+| Allow draws | When off, the host can only confirm a winner each round — no draw option. |
+| Allow merges | When draws are on, combatants that draw can merge into a new combined form. Turn this off to keep draws simple. |
 
 Once the room is created, share the 4-character code or use the copy-link buttons to invite players and spectators.
 
@@ -119,6 +122,8 @@ Evolution is the narrative heart of the game. When the host confirms a winner, t
 When a series continues, the evolved form appears in the owner's draft as a required pick — the owner must place the variant in a slot. The original is not required in its place; only the most recent evolved form is.
 
 If a combatant evolved multiple times across multiple games, only the current tip form (the most recent variant) appears as the required entry.
+
+If **Allow evolutions** is off, winners carry forward into the next series game as-is — no evolution prompt appears, and no variant is created. Champions still carry over as required picks.
 
 ### Reading the evolution in history
 
