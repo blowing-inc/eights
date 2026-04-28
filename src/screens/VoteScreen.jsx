@@ -143,6 +143,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
 
   const round   = room.rounds[room.currentRound - 1]
   const isHost  = room.host === playerId
+  const { allowEvolutions, allowDraws, allowMerges } = normalizeRoomSettings(room.settings)
 
   useEffect(() => {
     return subscribeToRoom(room.id, async r => {
@@ -771,15 +772,17 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                   <button onClick={() => confirmWinner(c.id)} style={{ ...btn('primary'), flex: 2, padding: '10px', fontSize: 14 }}>
                     Confirm win ✓
                   </button>
-                  <button
-                    onClick={() => setEvolveFlow({
-                      stage:       c.ownerId === playerId ? 'writing' : 'pending',
-                      combatantId: c.id,
-                    })}
-                    style={{ ...btn(), flex: 1, padding: '8px 10px', fontSize: 13 }}
-                  >
-                    Evolve ⚡
-                  </button>
+                  {allowEvolutions && (
+                    <button
+                      onClick={() => setEvolveFlow({
+                        stage:       c.ownerId === playerId ? 'writing' : 'pending',
+                        combatantId: c.id,
+                      })}
+                      style={{ ...btn(), flex: 1, padding: '8px 10px', fontSize: 13 }}
+                    >
+                      Evolve ⚡
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -874,7 +877,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       )}
 
       {/* ── Declare draw (host only, no evolution in progress) ───────────── */}
-      {isHost && !evolveFlow && !evolutionPending && !drawFlow && (
+      {isHost && allowDraws && !evolveFlow && !evolutionPending && !drawFlow && (
         <button onClick={startDrawFlow} style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginTop: 8, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}>
           🤝 Declare draw
         </button>
@@ -933,7 +936,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
               Neither advances
             </button>
             <button
-              onClick={() => setDrawFlow({ step: 3, selectedIds: drawFlow.selectedIds })}
+              onClick={() => allowMerges
+                ? setDrawFlow({ step: 3, selectedIds: drawFlow.selectedIds })
+                : confirmDraw(drawFlow.selectedIds, 'all_advance')
+              }
               style={{ ...btn(), flex: 1, fontSize: 13, padding: '10px 8px' }}
             >
               All advance

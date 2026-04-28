@@ -4,9 +4,9 @@ import { btn, inp, lbl } from '../styles.js'
 import { sset } from '../supabase.js'
 import { playerColor } from '../gameLogic.js'
 
-function SettingRow({ label, description, value, onToggle }) {
+function SettingRow({ label, description, value, onToggle, indented }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--color-border-tertiary)', paddingLeft: indented ? 16 : 0 }}>
       <div>
         <div style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>{label}</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 1 }}>{description}</div>
@@ -44,12 +44,14 @@ const SETTINGS = [
   ['anonymousCombatants',    'Anonymous combatants',    'Hide owner names during voting'],
   ['blindVoting',            'Blind voting',            'Hide votes until everyone has picked'],
   ['biosRequired',           'Bios required',           'Players must write a bio for each combatant'],
+  ['allowEvolutions',        'Allow evolutions',        'Winners can be evolved into a new form after a round.'],
+  ['allowDraws',             'Allow draws',             'Host can declare a round a draw instead of picking a winner.'],
 ]
 
 export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false })
+  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true })
 
   function toggle(key) { setSettings(s => ({ ...s, [key]: !s[key] })) }
 
@@ -87,7 +89,23 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
       <div style={{ marginBottom: '1.5rem' }}>
         <RosterSizeRow value={settings.rosterSize} onChange={v => setSettings(s => ({ ...s, rosterSize: v }))} />
         {SETTINGS.map(([key, label, desc]) => (
-          <SettingRow key={key} label={label} description={desc} value={settings[key]} onToggle={() => toggle(key)} />
+          <div key={key}>
+            <SettingRow label={label} description={desc} value={settings[key]} onToggle={() => toggle(key)} />
+            {key === 'allowEvolutions' && !settings.allowEvolutions && (
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', padding: '2px 0 6px', marginTop: -4 }}>
+                Winners carry forward unchanged in a series.
+              </div>
+            )}
+            {key === 'allowDraws' && settings.allowDraws && (
+              <SettingRow
+                label="Allow merges"
+                description="Combatants that draw can merge into a new combined form."
+                value={settings.allowMerges}
+                onToggle={() => toggle('allowMerges')}
+                indented
+              />
+            )}
+          </div>
         ))}
       </div>
 

@@ -1144,12 +1144,18 @@ describe('normalizeRoomSettings', () => {
     expect(s.anonymousCombatants).toBe(false)
     expect(s.blindVoting).toBe(false)
     expect(s.biosRequired).toBe(false)
+    expect(s.allowEvolutions).toBe(true)
+    expect(s.allowDraws).toBe(true)
+    expect(s.allowMerges).toBe(true)
   })
 
   it('fills all defaults when passed an empty object', () => {
     const s = normalizeRoomSettings({})
     expect(s.rosterSize).toBe(8)
     expect(s.spectatorsAllowed).toBe(true)
+    expect(s.allowEvolutions).toBe(true)
+    expect(s.allowDraws).toBe(true)
+    expect(s.allowMerges).toBe(true)
   })
 
   it('preserves explicit values', () => {
@@ -1162,6 +1168,21 @@ describe('normalizeRoomSettings', () => {
   it('preserves false explicitly set', () => {
     const s = normalizeRoomSettings({ spectatorsAllowed: false })
     expect(s.spectatorsAllowed).toBe(false)
+  })
+
+  it('allowEvolutions defaults to true, can be set false', () => {
+    expect(normalizeRoomSettings({}).allowEvolutions).toBe(true)
+    expect(normalizeRoomSettings({ allowEvolutions: false }).allowEvolutions).toBe(false)
+  })
+
+  it('allowDraws defaults to true, can be set false', () => {
+    expect(normalizeRoomSettings({}).allowDraws).toBe(true)
+    expect(normalizeRoomSettings({ allowDraws: false }).allowDraws).toBe(false)
+  })
+
+  it('allowMerges defaults to true, can be set false', () => {
+    expect(normalizeRoomSettings({}).allowMerges).toBe(true)
+    expect(normalizeRoomSettings({ allowMerges: false }).allowMerges).toBe(false)
   })
 
   it('is non-destructive — does not mutate the input', () => {
