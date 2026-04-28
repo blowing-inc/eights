@@ -91,6 +91,7 @@ function RoundCard({ round, playerById }) {
   const isDraw      = !!round.draw
   const picks       = round.picks      || {}     // { [playerId]: combatantId }
   const evolution   = round.evolution  || null
+  const merge       = round.merge      || null
 
   // Group votes by combatant voted for
   const votesByCombatant = {}
@@ -169,6 +170,31 @@ function RoundCard({ round, playerById }) {
             </div>
             {evolution.ownerName && (
               <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>by {evolution.ownerName}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Merge note */}
+      {merge && (
+        <div style={{ padding: '12px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-info)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚡</span>
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 500 }}>
+              {(merge.fromNames || []).join(' + ')} → {merge.toName}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
+              {(merge.fromNames || []).join(' + ')} merged into {merge.toName} after drawing with each other.
+            </div>
+            {merge.mergeNote && (
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
+                "{merge.mergeNote}"
+              </div>
+            )}
+            {merge.primaryOwnerName && (
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                by {[merge.primaryOwnerName, ...(merge.coOwnerNames || [])].filter(Boolean).join(', ')}
+              </div>
             )}
           </div>
         </div>

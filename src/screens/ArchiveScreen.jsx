@@ -134,7 +134,13 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 32 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
                 by {c.owner_name || 'unknown'}
-                {isVariant && c.lineage?.bornFrom?.opponentName && (
+                {isVariant && c.lineage?.bornFrom?.type === 'merge' && (
+                  <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 6 }}>
+                    · merged from {(c.lineage.bornFrom.parentNames || []).join(' + ')}
+                    {c.lineage.bornFrom.gameCode && <> in {c.lineage.bornFrom.gameCode}</>}
+                  </span>
+                )}
+                {isVariant && !c.lineage?.bornFrom?.type && c.lineage?.bornFrom?.opponentName && (
                   <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 6 }}>
                     · beat <em>{c.lineage.bornFrom.opponentName}</em>
                     {c.lineage.bornFrom.gameCode && <> in {c.lineage.bornFrom.gameCode}</>}

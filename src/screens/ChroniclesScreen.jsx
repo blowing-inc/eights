@@ -9,7 +9,7 @@ import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js
 // NOTE: The round display logic in ChroniclesRoomDetail is partially duplicated with RoundCard
 // in GameSummaryScreen.jsx. If you're updating either, consider extracting a shared component.
 function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNextGame }) {
-  const completedRounds = (room.rounds || []).filter(r => r.winner)
+  const completedRounds = (room.rounds || []).filter(r => r.winner || r.merge)
   const allRounds = room.rounds || []
   const players = (room.players || []).filter(p => !p.isBot)
   const allCombatants = Object.values(room.combatants || {}).flat().filter(c => !c.isBot)
@@ -74,15 +74,19 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
                 style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0', textAlign: 'left' }}>
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 56 }}>Round {r.number}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
-                  {r.evolution && (
+                  {r.winner
+                    ? <span style={{ fontSize: 14, color: 'var(--color-text-success)', fontWeight: 500 }}>🏆 {r.winner.name}</span>
+                    : <span style={{ fontSize: 14, color: 'var(--color-text-info)', fontWeight: 500 }}>⚡ {r.merge?.toName}</span>}
+                  {r.winner && r.evolution && (
                     <span style={{ fontSize: 11, color: 'var(--color-text-info)', whiteSpace: 'nowrap' }}>
                       → {r.evolution.toName}
                     </span>
                   )}
                 </div>
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
-                  by {(room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'}
+                  {r.winner
+                    ? `by ${(room.players || []).find(p => p.id === r.winner.ownerId)?.name || r.winner.ownerName || '?'}`
+                    : r.merge?.primaryOwnerName ? `by ${r.merge.primaryOwnerName}` : ''}
                 </span>
               </button>
             ))}
@@ -188,6 +192,20 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
                       </>
                     )
                   })()}
+                </div>
+              )}
+
+              {rd.merge && (
+                <div style={{ borderTop: '0.5px solid var(--color-border-info)', paddingTop: 12, marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-info)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>⚡ Merge</div>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-primary)', margin: '0 0 6px', lineHeight: 1.5 }}>
+                    <strong>{(rd.merge.fromNames || []).join(' + ')}</strong> merged into <strong>{rd.merge.toName}</strong> after drawing with each other.
+                  </p>
+                  {rd.merge.mergeNote && (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4, fontStyle: 'italic' }}>
+                      "{rd.merge.mergeNote}"
+                    </p>
+                  )}
                 </div>
               )}
 
