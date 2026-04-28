@@ -9,7 +9,7 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
-import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges } from '../gameLogic.js'
+import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish } from '../gameLogic.js'
 
 export default function VoteScreen({ room: init, playerId, setRoom, onResult, onViewPlayer, onHome, isGuest, onLogin }) {
   const [room, setLocal] = useState(init)
@@ -107,11 +107,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
-        const rosterIds  = Object.values(r.combatants)
-          .filter(list => list.length === rosterSize)
-          .flat().map(c => c.id)
-        const variantIds = (r.rounds || []).filter(rd => rd.evolution).map(rd => rd.evolution.toId)
-        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
+        await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
       }
     })()
   }
@@ -152,11 +148,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
-        const rosterIds  = Object.values(combatants)
-          .filter(list => list.length === rosterSize)
-          .flat().map(c => c.id)
-        const variantIds = rounds.filter(rd => rd.evolution).map(rd => rd.evolution.toId)
-        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
+        await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
       }
     })()
   }
@@ -261,13 +253,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
-        const rosterIds  = Object.values(finalCombatants)
-          .filter(list => list.length === rosterSize)
-          .flat().map(c => c.id)
-        // Also publish any variants created during this game — they were never
-        // in the roster so they won't appear in rosterIds
-        const variantIds = rounds.filter(rd => rd.evolution).map(rd => rd.evolution.toId)
-        await publishCombatants([...new Set([...rosterIds, ...variantIds])])
+        await publishCombatants(getCombatantsToPublish(finalCombatants, rounds, rosterSize))
       }
     })()
   }

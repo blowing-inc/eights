@@ -29,6 +29,7 @@ import {
   buildEvolutionRound,
   getEphemeralBadges,
   computeSuperlatives,
+  getCombatantsToPublish,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -372,6 +373,56 @@ describe('isFinalRound', () => {
     const room = makeRoom({ currentRound: 5 })
     room.combatants.p2 = room.combatants.p2.slice(0, 5)
     expect(isFinalRound(room)).toBe(true)
+  })
+})
+
+// ─── getCombatantsToPublish ───────────────────────────────────────────────────
+
+describe('getCombatantsToPublish', () => {
+  const roster = (ids) => ids.map(id => ({ id }))
+
+  it('returns all roster combatant IDs for a full-roster game', () => {
+    const combatants = { p1: roster(['a', 'b']), p2: roster(['c', 'd']) }
+    const result = getCombatantsToPublish(combatants, [], 2)
+    expect(result.sort()).toEqual(['a', 'b', 'c', 'd'].sort())
+  })
+
+  it('excludes players who submitted a partial roster (force-start case)', () => {
+    const combatants = { p1: roster(['a', 'b']), p2: roster(['c']) }
+    const result = getCombatantsToPublish(combatants, [], 2)
+    expect(result.sort()).toEqual(['a', 'b'].sort())
+  })
+
+  it('includes variant IDs from evolution rounds', () => {
+    const combatants = { p1: roster(['a']), p2: roster(['b']) }
+    const rounds = [{ evolution: { toId: 'a2' } }]
+    const result = getCombatantsToPublish(combatants, rounds, 1)
+    expect(result.sort()).toEqual(['a', 'a2', 'b'].sort())
+  })
+
+  it('deduplicates IDs appearing in both roster and variants', () => {
+    const combatants = { p1: roster(['a']), p2: roster(['b']) }
+    const rounds = [{ evolution: { toId: 'a' } }]
+    const result = getCombatantsToPublish(combatants, rounds, 1)
+    expect(result.filter(id => id === 'a').length).toBe(1)
+  })
+
+  it('skips rounds without evolution', () => {
+    const combatants = { p1: roster(['a']), p2: roster(['b']) }
+    const rounds = [{ winner: { id: 'a' } }, { evolution: { toId: 'b2' } }]
+    const result = getCombatantsToPublish(combatants, rounds, 1)
+    expect(result.sort()).toEqual(['a', 'b', 'b2'].sort())
+  })
+
+  it('returns empty array when combatants is empty', () => {
+    expect(getCombatantsToPublish({}, [], 2)).toEqual([])
+  })
+
+  it('Workshop combatants (stashed, source=created) are included by ID like any other', () => {
+    const workshopId = 'workshop-combatant-id'
+    const combatants = { p1: roster([workshopId, 'regular-id']) }
+    const result = getCombatantsToPublish(combatants, [], 2)
+    expect(result.sort()).toEqual(['regular-id', workshopId].sort())
   })
 })
 

@@ -508,6 +508,25 @@ export function isFinalRound(room) {
   return total > 0 && room.currentRound >= total
 }
 
+/**
+ * Returns the deduplicated set of combatant IDs to publish when a game completes.
+ * Includes every combatant from players who submitted a full roster, plus any
+ * evolution variants created during the game. Stash/publish status is not checked
+ * here — the caller (publishCombatants) performs the DB update unconditionally, which
+ * is a no-op for already-published combatants.
+ *
+ * combatants — room.combatants map: { [playerId]: [combatant, ...] }
+ * rounds     — resolved rounds array (should include the current round's result)
+ * rosterSize — expected number of combatants per player
+ */
+export function getCombatantsToPublish(combatants, rounds, rosterSize) {
+  const rosterIds  = Object.values(combatants)
+    .filter(list => list.length === rosterSize)
+    .flat().map(c => c.id)
+  const variantIds = rounds.filter(r => r.evolution).map(r => r.evolution.toId)
+  return [...new Set([...rosterIds, ...variantIds])]
+}
+
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
 /**
