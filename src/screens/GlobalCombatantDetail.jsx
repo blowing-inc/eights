@@ -3,7 +3,7 @@ import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget, superHostSetEntityTags, superHostInductHoF, superHostRemoveHoF, setCombatantGroups, getCombatantGroupIds, listPublishedGroups } from '../supabase.js'
 import { buildStoryFromLineageTree, computeSuperlatives } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
@@ -218,7 +218,7 @@ function LineageSection({ title, story, rawTree, currentId, onViewCombatant, onV
   )
 }
 
-export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, onBack, onViewCombatant }) {
+export default function GlobalCombatantDetail({ combatant: init, playerId, playerName, isSuperHost, onBack, onViewCombatant }) {
   const [c, setC] = useState(init)
   const [editMode, setEditMode] = useState(false)
   const [editName, setEditName] = useState(init.name)
@@ -235,7 +235,19 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [h2hRows,  setH2hRows]  = useState(null)   // null = not yet loaded
   const [roomOverlay, setRoomOverlay] = useState(null) // { room, initialRound }
 
-  const canEdit    = c.owner_id === playerId
+  // Super Host state
+  const [shTagEdit,     setShTagEdit]     = useState(false)
+  const [shEditTags,    setShEditTags]    = useState(init.tags || [])
+  const [shTagSaving,   setShTagSaving]   = useState(false)
+  const [shHofOpen,     setShHofOpen]     = useState(false)
+  const [shHofNote,     setShHofNote]     = useState('')
+  const [shHofSaving,   setShHofSaving]   = useState(false)
+  const [shGroupOpen,   setShGroupOpen]   = useState(false)
+  const [shGroupIds,    setShGroupIds]    = useState(null)  // null = not loaded
+  const [shAllGroups,   setShAllGroups]   = useState(null)
+  const [shGroupSaving, setShGroupSaving] = useState(false)
+
+  const canEdit = c.owner_id === playerId
   const totalRounds = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   const history    = c.bio_history || []
   const isVariant  = !!c.lineage
@@ -304,6 +316,48 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     setConfirmPending(false); setEditMode(false)
   }
 
+  async function shSaveTags() {
+    setShTagSaving(true)
+    await superHostSetEntityTags('combatants', c.id, shEditTags)
+    setC(prev => ({ ...prev, tags: shEditTags }))
+    setShTagSaving(false); setShTagEdit(false)
+  }
+
+  async function shInduct() {
+    setShHofSaving(true)
+    const ok = await superHostInductHoF(c.id, playerName, shHofNote)
+    if (ok) {
+      setC(prev => ({ ...prev, hall_of_fame: true, inducted_at: new Date().toISOString(), inducted_by: playerName, induction_note: shHofNote }))
+      setShHofOpen(false); setShHofNote('')
+    }
+    setShHofSaving(false)
+  }
+
+  async function shRemoveHof() {
+    setShHofSaving(true)
+    const ok = await superHostRemoveHoF(c.id, playerName)
+    if (ok) setC(prev => ({ ...prev, hall_of_fame: false, removed_at: new Date().toISOString(), removed_by: playerName }))
+    setShHofSaving(false)
+  }
+
+  async function shOpenGroups() {
+    setShGroupOpen(true)
+    if (shGroupIds === null) {
+      const [ids, groups] = await Promise.all([
+        getCombatantGroupIds(c.id),
+        listPublishedGroups(),
+      ])
+      setShGroupIds(ids)
+      setShAllGroups(groups)
+    }
+  }
+
+  async function shSaveGroups() {
+    setShGroupSaving(true)
+    await setCombatantGroups(c.id, shGroupIds, playerId)
+    setShGroupSaving(false); setShGroupOpen(false)
+  }
+
   return (
     <Screen title={c.name} onBack={onBack}>
 
@@ -313,7 +367,12 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           {isVariant ? '⚡' : '⚔️'}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>{c.name}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>{c.name}</h2>
+            {c.hall_of_fame && (
+              <span title={c.inducted_by ? `Inducted by ${c.inducted_by}` : undefined} style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 99, flexShrink: 0 }}>Hall of Fame</span>
+            )}
+          </div>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
             Created by {c.owner_name || 'unknown'}
             {c.source === 'created' && <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 6 }}>· Made in The Workshop</span>}
@@ -488,6 +547,96 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Super Host panel ─────────────────────────────────────────────── */}
+      {isSuperHost && c.status === 'published' && (
+        <div style={{ marginTop: '1.5rem', borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: '1.5rem' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Super Host</h3>
+
+          {/* Tags */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Tags</span>
+              {!shTagEdit && <button onClick={() => { setShTagEdit(true); setShEditTags(c.tags || []) }} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Edit</button>}
+            </div>
+            {shTagEdit ? (
+              <>
+                <TagInput value={shEditTags} onChange={setShEditTags} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={shSaveTags} disabled={shTagSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shTagSaving ? 'Saving…' : 'Save'}</button>
+                  <button onClick={() => setShTagEdit(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <TagChips tags={c.tags || []} />
+            )}
+          </div>
+
+          {/* Group membership */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Groups</span>
+              {!shGroupOpen && <button onClick={shOpenGroups} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Manage</button>}
+            </div>
+            {shGroupOpen && (
+              shAllGroups === null
+                ? <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading…</p>
+                : shAllGroups.length === 0
+                  ? <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>No published groups yet.</p>
+                  : (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                        {shAllGroups.map(g => (
+                          <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>
+                            <input type="checkbox" checked={(shGroupIds || []).includes(g.id)}
+                              onChange={e => setShGroupIds(ids => e.target.checked ? [...(ids || []), g.id] : (ids || []).filter(id => id !== g.id))}
+                            />
+                            {g.name}
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={shSaveGroups} disabled={shGroupSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shGroupSaving ? 'Saving…' : 'Save'}</button>
+                        <button onClick={() => setShGroupOpen(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                      </div>
+                    </>
+                  )
+            )}
+          </div>
+
+          {/* Hall of Fame */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Hall of Fame</span>
+              {c.hall_of_fame
+                ? <button onClick={shRemoveHof} disabled={shHofSaving} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>{shHofSaving ? '…' : 'Remove'}</button>
+                : <button onClick={() => setShHofOpen(o => !o)} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Induct</button>
+              }
+            </div>
+            {c.hall_of_fame && c.inducted_at && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 4px' }}>
+                Inducted {new Date(c.inducted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {c.inducted_by && ` by ${c.inducted_by}`}
+                {c.induction_note && ` — "${c.induction_note}"`}
+              </p>
+            )}
+            {!c.hall_of_fame && shHofOpen && (
+              <>
+                <input
+                  style={{ ...inp(), fontSize: 13, marginBottom: 6 }}
+                  placeholder="Induction note (optional)"
+                  value={shHofNote}
+                  onChange={e => setShHofNote(e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={shInduct} disabled={shHofSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shHofSaving ? 'Inducting…' : 'Confirm induction'}</button>
+                  <button onClick={() => { setShHofOpen(false); setShHofNote('') }} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </Screen>

@@ -137,8 +137,6 @@ function Notice({ msg }) {
   )
 }
 
-// Tag merge — Super Host capability, temporarily admin-only until 1.2.x Super Host role ships.
-// Replaces old_tag with new_tag on every combatant that carries it.
 function TagMerge() {
   const [oldTag,  setOldTag]  = useState('')
   const [newTag,  setNewTag]  = useState('')
@@ -162,8 +160,7 @@ function TagMerge() {
         Merge Tags
       </h3>
       <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 10px' }}>
-        Replaces a tag with another across all combatants — use this to consolidate typos or duplicates.
-        Will become a Super Host power in 1.2.x.
+        Replaces a tag with another across all combatants, arenas, and groups.
       </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <input

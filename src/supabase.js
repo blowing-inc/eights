@@ -154,7 +154,7 @@ export async function lookupUser(username) {
 export async function verifyUser(username, pin) {
   try {
     const { data, error } = await supabase
-      .from('users').select('id, username, needs_reset')
+      .from('users').select('id, username, needs_reset, is_super_host')
       .ilike('username', username).eq('pin', pin).maybeSingle()
     if (error) { console.error('verifyUser error', error); return null }
     return data ?? null
@@ -192,7 +192,7 @@ export async function adminResetUser(username) {
 export async function listUsers() {
   try {
     const { data, error } = await supabase
-      .from('users').select('id, username, needs_reset, created_at')
+      .from('users').select('id, username, needs_reset, is_super_host, created_at')
       .order('username', { ascending: true })
     if (error) { console.error('listUsers error', error); return [] }
     return data || []
@@ -232,6 +232,63 @@ export async function setFavoriteCombatant(userId, combatantId, combatantName) {
       .eq('id', userId)
     if (error) console.error('setFavoriteCombatant error', error)
   } catch (e) { console.error('setFavoriteCombatant exception', e) }
+}
+
+// Admin: grant or revoke Super Host role. Direct update — same pattern as setUserPin.
+export async function adminSetSuperHost(userId, isSuperHost) {
+  try {
+    const { error } = await supabase.from('users')
+      .update({ is_super_host: isSuperHost, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+    if (error) throw new Error(error.message)
+  } catch (e) { console.error('adminSetSuperHost error', e); throw e }
+}
+
+// ─── Super Host ───────────────────────────────────────────────────────────────
+// All functions below require the caller to be a Super Host (enforced at call
+// sites by checking currentUser.is_super_host — no DB enforcement).
+
+// Update tags on any published combatant, arena, or group.
+// type: 'combatants' | 'arenas' | 'groups'
+export async function superHostSetEntityTags(type, id, tags) {
+  try {
+    const { error } = await supabase.from(type)
+      .update({ tags, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) console.error('superHostSetEntityTags error', error)
+  } catch (e) { console.error('superHostSetEntityTags exception', e) }
+}
+
+// Update arena pool membership. pools: string[] of 'standard' | 'wacky' | 'league'
+export async function superHostSetArenaPools(arenaId, pools) {
+  try {
+    const { error } = await supabase.from('arenas')
+      .update({ pools, updated_at: new Date().toISOString() })
+      .eq('id', arenaId)
+    if (error) console.error('superHostSetArenaPools error', error)
+  } catch (e) { console.error('superHostSetArenaPools exception', e) }
+}
+
+// Induct a combatant into the Hall of Fame.
+export async function superHostInductHoF(combatantId, inductedBy, note = '') {
+  try {
+    const { error } = await supabase.from('combatants')
+      .update({ hall_of_fame: true, inducted_at: new Date().toISOString(), inducted_by: inductedBy, induction_note: note, removed_at: null, removed_by: null, updated_at: new Date().toISOString() })
+      .eq('id', combatantId)
+    if (error) console.error('superHostInductHoF error', error)
+    return !error
+  } catch (e) { console.error('superHostInductHoF exception', e); return false }
+}
+
+// Remove a combatant from the Hall of Fame. Preserves induction record.
+export async function superHostRemoveHoF(combatantId, removedBy) {
+  try {
+    const { error } = await supabase.from('combatants')
+      .update({ hall_of_fame: false, removed_at: new Date().toISOString(), removed_by: removedBy, updated_at: new Date().toISOString() })
+      .eq('id', combatantId)
+    if (error) console.error('superHostRemoveHoF error', error)
+    return !error
+  } catch (e) { console.error('superHostRemoveHoF exception', e); return false }
 }
 
 // Paginated combatants by owner, published only

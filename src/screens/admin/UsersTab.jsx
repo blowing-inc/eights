@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { btn, inp } from '../../styles.js'
-import { listUsers, adminResetUser, slist, adminMergeUsers, getCombatantsByOwnerId, adminLinkGuestToUser } from '../../supabase.js'
+import { listUsers, adminResetUser, adminSetSuperHost, slist, adminMergeUsers, getCombatantsByOwnerId, adminLinkGuestToUser } from '../../supabase.js'
 import { planMerge, applyMergeToRoom } from '../../adminLogic.js'
 import { replacePlayerIdInRoom } from '../../gameLogic.js'
 
@@ -279,12 +279,78 @@ function GuestSection() {
   )
 }
 
+// ─── Super Hosts section ──────────────────────────────────────────────────────
+
+function SuperHostSection() {
+  const [users,    setUsers]    = useState([])
+  const [search,   setSearch]   = useState('')
+  const [saving,   setSaving]   = useState(null)
+  const [msg,      setMsg]      = useState('')
+
+  useEffect(() => { listUsers().then(setUsers) }, [])
+
+  const [error, setError] = useState('')
+
+  async function toggle(user) {
+    setSaving(user.id); setMsg(''); setError('')
+    try {
+      await adminSetSuperHost(user.id, !user.is_super_host)
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_super_host: !u.is_super_host } : u))
+      setMsg(!user.is_super_host
+        ? `${user.username} is now a Super Host.`
+        : `${user.username} is no longer a Super Host.`)
+    } catch {
+      setError('Failed to update. Check the console for details.')
+    }
+    setSaving(null)
+  }
+
+  const filtered = users.filter(u =>
+    !search.trim() || u.username.toLowerCase().includes(search.trim().toLowerCase())
+  )
+
+  return (
+    <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: '1.5rem', paddingTop: '1.5rem' }}>
+      <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 4px' }}>Super Hosts</h3>
+      <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 12px' }}>
+        Trusted users who can edit tags on any entity, manage group memberships, curate arena pools, merge tags globally, and induct combatants into the Hall of Fame.
+      </p>
+      {msg && <Notice msg={msg} />}
+      {error && <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{error}</p>}
+      <input
+        style={{ ...inp(), marginBottom: '1rem', fontSize: 14 }}
+        placeholder="Search by username…"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+      />
+      {filtered.length === 0 && (
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+          {users.length === 0 ? 'No registered users yet.' : 'No users match that search.'}
+        </p>
+      )}
+      {filtered.map(u => (
+        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8 }}>
+          <span style={{ flex: 1, fontSize: 15, color: 'var(--color-text-primary)' }}>{u.username}</span>
+          {u.is_super_host && (
+            <span style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', borderRadius: 99, border: '0.5px solid var(--color-border-info)' }}>Super Host</span>
+          )}
+          <button onClick={() => toggle(u)} disabled={saving === u.id}
+            style={{ ...btn(u.is_super_host ? 'ghost' : 'primary'), padding: '4px 10px', fontSize: 12 }}>
+            {saving === u.id ? '…' : u.is_super_host ? 'Revoke' : 'Grant'}
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
 export default function UsersTab() {
   return (
     <>
       <PinResetSection />
+      <SuperHostSection />
       <MergeSection />
       <GuestSection />
     </>
