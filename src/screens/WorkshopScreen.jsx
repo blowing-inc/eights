@@ -322,16 +322,35 @@ function WorkshopCard({ combatant, onEdit, onPublish, onUnpublish, onDelete }) {
   )
 }
 
+// ─── Placeholder tab panels ───────────────────────────────────────────────────
+
+function ArenasPlaceholder() {
+  return (
+    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+      Arena creation coming soon.
+    </div>
+  )
+}
+
+function GroupsPlaceholder() {
+  return (
+    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+      Group creation coming soon.
+    </div>
+  )
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   if (!currentUser) return <GuestGate onLogin={onLogin} />
 
-  const [view,      setView]      = useState('library')  // 'library' | 'create' | 'edit'
+  const [section,    setSection]    = useState('combatants')  // 'combatants' | 'arenas' | 'groups'
+  const [view,       setView]       = useState('library')     // 'library' | 'create' | 'edit'
   const [editTarget, setEditTarget] = useState(null)
-  const [items,     setItems]     = useState([])
-  const [filter,    setFilter]    = useState('all')      // 'all' | 'stashed' | 'published'
-  const [loading,   setLoading]   = useState(true)
+  const [items,      setItems]      = useState([])
+  const [filter,     setFilter]     = useState('all')         // 'all' | 'stashed' | 'published'
+  const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
     setLoading(true)
@@ -389,48 +408,62 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   return (
     <Screen title="My Workshop" onBack={onBack}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '-0.75rem 0 1rem' }}>
-        Your bench. Stashed combatants are private until you publish them.
+        Your bench. Everything stashed here is private until you publish it.
       </p>
 
-      <button
-        onClick={() => setView('create')}
-        style={{ ...btn('primary'), marginBottom: '1.25rem' }}
-      >
-        + New combatant
-      </button>
+      {/* ── Section tabs: Combatants / Arenas / Groups ── */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        <button onClick={() => setSection('combatants')} style={tab(section === 'combatants')}>Combatants</button>
+        <button onClick={() => setSection('arenas')}     style={tab(section === 'arenas')}>Arenas</button>
+        <button onClick={() => setSection('groups')}     style={tab(section === 'groups')}>Groups</button>
+      </div>
 
-      {items.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilter('all')}       style={tab(filter === 'all')}>All ({items.length})</button>
-          <button onClick={() => setFilter('stashed')}   style={tab(filter === 'stashed')}>Stashed ({stashedCount})</button>
-          <button onClick={() => setFilter('published')} style={tab(filter === 'published')}>Published ({publishedCount})</button>
-        </div>
+      {section === 'arenas' && <ArenasPlaceholder />}
+      {section === 'groups' && <GroupsPlaceholder />}
+
+      {section === 'combatants' && (
+        <>
+          <button
+            onClick={() => setView('create')}
+            style={{ ...btn('primary'), marginBottom: '1.25rem' }}
+          >
+            + New combatant
+          </button>
+
+          {items.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <button onClick={() => setFilter('all')}       style={tab(filter === 'all')}>All ({items.length})</button>
+              <button onClick={() => setFilter('stashed')}   style={tab(filter === 'stashed')}>Stashed ({stashedCount})</button>
+              <button onClick={() => setFilter('published')} style={tab(filter === 'published')}>Published ({publishedCount})</button>
+            </div>
+          )}
+
+          {loading && <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>Loading…</p>}
+
+          {!loading && items.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              Nothing here yet. Create your first combatant above.
+            </div>
+          )}
+
+          {!loading && items.length > 0 && visible.length === 0 && (
+            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              Nothing in this group yet.
+            </p>
+          )}
+
+          {visible.map(combatant => (
+            <WorkshopCard
+              key={combatant.id}
+              combatant={combatant}
+              onEdit={c => { setEditTarget(c); setView('edit') }}
+              onPublish={handlePublish}
+              onUnpublish={handleUnpublish}
+              onDelete={handleDelete}
+            />
+          ))}
+        </>
       )}
-
-      {loading && <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>Loading…</p>}
-
-      {!loading && items.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-          Nothing in the workshop yet. Create your first combatant above.
-        </div>
-      )}
-
-      {!loading && items.length > 0 && visible.length === 0 && (
-        <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-          Nothing in this group yet.
-        </p>
-      )}
-
-      {visible.map(combatant => (
-        <WorkshopCard
-          key={combatant.id}
-          combatant={combatant}
-          onEdit={c => { setEditTarget(c); setView('edit') }}
-          onPublish={handlePublish}
-          onUnpublish={handleUnpublish}
-          onDelete={handleDelete}
-        />
-      ))}
     </Screen>
   )
 }
