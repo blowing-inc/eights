@@ -939,3 +939,80 @@ export async function getArenaPickerOptions(ownerId) {
     return (data || []).filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
   } catch (e) { console.error('getArenaPickerOptions exception', e); return [] }
 }
+
+// ─── Archive listing functions ────────────────────────────────────────────────
+
+// Published groups with aggregated member count, combined W/L, and most-decorated
+// member name. Three queries aggregated client-side (acceptable at expected scale).
+export async function listPublishedGroups({ query = '', tag = null } = {}) {
+  try {
+    const [groupsRes, membershipsRes, combatantsRes] = await Promise.all([
+      supabase.from('groups').select('id, name, description, owner_name, tags').eq('status', 'published'),
+      supabase.from('combatant_groups').select('combatant_id, group_id'),
+      supabase.from('combatants').select('id, name, wins, losses, reactions_heart, reactions_angry, reactions_cry').eq('status', 'published'),
+    ])
+    if (groupsRes.error || membershipsRes.error || combatantsRes.error) return []
+
+    const combatantMap = Object.fromEntries((combatantsRes.data || []).map(c => [c.id, c]))
+    const membersByGroup = {}
+    for (const row of (membershipsRes.data || [])) {
+      if (!membersByGroup[row.group_id]) membersByGroup[row.group_id] = []
+      if (combatantMap[row.combatant_id]) membersByGroup[row.group_id].push(combatantMap[row.combatant_id])
+    }
+
+    let groups = (groupsRes.data || []).map(g => {
+      const members = membersByGroup[g.id] || []
+      const wins   = members.reduce((s, c) => s + (c.wins   || 0), 0)
+      const losses = members.reduce((s, c) => s + (c.losses || 0), 0)
+      const mostDecorated = members.reduce((best, c) => {
+        const score     = (c.wins || 0) * 3 + (c.reactions_heart || 0) + (c.reactions_angry || 0) + (c.reactions_cry || 0)
+        const bestScore = best ? (best.wins || 0) * 3 + (best.reactions_heart || 0) + (best.reactions_angry || 0) + (best.reactions_cry || 0) : -1
+        return score > bestScore ? c : best
+      }, null)
+      return { ...g, member_count: members.length, wins, losses, most_decorated: mostDecorated?.name ?? null }
+    })
+
+    if (tag)         groups = groups.filter(g => (g.tags || []).includes(tag))
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q))
+    }
+
+    return groups.sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name))
+  } catch (e) { console.error('listPublishedGroups exception', e); return [] }
+}
+
+// Published arenas with pagination and optional name/bio search + tag filter.
+export async function listPublishedArenas({ query = '', tag = null, page = 0, pageSize = 20 } = {}) {
+  try {
+    let q = supabase
+      .from('arenas')
+      .select('id, name, bio, rules, tags, likes, dislikes, owner_name', { count: 'exact' })
+      .eq('status', 'published')
+    if (tag)          q = q.contains('tags', [tag])
+    if (query.trim()) q = q.or(`name.ilike.%${query.trim()}%,bio.ilike.%${query.trim()}%`)
+    q = q.order('name', { ascending: true }).range(page * pageSize, page * pageSize + pageSize - 1)
+    const { data, count, error } = await q
+    if (error) { console.error('listPublishedArenas error', error); return { items: [], total: 0 } }
+    return { items: data || [], total: count || 0 }
+  } catch (e) { console.error('listPublishedArenas exception', e); return { items: [], total: 0 } }
+}
+
+// All distinct tags across published combatants, groups, and arenas.
+// Returns [{tag, count}] sorted by frequency desc then alphabetical.
+export async function listAllDistinctTags() {
+  try {
+    const [combRes, grpRes, arenaRes] = await Promise.all([
+      supabase.from('combatants').select('tags').eq('status', 'published'),
+      supabase.from('groups').select('tags').eq('status', 'published'),
+      supabase.from('arenas').select('tags').eq('status', 'published'),
+    ])
+    const counts = {}
+    for (const row of [...(combRes.data || []), ...(grpRes.data || []), ...(arenaRes.data || [])]) {
+      for (const t of (row.tags || [])) counts[t] = (counts[t] || 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+  } catch (e) { console.error('listAllDistinctTags exception', e); return [] }
+}
