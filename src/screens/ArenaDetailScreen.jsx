@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import { btn } from '../styles.js'
-import { getArena, getArenaLineageTree, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getArenaAppearances } from '../supabase.js'
+import { getArena, getArenaLineageTree, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getArenaAppearances, hasPlayerEncounteredArena, ARENA_DISLIKE_RATIO } from '../supabase.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 
 const POOL_LABELS = { standard: 'Standard', wacky: 'Wacky', league: 'League', 'weighted-liked': 'Popular' }
@@ -92,6 +92,7 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
   const [full, setFull]               = useState(null)
   const [lineageTree, setLineageTree] = useState([])
   const [reaction, setReaction]       = useState(null)   // 'like' | 'dislike' | null
+  const [encountered, setEncountered] = useState(null)   // null = loading, true/false = resolved
   const [reacting, setReacting]       = useState(false)
   const [counts, setCounts]           = useState({ likes: init.likes || 0, dislikes: init.dislikes || 0 })
   const [appearances, setAppearances] = useState(null)   // null = not yet loaded
@@ -109,7 +110,12 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
       const rootId = row.root_id || row.id
       getArenaLineageTree(rootId).then(setLineageTree)
     })
-    if (playerId) getArenaReaction(init.id, playerId).then(setReaction)
+    if (playerId) {
+      getArenaReaction(init.id, playerId).then(setReaction)
+      hasPlayerEncounteredArena(init.id, playerId).then(setEncountered)
+    } else {
+      setEncountered(false)
+    }
   }, [init.id, playerId])
 
   // Lazy-load appearances when section is opened
@@ -154,7 +160,7 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
   const showLineage = lineageTree.length > 1
 
   const curated = (arena.pools || []).filter(p => p !== 'weighted-liked')
-  const isPopular = (counts.dislikes || 0) <= (counts.likes || 0) * 3 && counts.likes > 0
+  const isPopular = (counts.dislikes || 0) <= (counts.likes || 0) * ARENA_DISLIKE_RATIO && counts.likes > 0
   const allPools = isPopular ? [...curated, 'weighted-liked'] : curated
 
   const hasRules = !!arena.rules?.trim()
@@ -200,29 +206,36 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
       )}
 
       {/* ��─ Likes / dislikes + reaction ──────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem' }}>
-        {playerId ? (
-          <>
-            <button
-              onClick={() => handleReaction('like')}
-              disabled={reacting}
-              style={{ ...btn(reaction === 'like' ? 'primary' : 'ghost'), padding: '6px 14px', fontSize: 13 }}>
-              👍 {counts.likes > 0 ? counts.likes : ''}
-            </button>
-            <button
-              onClick={() => handleReaction('dislike')}
-              disabled={reacting}
-              style={{ ...btn(reaction === 'dislike' ? 'danger' : 'ghost'), padding: '6px 14px', fontSize: 13 }}>
-              👎 {counts.dislikes > 0 ? counts.dislikes : ''}
-            </button>
-          </>
-        ) : (
-          <>
-            {counts.likes    > 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>👍 {counts.likes}</span>}
-            {counts.dislikes > 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>👎 {counts.dislikes}</span>}
-          </>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {encountered === true ? (
+            <>
+              <button
+                onClick={() => handleReaction('like')}
+                disabled={reacting}
+                style={{ ...btn(reaction === 'like' ? 'primary' : 'ghost'), padding: '6px 14px', fontSize: 13 }}>
+                👍 {counts.likes > 0 ? counts.likes : ''}
+              </button>
+              <button
+                onClick={() => handleReaction('dislike')}
+                disabled={reacting}
+                style={{ ...btn(reaction === 'dislike' ? 'danger' : 'ghost'), padding: '6px 14px', fontSize: 13 }}>
+                👎 {counts.dislikes > 0 ? counts.dislikes : ''}
+              </button>
+            </>
+          ) : (
+            <>
+              {counts.likes    > 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>👍 {counts.likes}</span>}
+              {counts.dislikes > 0 && <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>👎 {counts.dislikes}</span>}
+            </>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {arena.owner_name}</span>
+        </div>
+        {playerId && encountered === false && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '6px 0 0', fontStyle: 'italic' }}>
+            Play in a game with this arena to rate it.
+          </p>
         )}
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>by {arena.owner_name}</span>
       </div>
 
       {/* ── Lineage / variant tree ───────────────────────────────────────── */}

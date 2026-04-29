@@ -6,7 +6,7 @@ import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
@@ -129,6 +129,8 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [hostOnline,       setHostOnline]       = useState(null)   // null = not yet synced; false = host absent
   const [presentIds,       setPresentIds]       = useState([])
   const [voteNudgeDone,    setVoteNudgeDone]    = useState(false)  // one-time guest nudge after first pick
+  const [arenaReaction,    setArenaReaction]    = useState(null)   // 'like' | 'dislike' | null
+  const [arenaReacting,    setArenaReacting]    = useState(false)
 
   // Draw / merge flow state machine.
   // null                                                           — no flow in progress
@@ -163,6 +165,26 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       onPresenceChange:   setPresentIds,
     })
   }, [room.id])
+
+  const arenaId = round?.arena?.id
+
+  useEffect(() => {
+    if (!arenaId || !playerId) { setArenaReaction(null); return }
+    getArenaReaction(arenaId, playerId).then(setArenaReaction)
+  }, [arenaId, playerId])
+
+  async function handleArenaReaction(value) {
+    if (!arenaId || !playerId || arenaReacting) return
+    setArenaReacting(true)
+    if (arenaReaction === value) {
+      await deleteArenaReaction(arenaId, playerId)
+      setArenaReaction(null)
+    } else {
+      await upsertArenaReaction(arenaId, playerId, value)
+      setArenaReaction(value)
+    }
+    setArenaReacting(false)
+  }
 
   // ── Voting ────────────────────────────────────────────────────────────────
 
@@ -674,6 +696,22 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           )}
           {round.arena.houseRules && (
             <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>Rules: {round.arena.houseRules}</p>
+          )}
+          {playerId && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <button
+                onClick={() => handleArenaReaction('like')}
+                disabled={arenaReacting}
+                style={{ background: arenaReaction === 'like' ? 'var(--color-background-info)' : 'var(--color-background-tertiary)', border: arenaReaction === 'like' ? '1px solid var(--color-border-info)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 99, padding: '5px 10px', fontSize: 13, cursor: 'pointer' }}>
+                👍
+              </button>
+              <button
+                onClick={() => handleArenaReaction('dislike')}
+                disabled={arenaReacting}
+                style={{ background: arenaReaction === 'dislike' ? 'var(--color-background-danger)' : 'var(--color-background-tertiary)', border: arenaReaction === 'dislike' ? '1px solid var(--color-border-danger)' : '0.5px solid var(--color-border-tertiary)', borderRadius: 99, padding: '5px 10px', fontSize: 13, cursor: 'pointer' }}>
+                👎
+              </button>
+            </div>
           )}
         </div>
       )}

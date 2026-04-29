@@ -817,6 +817,14 @@ export async function publishCombatants(ids) {
   } catch (e) { console.error('publishCombatants exception', e) }
 }
 
+// ─── Arena config ─────────────────────────────────────────────────────────────
+
+// Arena suppression threshold: an arena is excluded from the weighted-liked pool
+// when its dislike count exceeds its like count by this ratio.
+// Applies in: listPublishedArenas (pool filter), getRandomArenaFromPool,
+// and the computed pool badge in ArenaDetailScreen.
+export const ARENA_DISLIKE_RATIO = 3
+
 // ─── Arena Workshop operations ────────────────────────────────────────────────
 
 export async function createWorkshopArena({ id, name, bio, rules, tags = [], ownerId, ownerName, status = 'stashed' }) {
@@ -904,7 +912,7 @@ export async function getRandomArenaFromPool(pool, excludeArenaIds = []) {
 
     let eligible = data
     if (pool === 'weighted-liked') {
-      eligible = eligible.filter(a => (a.likes || 0) >= (a.dislikes || 0))
+      eligible = eligible.filter(a => (a.dislikes || 0) <= (a.likes || 0) * ARENA_DISLIKE_RATIO)
     }
     if (excludeArenaIds.length) {
       const filtered = eligible.filter(a => !excludeArenaIds.includes(a.id))
@@ -1001,8 +1009,8 @@ export async function listPublishedArenas({ query = '', tag = null, pool = null,
     const { data, count, error } = await q
     if (error) { console.error('listPublishedArenas error', error); return { items: [], total: 0 } }
     let items = data || []
-    // weighted-liked is computed: filter out arenas with dislikes > likes × 3
-    if (pool === 'weighted-liked') items = items.filter(a => (a.dislikes || 0) <= (a.likes || 0) * 3)
+    // weighted-liked is computed: filter out arenas with dislikes > likes × ARENA_DISLIKE_RATIO
+    if (pool === 'weighted-liked') items = items.filter(a => (a.dislikes || 0) <= (a.likes || 0) * ARENA_DISLIKE_RATIO)
     return { items, total: count || 0 }
   } catch (e) { console.error('listPublishedArenas exception', e); return { items: [], total: 0 } }
 }
@@ -1097,6 +1105,22 @@ export async function getArenaAppearances(arenaIds) {
     }
     return appearances
   } catch (e) { console.error('getArenaAppearances exception', e); return [] }
+}
+
+// Returns true if the given player participated in any game that used this arena.
+// Used to gate the like/dislike action on the arena detail page in The Archive.
+export async function hasPlayerEncounteredArena(arenaId, playerId) {
+  if (!arenaId || !playerId) return false
+  try {
+    const { data, error } = await supabase.from('rooms').select('data').order('updated_at', { ascending: false })
+    if (error || !data?.length) return false
+    return data.some(row => {
+      const r = row.data
+      if (!r || r.devMode) return false
+      if (!(r.players || []).some(p => p.id === playerId)) return false
+      return (r.rounds || []).some(rd => rd.arena?.id === arenaId)
+    })
+  } catch (e) { console.error('hasPlayerEncounteredArena exception', e); return false }
 }
 
 // All distinct tags across published combatants, groups, and arenas.
