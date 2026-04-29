@@ -218,7 +218,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
-        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
+        // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
+        const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
+        if (arenaIds.length) await publishArenas(arenaIds)
       }
     })()
   }
@@ -269,7 +271,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
-        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
+        // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
+        const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
+        if (arenaIds.length) await publishArenas(arenaIds)
       }
     })()
   }
@@ -415,7 +419,9 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
-        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
+        // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
+        const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
+        if (arenaIds.length) await publishArenas(arenaIds)
       }
     })()
   }
@@ -655,9 +661,22 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           Host is out of the room
         </div>
       )}
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>
         {isHost ? 'Pick the winner, then confirm to lock it in.' : 'Tap your pick — the host will confirm the final call.'}
       </p>
+
+      {/* ── Arena context ────────────────────────────────────────────── */}
+      {round.arena && (
+        <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '8px 14px', marginBottom: '1rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{round.arena.name}</div>
+          {round.arena.description && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>{round.arena.description}</p>
+          )}
+          {round.arena.houseRules && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>Rules: {round.arena.houseRules}</p>
+          )}
+        </div>
+      )}
 
       {trapAnnouncement && (
         <div style={{ marginBottom: '1.5rem', padding: '16px 18px', background: 'var(--color-background-danger)', border: '1.5px solid var(--color-border-danger)', borderRadius: 'var(--border-radius-lg)', textAlign: 'center' }}>

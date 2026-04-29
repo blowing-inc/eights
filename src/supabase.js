@@ -889,6 +889,41 @@ export async function publishArenas(ids) {
   } catch (e) { console.error('publishArenas exception', e) }
 }
 
+// Returns a random arena snapshot for random-pool delivery mode.
+// pool: 'standard' | 'wacky' | 'league' | 'weighted-liked'
+// excludeArenaIds: arena IDs to exclude (e.g. already played in the series)
+// Pool-specific curation (standard/wacky/league) deferred to Super Host #74 —
+// all published arenas are eligible across those pools for now.
+export async function getRandomArenaFromPool(pool, excludeArenaIds = []) {
+  try {
+    const { data, error } = await supabase
+      .from('arenas')
+      .select('id, name, bio, rules, tags, likes, dislikes')
+      .eq('status', 'published')
+    if (error || !data?.length) return null
+
+    let eligible = data
+    if (pool === 'weighted-liked') {
+      eligible = eligible.filter(a => (a.likes || 0) >= (a.dislikes || 0))
+    }
+    if (excludeArenaIds.length) {
+      const filtered = eligible.filter(a => !excludeArenaIds.includes(a.id))
+      // fall back to full eligible set if all are excluded
+      if (filtered.length) eligible = filtered
+    }
+    if (!eligible.length) return null
+
+    const arena = eligible[Math.floor(Math.random() * eligible.length)]
+    return {
+      id:          arena.id,
+      name:        arena.name,
+      description: arena.bio   || '',
+      houseRules:  arena.rules || null,
+      tags:        arena.tags  || [],
+    }
+  } catch (e) { console.error('getRandomArenaFromPool exception', e); return null }
+}
+
 // Returns arenas visible to a host in the lobby arena picker:
 // all published arenas + the host's own stashed arenas.
 export async function getArenaPickerOptions(ownerId) {

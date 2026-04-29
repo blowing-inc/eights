@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
-import { btn, inp, lbl } from '../styles.js'
-import { sset } from '../supabase.js'
-import { playerColor } from '../gameLogic.js'
+import { btn, inp, lbl, tab } from '../styles.js'
+import { sset, getArenaPickerOptions } from '../supabase.js'
+import { playerColor, buildArenaSnapshot } from '../gameLogic.js'
 
 function SettingRow({ label, description, value, onToggle, indented }) {
   return (
@@ -48,12 +48,58 @@ const SETTINGS = [
   ['allowDraws',             'Allow draws',             'Host can declare a round a draw instead of picking a winner.'],
 ]
 
+const ARENA_MODES = [
+  { value: 'none',        label: 'None' },
+  { value: 'single',      label: 'Single' },
+  { value: 'random-pool', label: 'Random pool' },
+  { value: 'playlist',    label: 'Playlist', disabled: true },
+]
+
+const POOL_OPTIONS = [
+  { value: 'standard',       label: 'Standard' },
+  { value: 'wacky',          label: 'Wacky' },
+  { value: 'league',         label: 'League' },
+  { value: 'weighted-liked', label: 'Fan favourites' },
+]
+
 export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true })
+  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null })
+
+  // Arena picker state for single mode
+  const [arenas,       setArenas]       = useState([])
+  const [arenaSearch,  setArenaSearch]  = useState('')
+  const [arenasLoaded, setArenasLoaded] = useState(false)
 
   function toggle(key) { setSettings(s => ({ ...s, [key]: !s[key] })) }
+
+  function selectArenaMode(mode) {
+    setSettings(s => ({ ...s, arenaMode: mode, arenaConfig: null }))
+    setArenaSearch('')
+    if (mode === 'single' && !arenasLoaded) {
+      getArenaPickerOptions(playerId).then(data => { setArenas(data); setArenasLoaded(true) })
+    }
+    if (mode === 'random-pool') {
+      setSettings(s => ({ ...s, arenaMode: mode, arenaConfig: { pool: 'standard', excludeSeries: false } }))
+    }
+  }
+
+  function pickArena(arena) {
+    setSettings(s => ({ ...s, arenaConfig: { arenaId: arena.id, arenaSnapshot: buildArenaSnapshot(arena) } }))
+  }
+
+  function clearArenaSelection() {
+    setSettings(s => ({ ...s, arenaConfig: null }))
+  }
+
+  function setPool(pool) {
+    setSettings(s => ({ ...s, arenaConfig: { ...(s.arenaConfig || {}), pool } }))
+  }
+
+  function toggleExcludeSeries() {
+    setSettings(s => ({ ...s, arenaConfig: { ...(s.arenaConfig || {}), excludeSeries: !(s.arenaConfig?.excludeSeries) } }))
+  }
 
   async function create() {
     if (!name.trim()) return
@@ -71,6 +117,12 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
     setLoading(false)
     onCreated(room)
   }
+
+  const filteredArenas = arenaSearch.trim()
+    ? arenas.filter(a => a.name.toLowerCase().includes(arenaSearch.trim().toLowerCase()) || (a.bio || '').toLowerCase().includes(arenaSearch.trim().toLowerCase()))
+    : arenas
+
+  const selectedArenaSnapshot = settings.arenaConfig?.arenaSnapshot || null
 
   return (
     <Screen title="New room" onBack={onBack}>
@@ -107,6 +159,127 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
             )}
           </div>
         ))}
+      </div>
+
+      {/* ── Arena ───────────────────────────────────────────────────────── */}
+      <h3 style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px' }}>Arena</h3>
+      <div style={{ marginBottom: '1.5rem' }}>
+        {/* Mode selector */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+          {ARENA_MODES.map(({ value, label, disabled }) => (
+            <button
+              key={value}
+              onClick={() => !disabled && selectArenaMode(value)}
+              disabled={disabled}
+              style={{
+                ...tab(settings.arenaMode === value),
+                flex: 1,
+                opacity: disabled ? 0.4 : 1,
+                cursor: disabled ? 'default' : 'pointer',
+                fontSize: 12,
+              }}
+              title={disabled ? 'Coming soon' : undefined}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Single mode: arena search + select */}
+        {settings.arenaMode === 'single' && (
+          <div>
+            {selectedArenaSnapshot ? (
+              <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedArenaSnapshot.name}</div>
+                    {selectedArenaSnapshot.description && (
+                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {selectedArenaSnapshot.description}
+                      </p>
+                    )}
+                    {selectedArenaSnapshot.houseRules && (
+                      <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>
+                        Rules: {selectedArenaSnapshot.houseRules.length > 60 ? selectedArenaSnapshot.houseRules.slice(0, 60) + '…' : selectedArenaSnapshot.houseRules}
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={clearArenaSelection} style={{ ...btn('ghost'), padding: '3px 10px', fontSize: 12, flexShrink: 0 }}>Change</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input
+                  style={{ ...inp(), margin: '0 0 6px', fontSize: 14 }}
+                  value={arenaSearch}
+                  onChange={e => setArenaSearch(e.target.value)}
+                  placeholder="Search arenas…"
+                  autoFocus
+                />
+                {!arenasLoaded ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading…</p>
+                ) : filteredArenas.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                    {arenas.length === 0 ? 'No arenas yet — create one in The Workshop first.' : 'No arenas match your search.'}
+                  </p>
+                ) : (
+                  <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden', maxHeight: 240, overflowY: 'auto' }}>
+                    {filteredArenas.map((arena, i) => (
+                      <button
+                        key={arena.id}
+                        onClick={() => pickArena(arena)}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: i % 2 === 0 ? 'var(--color-background-secondary)' : 'var(--color-background-primary)', border: 'none', borderTop: i === 0 ? 'none' : '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{arena.name}</span>
+                          {arena.status === 'stashed' && (
+                            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-tertiary)' }}>stashed</span>
+                          )}
+                        </div>
+                        {arena.bio && (
+                          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
+                            {arena.bio}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Random pool mode: pool selector + series exclusion */}
+        {settings.arenaMode === 'random-pool' && (
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 6 }}>Pool</div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+              {POOL_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setPool(value)}
+                  style={{ ...tab(settings.arenaConfig?.pool === value), fontSize: 12 }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <SettingRow
+              label="Exclude series arenas"
+              description="Skip arenas already played in the current series"
+              value={settings.arenaConfig?.excludeSeries || false}
+              onToggle={toggleExcludeSeries}
+            />
+          </div>
+        )}
+
+        {/* Playlist mode: gated */}
+        {settings.arenaMode === 'playlist' && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+            Playlist delivery coming soon.
+          </p>
+        )}
       </div>
 
       <button style={btn('primary')} onClick={create} disabled={!name.trim() || loading}>{loading ? 'Creating…' : 'Create room'}</button>
