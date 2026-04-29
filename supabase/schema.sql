@@ -21,7 +21,8 @@
 --   round: { id, number, combatants[], winner, picks{}, playerReactions{},
 --            chat[], createdAt,
 --            evolution: { fromId, fromName, toId, toName, toBio,
---                         ownerId, ownerName, authorId } | null }
+--                         ownerId, ownerName, authorId } | null,
+--            arena: { id, name, description, houseRules, tags[] } | null }
 
 create table if not exists rooms (
   id          text primary key,
@@ -242,15 +243,19 @@ grant select, insert, update, delete on table combatant_groups to anon, authenti
 
 -- ─── Arenas ──────────────────────────────────────────────────────────────────
 -- Optional fight contexts: name, bio (the setting/vibe), and house rules.
--- Schema only in 1.1.x — no arena feature work until scope decision is resolved
--- (game-level vs round-level assignment; see docs/glossary.md → Arenas).
+-- Arenas attach at the round level. All delivery modes write to round.arena —
+-- a denormalized snapshot taken at assignment time (see rooms comment above).
 --
 -- Follows the same stash/publish lifecycle as combatants and groups.
 -- Publish-on-game-completion applies: stashed arenas used in a completed game
 -- auto-publish on room close (app-level logic, not enforced here).
 --
--- Arena data is denormalized into the round/room at selection time.
--- Later edits to the arena row do not alter the fight record.
+-- Lineage mirrors the combatants pattern (rootId/parentId/generation/bornFrom).
+-- bornFrom shape: { gameCode, roundNumber, seriesId } (seriesId nullable).
+-- null on lineage columns means generation-0 (original) arena.
+--
+-- likes/dislikes are running totals cached from arena_reactions for read
+-- performance. Kept in sync by the sync_arena_reaction_counts trigger.
 
 create table if not exists arenas (
   id          text        primary key,
@@ -261,6 +266,12 @@ create table if not exists arenas (
   owner_name  text        not null,
   status      text        not null default 'stashed', -- 'stashed' | 'published'
   tags        text[]      not null default '{}',
+  root_id     text        null,
+  parent_id   text        null,
+  generation  int         not null default 0,
+  born_from   jsonb       null,                  -- { gameCode, roundNumber, seriesId }; null for gen-0
+  likes       int         not null default 0,
+  dislikes    int         not null default 0,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -272,6 +283,11 @@ create index if not exists arenas_status_idx
   on arenas (status)
   where status = 'published';
 
+-- Fast lookup of all variants whose root is X
+create index if not exists arenas_lineage_root_idx
+  on arenas (root_id)
+  where root_id is not null;
+
 alter table arenas enable row level security;
 
 create policy "public read arenas"   on arenas for select using (true);
@@ -279,3 +295,121 @@ create policy "public insert arenas" on arenas for insert with check (true);
 create policy "public update arenas" on arenas for update using (true);
 
 grant select, insert, update on table arenas to anon, authenticated;
+
+-- ─── Arena Reactions ─────────────────────────────────────────────────────────
+-- Per-player reactions (like / dislike) to arenas. One row per player per
+-- arena — the unique constraint enforces this. Changing a reaction is an
+-- UPDATE, not a new INSERT.
+--
+-- The sync_arena_reaction_counts trigger keeps arenas.likes / arenas.dislikes
+-- current on every insert, update, and delete.
+
+create table if not exists arena_reactions (
+  id         uuid        primary key default gen_random_uuid(),
+  arena_id   text        not null,
+  user_id    text        not null,
+  reaction   text        not null check (reaction in ('like', 'dislike')),
+  created_at timestamptz not null default now(),
+  unique (arena_id, user_id)
+);
+
+create index if not exists arena_reactions_arena_idx on arena_reactions (arena_id);
+
+alter table arena_reactions enable row level security;
+
+create policy "public read arena_reactions"   on arena_reactions for select using (true);
+create policy "public insert arena_reactions" on arena_reactions for insert with check (true);
+create policy "public update arena_reactions" on arena_reactions for update using (true);
+create policy "public delete arena_reactions" on arena_reactions for delete using (true);
+
+grant select, insert, update, delete on table arena_reactions to anon, authenticated;
+
+create or replace function sync_arena_reaction_counts()
+returns trigger language plpgsql as $$
+begin
+  if TG_OP = 'INSERT' then
+    if NEW.reaction = 'like' then
+      update arenas set likes    = likes    + 1 where id = NEW.arena_id;
+    else
+      update arenas set dislikes = dislikes + 1 where id = NEW.arena_id;
+    end if;
+
+  elsif TG_OP = 'UPDATE' then
+    if OLD.reaction = 'like' then
+      update arenas
+        set likes    = greatest(0, likes    - 1),
+            dislikes = dislikes + 1
+        where id = NEW.arena_id;
+    else
+      update arenas
+        set dislikes = greatest(0, dislikes - 1),
+            likes    = likes    + 1
+        where id = NEW.arena_id;
+    end if;
+
+  elsif TG_OP = 'DELETE' then
+    if OLD.reaction = 'like' then
+      update arenas set likes    = greatest(0, likes    - 1) where id = OLD.arena_id;
+    else
+      update arenas set dislikes = greatest(0, dislikes - 1) where id = OLD.arena_id;
+    end if;
+
+  end if;
+  return null;
+end;
+$$;
+
+create trigger arena_reaction_count_sync
+  after insert or update or delete on arena_reactions
+  for each row execute function sync_arena_reaction_counts();
+
+-- ─── Arena Playlists ─────────────────────────────────────────────────────────
+-- Named, ordered collections of arenas for round-by-round delivery.
+-- Distinct from Groups — a playlist is a delivery mechanism, not a narrative
+-- collective. Follows the same stash/publish lifecycle as all Workshop objects.
+--
+-- arena_playlist_slots holds the ordered arena entries. position is 1-based.
+-- arena_id is not a FK — arenas use text primary keys (no uuid FK constraint).
+
+create table if not exists arena_playlists (
+  id         uuid        primary key default gen_random_uuid(),
+  name       text        not null,
+  owner_id   text        not null,
+  owner_name text        not null,
+  status     text        not null default 'stashed'
+               check (status in ('stashed', 'published')),
+  tags       text[]      not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists arena_playlists_owner_idx  on arena_playlists (owner_id);
+create index if not exists arena_playlists_status_idx on arena_playlists (status)
+  where status = 'published';
+
+alter table arena_playlists enable row level security;
+
+create policy "public read arena_playlists"   on arena_playlists for select using (true);
+create policy "public insert arena_playlists" on arena_playlists for insert with check (true);
+create policy "public update arena_playlists" on arena_playlists for update using (true);
+
+grant select, insert, update on table arena_playlists to anon, authenticated;
+
+create table if not exists arena_playlist_slots (
+  id          uuid        primary key default gen_random_uuid(),
+  playlist_id uuid        not null references arena_playlists(id),
+  arena_id    text        not null,
+  position    int         not null,
+  unique (playlist_id, position)
+);
+
+create index if not exists arena_playlist_slots_playlist_idx on arena_playlist_slots (playlist_id);
+
+alter table arena_playlist_slots enable row level security;
+
+create policy "public read arena_playlist_slots"   on arena_playlist_slots for select using (true);
+create policy "public insert arena_playlist_slots" on arena_playlist_slots for insert with check (true);
+create policy "public update arena_playlist_slots" on arena_playlist_slots for update using (true);
+create policy "public delete arena_playlist_slots" on arena_playlist_slots for delete using (true);
+
+grant select, insert, update, delete on table arena_playlist_slots to anon, authenticated;
