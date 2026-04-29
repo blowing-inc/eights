@@ -2,9 +2,64 @@ import { useState, useEffect, useRef } from 'react'
 import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
-import { btn } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain } from '../supabase.js'
+import { btn, inp } from '../styles.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
+
+// Inline form for evolving the current arena after a round resolves.
+// Pre-fills house rules from the parent arena; name and description start blank.
+function ArenaEvolveForm({ currentArena, onSubmit, onCancel, error, submitting }) {
+  const [name,       setName]       = useState('')
+  const [description, setDescription] = useState('')
+  const [houseRules,  setHouseRules]  = useState(currentArena.houseRules || '')
+
+  return (
+    <div style={{ padding: '12px 16px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: 8 }}>
+      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 10px' }}>
+        How did <strong>{currentArena.name}</strong> change?
+      </p>
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>New name (required)</div>
+      <input
+        style={{ ...inp(), margin: '0 0 4px', fontSize: 14, borderColor: error ? 'var(--color-border-danger)' : undefined }}
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="What is this arena called now?"
+        autoFocus
+      />
+      {error && <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 8px', lineHeight: 1.4 }}>{error}</p>}
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>Description (required)</div>
+      <textarea
+        style={{ ...inp(), margin: '0 0 8px', resize: 'none', height: 72, fontSize: 13, width: '100%' }}
+        value={description}
+        onChange={e => setDescription(e.target.value)}
+        placeholder="What's different about this version?"
+      />
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 3 }}>House rules <span style={{ fontStyle: 'italic' }}>(optional)</span></div>
+      <textarea
+        style={{ ...inp(), margin: '0 0 10px', resize: 'none', height: 48, fontSize: 13, width: '100%' }}
+        value={houseRules}
+        onChange={e => setHouseRules(e.target.value)}
+        placeholder="Any rule changes for this form?"
+      />
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => onSubmit(name.trim(), description.trim(), houseRules.trim() || null)}
+          disabled={!name.trim() || !description.trim() || submitting}
+          style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '9px' }}
+        >
+          {submitting ? 'Saving…' : 'Save evolution 🏟️'}
+        </button>
+        <button onClick={onCancel} style={{ ...btn('ghost'), fontSize: 13, padding: '9px 14px' }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onChronicles, onHome, onNextGame, onRejoinNextGame }) {
   const [room, setLocal] = useState(init)
@@ -14,6 +69,10 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [undoNotice, setUndoNotice] = useState(null) // "Host undid Round X"
   const [hostOnline, setHostOnline] = useState(null) // null = not yet synced; false = host absent
   const [presentIds, setPresentIds] = useState([])
+  // Arena evolution flow: null | { stage: 'form' }
+  const [arenaEvolveFlow, setArenaEvolveFlow] = useState(null)
+  const [arenaEvolveError, setArenaEvolveError] = useState(null)
+  const [arenaEvolving, setArenaEvolving] = useState(false)
   const prevRoundRef = useRef(init.currentRound)
   const undoTimerRef = useRef(null)
 
@@ -52,10 +111,12 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     const roundNum = room.currentRound + 1
     const matchup = room.players.map(p => (room.combatants[p.id] || [])[roundNum - 1]).filter(Boolean)
 
-    // Attach arena snapshot based on the configured delivery mode
+    // Attach arena snapshot: evolved override takes precedence over delivery mode config
     const { arenaMode, arenaConfig } = normalizeRoomSettings(room.settings)
     let arena = null
-    if (arenaMode === 'single') {
+    if (room.arenaEvolutionOverride) {
+      arena = room.arenaEvolutionOverride.snapshot
+    } else if (arenaMode === 'single') {
       arena = arenaConfig?.arenaSnapshot || null
     } else if (arenaMode === 'random-pool') {
       // Collect arena IDs already used in this game
@@ -101,7 +162,21 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
 
     // Reverse in-room stats using pure function
     const combatants = undoRound(r, last)
-    const updated = { ...r, rounds: r.rounds.slice(0, r.currentRound - 1), combatants, currentRound: r.currentRound - 1, phase: 'battle' }
+    const remainingRounds = r.rounds.slice(0, r.currentRound - 1)
+    const updated = { ...r, rounds: remainingRounds, combatants, currentRound: r.currentRound - 1, phase: 'battle' }
+
+    // Restore arena evolution override: if the undone round carried an evolution,
+    // scan remaining rounds for the most recent prior evolution and restore that,
+    // or clear the override entirely if none exists.
+    if (last.arenaEvolution) {
+      const prevEvolved = [...remainingRounds].reverse().find(rd => rd.arenaEvolution)
+      if (prevEvolved) {
+        updated.arenaEvolutionOverride = { id: prevEvolved.arenaEvolution.variantId, snapshot: prevEvolved.arenaEvolution.snapshot }
+      } else {
+        delete updated.arenaEvolutionOverride
+      }
+    }
+
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated); setConfirmUndo(false)
 
@@ -117,6 +192,67 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         }
       }
     })()
+  }
+
+  const { arenaEvolutionEnabled } = normalizeRoomSettings(room.settings)
+
+  async function handleArenaEvolution(newName, newDescription, newHouseRules) {
+    setArenaEvolving(true)
+    setArenaEvolveError(null)
+    const r = await sget('room:' + room.id)
+    if (!r) { setArenaEvolving(false); return }
+
+    const rdIdx = r.currentRound - 1
+    const rd = r.rounds[rdIdx]
+    if (!rd?.arena) { setArenaEvolving(false); return }
+
+    // Fetch parent from DB for accurate lineage (snapshot doesn't carry root_id/generation)
+    const parentRow = await getArena(rd.arena.id)
+
+    const newId = uid()
+    const hostPlayer = r.players.find(p => p.id === r.host)
+    const rootId     = parentRow?.root_id || rd.arena.id
+    const generation = (parentRow?.generation || 0) + 1
+    const bornFrom   = { gameCode: r.code, roundNumber: rd.number, seriesId: r.seriesId || null }
+
+    await createArenaVariant({
+      id: newId,
+      name: newName,
+      bio: newDescription,
+      rules: newHouseRules || '',
+      tags: parentRow?.tags || rd.arena.tags || [],
+      ownerId: r.host,
+      ownerName: hostPlayer?.name || '',
+      rootId, parentId: rd.arena.id, generation, bornFrom,
+    })
+
+    const evolvedSnapshot = {
+      id:          newId,
+      name:        newName,
+      description: newDescription,
+      houseRules:  newHouseRules || null,
+      tags:        parentRow?.tags || rd.arena.tags || [],
+    }
+
+    // Record evolution on the round (includes snapshot so undo can restore it)
+    const updatedRound = {
+      ...rd,
+      arenaEvolution: { variantId: newId, variantName: newName, snapshot: evolvedSnapshot },
+    }
+    const rounds = [...r.rounds]; rounds[rdIdx] = updatedRound
+
+    // Override applies to all subsequent rounds regardless of delivery mode
+    const updated = { ...r, rounds, arenaEvolutionOverride: { id: newId, snapshot: evolvedSnapshot } }
+
+    // If game is ending and variants need publishing, mark for publish-on-complete.
+    // Arena publish-on-game-completion handles stashed arenas used in the final round
+    // via publishArenas() in VoteScreen — the variant will be picked up there since
+    // it's now a DB record with an id.
+
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    setArenaEvolveFlow(null)
+    setArenaEvolving(false)
   }
 
   return (<>
@@ -157,6 +293,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                 : r.draw
                   ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>🤝 Draw</span>
                   : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
+              {r.arenaEvolution && <span style={{ fontSize: 11, color: 'var(--color-text-info)', flexShrink: 0 }}>🏟️ → {r.arenaEvolution.variantName}</span>}
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                 {r.combatants.map(c => (
                   <button key={c.id} onClick={() => setSheetCombatant({ id: c.id, inRoom: c })}
@@ -185,7 +322,31 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           </div>
         )}
 
-        {isHost && room.currentRound < totalRounds && (round?.winner || round?.draw) && (
+        {/* ── Arena evolution affordance (non-final rounds) ─────────────────── */}
+        {isHost && arenaEvolutionEnabled && round?.arena && (round?.winner || round?.draw) &&
+          !round.arenaEvolution && room.currentRound < totalRounds && (
+          <>
+            {!arenaEvolveFlow && (
+              <button
+                onClick={() => { setArenaEvolveFlow({ stage: 'form' }); setArenaEvolveError(null) }}
+                style={{ ...btn('ghost'), width: '100%', fontSize: 13, marginBottom: 8, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}
+              >
+                🏟️ Evolve arena
+              </button>
+            )}
+            {arenaEvolveFlow?.stage === 'form' && (
+              <ArenaEvolveForm
+                currentArena={round.arena}
+                onSubmit={handleArenaEvolution}
+                onCancel={() => { setArenaEvolveFlow(null); setArenaEvolveError(null) }}
+                error={arenaEvolveError}
+                submitting={arenaEvolving}
+              />
+            )}
+          </>
+        )}
+
+        {isHost && room.currentRound < totalRounds && (round?.winner || round?.draw) && !arenaEvolveFlow && (
           <button style={btn('primary')} onClick={startRound}>Round {room.currentRound + 1} ⚔️</button>
         )}
 
@@ -233,14 +394,40 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
               {isHost && (
                 <>
-                  <button style={btn('primary')} onClick={completeGame}>Complete game ✓</button>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button style={btn()} onClick={onChronicles}>The Chronicles</button>
-                    <button style={btn()} onClick={() => onNextGame(room)}>Next Game ⚔️</button>
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
-                    This room stays open until you complete or start the next game.
-                  </p>
+                  {/* Arena evolution on the final round — records the variant but no future rounds benefit */}
+                  {arenaEvolutionEnabled && round?.arena && !round.arenaEvolution && (
+                    <>
+                      {!arenaEvolveFlow && (
+                        <button
+                          onClick={() => { setArenaEvolveFlow({ stage: 'form' }); setArenaEvolveError(null) }}
+                          style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-tertiary)', borderColor: 'var(--color-border-tertiary)' }}
+                        >
+                          🏟️ Evolve arena
+                        </button>
+                      )}
+                      {arenaEvolveFlow?.stage === 'form' && (
+                        <ArenaEvolveForm
+                          currentArena={round.arena}
+                          onSubmit={handleArenaEvolution}
+                          onCancel={() => { setArenaEvolveFlow(null); setArenaEvolveError(null) }}
+                          error={arenaEvolveError}
+                          submitting={arenaEvolving}
+                        />
+                      )}
+                    </>
+                  )}
+                  {!arenaEvolveFlow && (
+                    <>
+                      <button style={btn('primary')} onClick={completeGame}>Complete game ✓</button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button style={btn()} onClick={onChronicles}>The Chronicles</button>
+                        <button style={btn()} onClick={() => onNextGame(room)}>Next Game ⚔️</button>
+                      </div>
+                      <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                        This room stays open until you complete or start the next game.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
               {!isHost && (

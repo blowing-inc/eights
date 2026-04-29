@@ -31,6 +31,7 @@ export function normalizeRoomSettings(settings) {
     allowMerges:          true,
     arenaMode:            'none',
     arenaConfig:          null,
+    arenaEvolutionEnabled: false,
     ...settings,
   }
 }
