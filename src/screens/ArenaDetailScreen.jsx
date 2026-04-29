@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
-import { btn } from '../styles.js'
-import { getArena, getArenaLineageTree, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getArenaAppearances, hasPlayerEncounteredArena, ARENA_DISLIKE_RATIO } from '../supabase.js'
+import TagInput from '../components/TagInput.jsx'
+import { btn, inp } from '../styles.js'
+import { getArena, getArenaLineageTree, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getArenaAppearances, hasPlayerEncounteredArena, ARENA_DISLIKE_RATIO, superHostSetEntityTags, superHostSetArenaPools } from '../supabase.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 
 const POOL_LABELS = { standard: 'Standard', wacky: 'Wacky', league: 'League', 'weighted-liked': 'Popular' }
@@ -86,7 +87,9 @@ function ArenaLineageTree({ tree, currentId, onViewArena }) {
 
 // ─── Arena detail ─────────────────────────────────────────────────────────────
 
-export default function ArenaDetailScreen({ arena: init, playerId, onBack, onViewArena }) {
+const CURATED_POOLS = ['standard', 'wacky', 'league']
+
+export default function ArenaDetailScreen({ arena: init, playerId, isSuperHost, onBack, onViewArena }) {
   // init is the card-level row (id, name, bio, rules, tags, pools, likes, dislikes, owner_name).
   // full is the complete DB row; loaded in background for bio_history + lineage columns.
   const [full, setFull]               = useState(null)
@@ -99,6 +102,14 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
   const [appearancesOpen, setAppearancesOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [roomOverlay, setRoomOverlay] = useState(null)   // { room, initialRound }
+
+  // Super Host state
+  const [shTagEdit,   setShTagEdit]   = useState(false)
+  const [shEditTags,  setShEditTags]  = useState(init.tags || [])
+  const [shTagSaving, setShTagSaving] = useState(false)
+  const [shPoolEdit,  setShPoolEdit]  = useState(false)
+  const [shEditPools, setShEditPools] = useState(init.pools || [])
+  const [shPoolSaving,setShPoolSaving]= useState(false)
 
   const arena = full || init
 
@@ -139,6 +150,20 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
     }
     if (updated) setCounts({ likes: updated.likes, dislikes: updated.dislikes })
     setReacting(false)
+  }
+
+  async function shSaveTags() {
+    setShTagSaving(true)
+    await superHostSetEntityTags('arenas', arena.id, shEditTags)
+    setFull(prev => prev ? { ...prev, tags: shEditTags } : prev)
+    setShTagSaving(false); setShTagEdit(false)
+  }
+
+  async function shSavePools() {
+    setShPoolSaving(true)
+    await superHostSetArenaPools(arena.id, shEditPools)
+    setFull(prev => prev ? { ...prev, pools: shEditPools } : prev)
+    setShPoolSaving(false); setShPoolEdit(false)
   }
 
   // Build timeline: creation + edits from bio_history + variant births from lineage
@@ -325,6 +350,66 @@ export default function ArenaDetailScreen({ arena: init, playerId, onBack, onVie
               )
         )}
       </div>
+
+      {/* ── Super Host panel ─────────────────────────────────────────────── */}
+      {isSuperHost && arena.status === 'published' && (
+        <div style={{ marginTop: '1.5rem', borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: '1.5rem' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Super Host</h3>
+
+          {/* Tags */}
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Tags</span>
+              {!shTagEdit && <button onClick={() => { setShTagEdit(true); setShEditTags(arena.tags || []) }} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Edit</button>}
+            </div>
+            {shTagEdit ? (
+              <>
+                <TagInput value={shEditTags} onChange={setShEditTags} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={shSaveTags} disabled={shTagSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shTagSaving ? 'Saving…' : 'Save'}</button>
+                  <button onClick={() => setShTagEdit(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <TagChips tags={arena.tags || []} />
+            )}
+          </div>
+
+          {/* Pool membership */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Preset pools</span>
+              {!shPoolEdit && <button onClick={() => { setShPoolEdit(true); setShEditPools(arena.pools || []) }} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Edit</button>}
+            </div>
+            {shPoolEdit ? (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                  {CURATED_POOLS.map(pool => (
+                    <label key={pool} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>
+                      <input type="checkbox" checked={shEditPools.includes(pool)}
+                        onChange={e => setShEditPools(prev => e.target.checked ? [...prev, pool] : prev.filter(p => p !== pool))}
+                      />
+                      {POOL_LABELS[pool]}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={shSavePools} disabled={shPoolSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shPoolSaving ? 'Saving…' : 'Save'}</button>
+                  <button onClick={() => setShPoolEdit(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {CURATED_POOLS.map(pool => (
+                  <span key={pool} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 99, border: '0.5px solid var(--color-border-secondary)', color: (arena.pools || []).includes(pool) ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)', background: (arena.pools || []).includes(pool) ? 'var(--color-background-secondary)' : 'transparent' }}>
+                    {POOL_LABELS[pool]}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </Screen>
   )

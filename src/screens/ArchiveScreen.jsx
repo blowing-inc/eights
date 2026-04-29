@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import { btn, tab, inp } from '../styles.js'
-import { listCombatants, searchCast, listPublishedGroups, listPublishedArenas, listAllDistinctTags } from '../supabase.js'
+import { listCombatants, searchCast, listPublishedGroups, listPublishedArenas, listAllDistinctTags, superHostSetEntityTags } from '../supabase.js'
+import TagInput from '../components/TagInput.jsx'
 
 const PAGE_SIZE = 20
 
@@ -130,15 +131,25 @@ function CastTab({ query, activeTag, onFilterTag, onViewCombatant }) {
 
 // ─── Groups tab ───────────────────────────────────────────────────────────────
 
-function GroupsTab({ query, activeTag, onFilterTag }) {
+function GroupsTab({ query, activeTag, onFilterTag, isSuperHost }) {
   const [groups, setGroups]   = useState([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [shEditingId, setShEditingId] = useState(null)
+  const [shEditTags,  setShEditTags]  = useState([])
+  const [shSaving,    setShSaving]    = useState(false)
 
   useEffect(() => {
     setLoading(true)
     listPublishedGroups({ query, tag: activeTag }).then(data => { setGroups(data); setLoading(false) })
   }, [query, activeTag])
+
+  async function shSaveGroupTags(groupId) {
+    setShSaving(true)
+    await superHostSetEntityTags('groups', groupId, shEditTags)
+    setGroups(prev => prev.map(g => g.id === groupId ? { ...g, tags: shEditTags } : g))
+    setShSaving(false); setShEditingId(null)
+  }
 
   if (loading) return <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>
 
@@ -157,6 +168,7 @@ function GroupsTab({ query, activeTag, onFilterTag }) {
       {groups.map(g => {
         const isExpanded = expanded === g.id
         const tags = g.tags || []
+        const isShEditing = shEditingId === g.id
         return (
           <div key={g.id} style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, overflow: 'hidden' }}>
             <button
@@ -182,6 +194,25 @@ function GroupsTab({ query, activeTag, onFilterTag }) {
                   ? <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 4px', lineHeight: 1.5 }}>{g.description}</p>
                   : <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: '8px 0 4px', fontStyle: 'italic' }}>No description.</p>}
                 <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>by {g.owner_name}</p>
+                {isSuperHost && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tags</span>
+                      {!isShEditing && <button onClick={e => { e.stopPropagation(); setShEditingId(g.id); setShEditTags(tags) }} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 11 }}>Edit</button>}
+                    </div>
+                    {isShEditing ? (
+                      <div onClick={e => e.stopPropagation()}>
+                        <TagInput value={shEditTags} onChange={setShEditTags} />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <button onClick={() => shSaveGroupTags(g.id)} disabled={shSaving} style={{ ...btn('primary'), flex: 1, fontSize: 12, padding: '6px' }}>{shSaving ? 'Saving…' : 'Save'}</button>
+                          <button onClick={() => setShEditingId(null)} style={{ ...btn(), flex: 1, fontSize: 12, padding: '6px' }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      tags.length === 0 && <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>No tags</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -338,7 +369,7 @@ const TABS = [
   { key: 'tags',   label: 'Tags'     },
 ]
 
-export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena }) {
+export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena, isSuperHost }) {
   const [activeTab,  setActiveTab]  = useState('cast')
   const [query,      setQuery]      = useState('')
   const [activeTag,  setActiveTag]  = useState(null)
@@ -381,7 +412,7 @@ export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena }) 
       </div>
 
       {activeTab === 'cast'   && <CastTab   query={query} activeTag={activeTag} onFilterTag={handleFilterTag} onViewCombatant={onViewCombatant} />}
-      {activeTab === 'groups' && <GroupsTab query={query} activeTag={activeTag} onFilterTag={handleFilterTag} />}
+      {activeTab === 'groups' && <GroupsTab query={query} activeTag={activeTag} onFilterTag={handleFilterTag} isSuperHost={isSuperHost} />}
       {activeTab === 'arenas' && <ArenasTab query={query} activeTag={activeTag} activePool={activePool} onFilterTag={handleFilterTag} onFilterPool={handleFilterPool} onViewArena={onViewArena} />}
       {activeTab === 'tags'   && <TagsTab   activeTag={activeTag} onFilterTag={handleFilterTag} />}
     </Screen>

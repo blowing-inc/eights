@@ -33,7 +33,7 @@ function HomeTicker() {
   )
 }
 
-export default function HomeScreen({ onCreate, onJoin, onChronicles, onArchive, onPlayers, onWorkshop, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies, onHelp }) {
+export default function HomeScreen({ onCreate, onJoin, onChronicles, onArchive, onPlayers, onWorkshop, onSuperHost, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies, onHelp }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', position: 'relative' }}>
       <button onClick={onHelp} title="How to play" style={{ position: 'absolute', top: '1rem', left: '1rem', background: 'transparent', border: '0.5px solid var(--color-border-tertiary)', borderRadius: '50%', width: 28, height: 28, fontSize: 13, color: 'var(--color-text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>?</button>
@@ -56,6 +56,9 @@ export default function HomeScreen({ onCreate, onJoin, onChronicles, onArchive, 
         <button onClick={onArchive} style={btn('ghost')}>The Archive ↗</button>
         <button onClick={onPlayers} style={btn('ghost')}>Players ↗</button>
         <button onClick={onWorkshop} style={btn('ghost')}>My Workshop ↗</button>
+        {currentUser?.is_super_host && (
+          <button onClick={onSuperHost} style={btn('ghost')}>Super Host Tools ↗</button>
+        )}
         <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', paddingTop: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {currentUser ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>

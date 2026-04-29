@@ -11,6 +11,7 @@
 //
 // Actions:
 //   reset-user-pin    { username }
+//   set-super-host    { userId, isSuperHost }
 //   merge-users       { roomUpdates, dropUserId, keepId }
 //   link-guest        { roomUpdates, guestId, userId, ownerName }
 //   delete-combatant  { id }
@@ -112,6 +113,15 @@ Deno.serve(async (req: Request) => {
         const { error } = await db.from('users')
           .update({ needs_reset: true, updated_at: new Date().toISOString() })
           .ilike('username', username)
+        if (error) throw error
+        return ok()
+      }
+
+      case 'set-super-host': {
+        const { userId, isSuperHost } = params as { userId: string; isSuperHost: boolean }
+        const { error } = await db.from('users')
+          .update({ is_super_host: isSuperHost, updated_at: new Date().toISOString() })
+          .eq('id', userId)
         if (error) throw error
         return ok()
       }
