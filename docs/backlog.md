@@ -270,37 +270,99 @@ Logged-in users only. Guests who try to access see a single-tap login prompt —
 
 Builds on the schema shipped in 1.1.x.
 
-#### Scope decision required before arena work begins
-
-- A. Is an arena set at the game level (one arena for the whole session) or at the round level (each round can have its own arena)?
-- B. Can both be true — a default arena for the game, overrideable per round?
-
-This decision drives the round and room schema. All arena feature work and The Workshop: Create-an-Arena are blocked until it's resolved.
-
 #### Arenas
 
-- An arena is an optional context for a fight: name, description, and optional house rules in free text. Not enforced by the app — narrative flavour and a prompt for the players.
-- Arena data is denormalized into the round or room at the time it's selected. If the arena is later edited, the fight record still shows what the arena was when they fought.
-- Players can like or dislike an arena after playing in it. Running count visible on the arena detail page.
-- All arenas remain permanently selectable. Enough dislikes relative to likes (threshold TBD) soft-removes the arena from curated preset pools. The record stays. No arena is deleted.
+**Scope decision: resolved.** Arenas attach at the round level. Every round
+knows its arena. The room carries no arena field. All delivery modes write to
+`round.arena` (a denormalized snapshot taken at assignment time). Read path
+everywhere: `round.arena ?? null`.
 
-**Preset pools (for random selection):**
+**Delivery modes (set at lobby time):**
+- `single` — host picks one arena; every round slot receives that snapshot
+- `playlist` — an ordered Arena Playlist assigned round-by-round; cycles if
+  shorter than round count
+- `random-pool` — each round draws from a chosen preset pool; option to exclude
+  arenas played in the same series
+
+**Arena core behaviour:**
+- An arena is an optional context for a fight: name, description, and optional
+  house rules in free text. Not enforced by the app — narrative flavour and a
+  prompt for the players.
+- Arena data is denormalized into the round at assignment time. If the arena is
+  later edited or a variant is created, the round record still shows what was
+  active when that round was played.
+- Players can like or dislike an arena after playing in it. Running count
+  visible on the arena detail page.
+- All arenas remain permanently selectable. Enough dislikes relative to likes
+  (threshold TBD) soft-removes the arena from curated preset pools. The record
+  stays. No arena is deleted.
+
+**Preset pools:**
 - `standard` — general-purpose arenas
 - `wacky` — high chaos / absurdist
 - `league` — arenas suited for a series home venue
-- `weighted-liked` — community-driven; arenas with too many dislikes suppressed automatically
+- `weighted-liked` — community-driven; arenas with too many dislikes suppressed
 
-**Lobby options:**
-- Host can select a specific arena or trigger random from a chosen preset pool
-- One arena for the whole game, or random per round — pending scope decision
-- Previous arena from the same series can optionally be excluded to avoid repetition
+**Arena Evolution (lobby setting — off by default):**
 
-**Deferred:** editing an arena's description for a one-off session without permanently altering the original requires a fork/override design decision. Don't build until resolved.
+When enabled, the host may evolve the current arena after any round resolves.
+"Evolve arena" is a secondary post-round action — a smaller button available
+alongside combatant evolution and draw/merge before the host advances to the
+next round. Host-only. Independent of combatant evolution — both can happen in
+the same post-round moment.
 
-**The Workshop: Create-an-Arena** (gated on scope decision above):
+- The evolved form replaces the arena going forward from the next round.
+  Previous rounds keep their snapshot. Forward only — never retroactive.
+- The original and all variants remain permanently selectable in The Archive.
+  No heritage enforcement — evolved arenas are not required anywhere.
+- Evolution is host-authored regardless of who created the original arena.
+- `bornFrom` on the variant: `{ gameCode, roundNumber, seriesId (nullable) }`.
+  Intentionally minimal — the bio and update history tell the story.
+- Update history on the arena detail page: original creator → bio edits
+  (author + timestamp) → variant births (round pointer). Clicking a variant
+  shows its bio as authored at that moment.
+
+**Arena Playlist (new entity in The Workshop):**
+
+A named, ordered collection of arenas for round-by-round delivery. Distinct
+from Groups — a playlist is a delivery mechanism, not a narrative collective.
+- Follows the same stash/publish lifecycle as combatants, arenas, and groups.
+- Created in The Workshop: name, ordered arena slots, stash/publish toggle.
+- Arenas and combatants can share tags — "underwater" arenas pair narratively
+  with "underwater" combatants. Connection surfaced in display, never enforced.
+- If a playlist arena evolves mid-game, the evolved form takes the slot
+  going forward.
+
+**Post-round action model:**
+
+After a round resolves, the host has up to three independent actions available
+before advancing to the next round. All are optional. All can occur in the same
+post-round moment:
+
+1. **Confirm winner → evolve combatant** (or skip evolution)
+2. **Declare draw → merge** (if `all_advance`; or skip merge)
+3. **Evolve arena** (if arena evolution is enabled for this game)
+
+Combatant resolution (winner or draw) is the primary action. "Evolve arena" is
+a visually subordinate secondary affordance. The host advances to the next
+round only after all desired post-round actions are complete.
+
+**Deferred:** editing an arena's description for a one-off session without
+permanently altering the original (the "Tim's house but it's Christmas" case).
+Arena evolution partially addresses this — evolving creates a permanent variant.
+Whether a true ephemeral override is also needed remains open. Don't build
+until resolved.
+
+**The Workshop: Create-an-Arena:**
 - Name, bio, house rules, tags, stash/publish toggle
 - My Workshop entry — same stash/publish/edit/delete patterns as combatants
 - Publish-on-game-completion applies
+
+**The Workshop: Create-a-Playlist:**
+- Name, ordered arena slots (search/select from published + own stashed arenas),
+  stash/publish toggle
+- My Workshop entry — same patterns as all other Workshop objects
+- Publish-on-game-completion applies if the playlist was used in a completed game
 
 #### Groups
 

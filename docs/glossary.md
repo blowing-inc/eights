@@ -251,13 +251,18 @@ Arena
   the absurdity), and optional house rules in free text. Not enforced by the
   app — narrative flavour and a prompt for the players.
 
+  Arenas attach at the round level. Every round knows its arena. The room
+  carries no arena of its own. Delivery mechanisms (single arena for the whole
+  game, playlist, random from pool) all write to the same field on the round —
+  there are no special cases at read time.
+
   Arenas follow the same stash/publish lifecycle as combatants and groups.
   Publish-on-game-completion applies: a stashed arena used in a completed game
   auto-publishes on room close.
 
-  Story record: arena data is denormalized into the round or room at the time
-  it is selected. If the arena is later edited or deleted, the fight record
-  still shows what the arena was when they fought.
+  Story record: arena data is denormalized into the round at the time it is
+  assigned. If the arena is later edited or a variant is created, the round
+  record still shows what the arena was when that round was played.
 
 Likes and dislikes
   Players can like or dislike an arena after playing in it. Running count
@@ -273,16 +278,68 @@ Preset pools (for random selection)
                     from this pool automatically
   Presets are compiled through play and curated by Super Hosts.
 
-Scope decision (required before arena work begins)
-  A. Is an arena set at the game level (one arena for the whole session) or at
-     the round level (each round can have its own arena)?
-  B. Can both be true — a default game arena, overrideable per round?
-  All arena feature work is blocked until this is resolved.
+Arena delivery modes (set at lobby time)
+  single          — host selects one arena; every round in the game plays on it
+  playlist        — an ordered set of arenas assigned round-by-round (see Arena
+                    Playlist below); cycles if playlist is shorter than round count
+  random-pool     — each round draws randomly from a chosen preset pool; previous
+                    arenas from the same series can optionally be excluded
+
+Arena Lineage / Evolution
+  When arena evolution is enabled (lobby setting, off by default), the host may
+  evolve the current arena after any round resolves. Evolution is a post-round
+  action available to the host before advancing to the next round, alongside
+  combatant evolution and draw/merge.
+
+  The evolved form replaces the arena for all subsequent rounds in the game or
+  playlist slot going forward. Previous rounds keep their snapshot of the form
+  that was active when they were played — forward only, never retroactive.
+
+  The original arena and all variants remain independently selectable in The
+  Archive at any point. No heritage enforcement — unlike combatants, an evolved
+  arena is not required anywhere. It is a creative record, not a mechanical
+  constraint.
+
+  Host authority: the host of the game triggers evolution regardless of who
+  created the original arena. Original creator ownership does not gate this
+  action — the arena's story belongs to the games played in it.
+
+  lineage fields (on the arenas table, mirrors combatants):
+    rootId      — id of the original arena at the start of the tree
+    parentId    — id of the immediate predecessor
+    generation  — 0 = original, 1 = first variant, 2 = second, etc.
+    bornFrom    — round pointer: { gameCode, roundNumber, seriesId (nullable) }
+
+  bornFrom is intentionally minimal. The bio and update history tell the story;
+  the round pointer is the anchor. No opponent equivalent needed.
+
+  Update history display: arena detail page shows a unified timeline —
+  original creator, bio edits (author + timestamp), variant births (round
+  pointer). Clicking a variant shows its bio as authored at that moment.
+
+Arena Playlist
+  A named, ordered collection of arenas used to deliver one arena per round
+  across a game. Distinct from Groups — a playlist is a delivery mechanism for
+  arenas, not a narrative collective. Created and managed in The Workshop.
+
+  Playlists follow the same stash/publish lifecycle as all other Workshop
+  objects. A host can select a playlist at lobby time instead of a single arena
+  or random pool.
+
+  Arenas and combatants can be linked through shared tags. A playlist of
+  "underwater" arenas pairs naturally with combatants tagged "underwater" — the
+  connection is surfaced narratively, not enforced mechanically.
+
+  If a playlist is shorter than the number of rounds, it cycles. If an arena in
+  a playlist evolves mid-game, the evolved form takes that slot going forward.
 
 Deferred: "Tim's house but it's Christmas" case
   Editing an arena's description or rules for a one-off session without
   permanently altering the original requires a decision: fork, one-session
   override, or a separate "this session only" field. Don't build until resolved.
+  Arena evolution (above) partially addresses this — evolving in-session creates
+  a permanent variant rather than a temporary override. Whether that is
+  sufficient or whether a true ephemeral override is needed remains open.
 
 ---
 
