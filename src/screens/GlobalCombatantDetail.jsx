@@ -316,6 +316,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: '0 0 2px', color: 'var(--color-text-primary)' }}>{c.name}</h2>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
             Created by {c.owner_name || 'unknown'}
+            {c.source === 'created' && <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 6 }}>· Made in The Workshop</span>}
             {isVariant && <span style={{ color: 'var(--color-text-info)', marginLeft: 6 }}>· gen {c.lineage.generation}</span>}
           </p>
         </div>
