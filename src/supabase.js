@@ -957,14 +957,14 @@ export async function publishArenas(ids) {
 // Returns a random arena snapshot for random-pool delivery mode.
 // pool: 'standard' | 'wacky' | 'league' | 'weighted-liked'
 // excludeArenaIds: arena IDs to exclude (e.g. already played in the series)
-// Pool-specific curation (standard/wacky/league) deferred to Super Host #74 —
-// all published arenas are eligible across those pools for now.
 export async function getRandomArenaFromPool(pool, excludeArenaIds = []) {
   try {
-    const { data, error } = await supabase
+    let q = supabase
       .from('arenas')
       .select('id, name, bio, rules, tags, likes, dislikes')
       .eq('status', 'published')
+    if (pool !== 'weighted-liked') q = q.contains('pools', [pool])
+    const { data, error } = await q
     if (error || !data?.length) return null
 
     let eligible = data
