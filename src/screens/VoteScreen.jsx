@@ -6,7 +6,7 @@ import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, publishPlaylist, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
@@ -238,11 +238,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
       }
       if (isFinalRound(r)) {
-        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const { rosterSize, arenaMode, arenaConfig } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
         // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
         const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
         if (arenaIds.length) await publishArenas(arenaIds)
+        if (arenaMode === 'playlist' && arenaConfig?.playlistId) await publishPlaylist(arenaConfig.playlistId)
       }
     })()
   }
@@ -291,11 +292,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         await incrementCombatantStats(c.id, { ...stat, heart, angry, cry })
       }
       if (isFinalRound(r)) {
-        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const { rosterSize, arenaMode, arenaConfig } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
         // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
         const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
         if (arenaIds.length) await publishArenas(arenaIds)
+        if (arenaMode === 'playlist' && arenaConfig?.playlistId) await publishPlaylist(arenaConfig.playlistId)
       }
     })()
   }
@@ -439,11 +441,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         await incrementCombatantStats(c.id, { wins: 1, heart, angry, cry })
       }
       if (isFinalRound(r)) {
-        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const { rosterSize, arenaMode, arenaConfig } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
         // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
         const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
         if (arenaIds.length) await publishArenas(arenaIds)
+        if (arenaMode === 'playlist' && arenaConfig?.playlistId) await publishPlaylist(arenaConfig.playlistId)
       }
     })()
   }
@@ -547,9 +550,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         await incrementCombatantStats(c.id, { wins: isWin ? 1 : 0, losses: isWin ? 0 : 1, heart, angry, cry })
       }
       if (isFinalRound(r)) {
-        const { rosterSize } = normalizeRoomSettings(r.settings)
+        const { rosterSize, arenaMode, arenaConfig } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(finalCombatants, rounds, rosterSize))
-        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
+        // Publish every arena snapshotted into a round (handles single, random-pool, playlist modes)
+        const arenaIds = [...new Set(rounds.filter(rd => rd.arena?.id).map(rd => rd.arena.id))]
+        if (arenaIds.length) await publishArenas(arenaIds)
+        if (arenaMode === 'playlist' && arenaConfig?.playlistId) await publishPlaylist(arenaConfig.playlistId)
       }
     })()
   }

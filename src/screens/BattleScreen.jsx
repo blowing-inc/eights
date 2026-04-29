@@ -3,7 +3,7 @@ import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery } from '../supabase.js'
 import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
 
 // Inline form for evolving the current arena after a round resolves.
@@ -128,6 +128,11 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
         excludeIds = [...new Set([...excludeIds, ...seriesIds])]
       }
       arena = await getRandomArenaFromPool(arenaConfig?.pool || 'standard', excludeIds)
+    } else if (arenaMode === 'playlist' && arenaConfig?.playlistId) {
+      const playlistArenas = await getPlaylistForDelivery(arenaConfig.playlistId)
+      if (playlistArenas.length) {
+        arena = playlistArenas[(roundNum - 1) % playlistArenas.length]
+      }
     }
 
     const newRound = { id: uid(), number: roundNum, combatants: matchup, picks: {}, winner: null, createdAt: Date.now(), arena }
