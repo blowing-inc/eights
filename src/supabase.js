@@ -884,6 +884,21 @@ export const ARENA_DISLIKE_RATIO = 3
 
 // ─── Arena Workshop operations ────────────────────────────────────────────────
 
+// Insert a new variant arena. Lineage fields (rootId, parentId, generation, bornFrom) are required.
+// bornFrom shape: { gameCode, roundNumber, seriesId } — seriesId is nullable.
+// Status starts 'stashed' — publish-on-game-completion applies at room close.
+export async function createArenaVariant({ id, name, bio, rules, tags = [], ownerId, ownerName, rootId, parentId, generation, bornFrom }) {
+  try {
+    const { error } = await supabase.from('arenas').insert({
+      id, name, bio: bio || '', rules: rules || '', tags,
+      owner_id: ownerId, owner_name: ownerName,
+      root_id: rootId, parent_id: parentId, generation, born_from: bornFrom,
+      status: 'stashed', updated_at: new Date().toISOString(),
+    })
+    if (error) console.error('createArenaVariant error', error)
+  } catch (e) { console.error('createArenaVariant exception', e) }
+}
+
 export async function createWorkshopArena({ id, name, bio, rules, tags = [], ownerId, ownerName, status = 'stashed' }) {
   try {
     const { error } = await supabase.from('arenas').insert({

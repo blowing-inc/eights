@@ -102,6 +102,7 @@ export default function ArenaDetailScreen({ arena: init, playerId, isSuperHost, 
   const [appearancesOpen, setAppearancesOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [roomOverlay, setRoomOverlay] = useState(null)   // { room, initialRound }
+  const [expandedVariantIdx, setExpandedVariantIdx] = useState(null) // timeline index of expanded variant
 
   // Super Host state
   const [shTagEdit,   setShTagEdit]   = useState(false)
@@ -286,7 +287,10 @@ export default function ArenaDetailScreen({ arena: init, playerId, isSuperHost, 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {timeline.map((entry, i) => (
                 <div key={i} style={{ padding: '8px 12px', background: 'var(--color-background-secondary)',
-                  borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)', fontSize: 13 }}>
+                  borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)', fontSize: 13,
+                  cursor: entry.type === 'variant' ? 'pointer' : 'default' }}
+                  onClick={entry.type === 'variant' ? () => setExpandedVariantIdx(expandedVariantIdx === i ? null : i) : undefined}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                     <span style={{ color: 'var(--color-text-secondary)' }}>
                       {entry.type === 'created' && 'Created'}
@@ -301,6 +305,9 @@ export default function ArenaDetailScreen({ arena: init, playerId, isSuperHost, 
                               {entry.born_from.gameCode} R{entry.born_from.roundNumber}
                             </span>
                           )}
+                          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                            {expandedVariantIdx === i ? '↑' : '↓'}
+                          </span>
                         </>
                       )}
                     </span>
@@ -309,6 +316,11 @@ export default function ArenaDetailScreen({ arena: init, playerId, isSuperHost, 
                     </span>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>by {entry.by}</p>
+                  {entry.type === 'variant' && expandedVariantIdx === i && (
+                    <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '6px 0 0', lineHeight: 1.5 }}>
+                      {entry.childArena?.bio || <em style={{ color: 'var(--color-text-tertiary)' }}>No description.</em>}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

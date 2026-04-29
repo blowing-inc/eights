@@ -65,7 +65,7 @@ const POOL_OPTIONS = [
 export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null })
+  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null, arenaEvolutionEnabled: false })
 
   // Arena picker state for single mode
   const [arenas,       setArenas]       = useState([])
@@ -184,6 +184,16 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
             </button>
           ))}
         </div>
+
+        {/* Arena evolution — available for any non-none mode */}
+        {settings.arenaMode !== 'none' && (
+          <SettingRow
+            label="Arena evolution"
+            description="Host can evolve the arena after any round"
+            value={settings.arenaEvolutionEnabled}
+            onToggle={() => toggle('arenaEvolutionEnabled')}
+          />
+        )}
 
         {/* Single mode: arena search + select */}
         {settings.arenaMode === 'single' && (
