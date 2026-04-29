@@ -982,20 +982,121 @@ export async function listPublishedGroups({ query = '', tag = null } = {}) {
   } catch (e) { console.error('listPublishedGroups exception', e); return [] }
 }
 
-// Published arenas with pagination and optional name/bio search + tag filter.
-export async function listPublishedArenas({ query = '', tag = null, page = 0, pageSize = 20 } = {}) {
+// Published arenas with pagination and optional name/bio search + tag/pool filter.
+// Default sort: most recently played first (last_played_at desc nulls last), then newest created.
+// pool: 'standard' | 'wacky' | 'league' | 'weighted-liked' | null
+export async function listPublishedArenas({ query = '', tag = null, pool = null, page = 0, pageSize = 20 } = {}) {
   try {
     let q = supabase
       .from('arenas')
-      .select('id, name, bio, rules, tags, likes, dislikes, owner_name', { count: 'exact' })
+      .select('id, name, bio, rules, tags, pools, likes, dislikes, owner_name, last_played_at', { count: 'exact' })
       .eq('status', 'published')
     if (tag)          q = q.contains('tags', [tag])
+    if (pool && pool !== 'weighted-liked') q = q.contains('pools', [pool])
     if (query.trim()) q = q.or(`name.ilike.%${query.trim()}%,bio.ilike.%${query.trim()}%`)
-    q = q.order('name', { ascending: true }).range(page * pageSize, page * pageSize + pageSize - 1)
+    q = q
+      .order('last_played_at', { ascending: false, nullsFirst: false })
+      .order('created_at',     { ascending: false })
+      .range(page * pageSize, page * pageSize + pageSize - 1)
     const { data, count, error } = await q
     if (error) { console.error('listPublishedArenas error', error); return { items: [], total: 0 } }
-    return { items: data || [], total: count || 0 }
+    let items = data || []
+    // weighted-liked is computed: filter out arenas with dislikes > likes × 3
+    if (pool === 'weighted-liked') items = items.filter(a => (a.dislikes || 0) <= (a.likes || 0) * 3)
+    return { items, total: count || 0 }
   } catch (e) { console.error('listPublishedArenas exception', e); return { items: [], total: 0 } }
+}
+
+// Fetch a single published arena by id (full row for detail page).
+export async function getArena(id) {
+  try {
+    const { data, error } = await supabase
+      .from('arenas')
+      .select('id, name, bio, bio_history, rules, tags, pools, likes, dislikes, owner_id, owner_name, status, root_id, parent_id, generation, born_from, created_at, updated_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) { console.error('getArena error', error); return null }
+    return data ?? null
+  } catch (e) { console.error('getArena exception', e); return null }
+}
+
+// Returns the full lineage tree for an arena: root + all variants, oldest first.
+// rootId: the root_id of the family (the original arena's id).
+export async function getArenaLineageTree(rootId) {
+  try {
+    const { data, error } = await supabase
+      .from('arenas')
+      .select('id, name, bio, rules, tags, pools, likes, dislikes, root_id, parent_id, generation, born_from, owner_id, owner_name, status, created_at')
+      .or(`id.eq.${rootId},root_id.eq.${rootId}`)
+      .order('created_at', { ascending: true })
+    if (error) { console.error('getArenaLineageTree error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getArenaLineageTree exception', e); return [] }
+}
+
+// Get the current user's reaction ('like' | 'dislike') for an arena, or null if none.
+export async function getArenaReaction(arenaId, userId) {
+  if (!userId) return null
+  try {
+    const { data, error } = await supabase
+      .from('arena_reactions')
+      .select('reaction')
+      .eq('arena_id', arenaId)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) { console.error('getArenaReaction error', error); return null }
+    return data?.reaction ?? null
+  } catch (e) { console.error('getArenaReaction exception', e); return null }
+}
+
+// Set or change a reaction. Upserts on (arena_id, user_id).
+// Returns the updated {likes, dislikes} counts after the trigger fires.
+export async function upsertArenaReaction(arenaId, userId, reaction) {
+  try {
+    const { error } = await supabase
+      .from('arena_reactions')
+      .upsert({ arena_id: arenaId, user_id: userId, reaction }, { onConflict: 'arena_id,user_id' })
+    if (error) { console.error('upsertArenaReaction error', error); return null }
+    const { data } = await supabase.from('arenas').select('likes, dislikes').eq('id', arenaId).maybeSingle()
+    return data ? { likes: data.likes, dislikes: data.dislikes } : null
+  } catch (e) { console.error('upsertArenaReaction exception', e); return null }
+}
+
+// Clear a player's reaction for an arena.
+export async function deleteArenaReaction(arenaId, userId) {
+  try {
+    const { error } = await supabase
+      .from('arena_reactions')
+      .delete()
+      .eq('arena_id', arenaId)
+      .eq('user_id', userId)
+    if (error) { console.error('deleteArenaReaction error', error); return null }
+    const { data } = await supabase.from('arenas').select('likes, dislikes').eq('id', arenaId).maybeSingle()
+    return data ? { likes: data.likes, dislikes: data.dislikes } : null
+  } catch (e) { console.error('deleteArenaReaction exception', e); return null }
+}
+
+// Scan all rooms for rounds where the arena (or any of its variants) appeared.
+// arenaIds: array of arena IDs to search (include variants for full coverage).
+// Returns [{gameCode, roundNumber, roomData}] most-recent-room first.
+export async function getArenaAppearances(arenaIds) {
+  if (!arenaIds.length) return []
+  try {
+    const idSet = new Set(arenaIds)
+    const { data, error } = await supabase.from('rooms').select('data').order('updated_at', { ascending: false })
+    if (error) { console.error('getArenaAppearances error', error); return [] }
+    const appearances = []
+    for (const row of (data || [])) {
+      const r = row.data
+      if (!r || r.devMode) continue
+      for (const round of (r.rounds || [])) {
+        if (round.arena?.id && idSet.has(round.arena.id)) {
+          appearances.push({ gameCode: r.id, roundNumber: round.number, roomData: r })
+        }
+      }
+    }
+    return appearances
+  } catch (e) { console.error('getArenaAppearances exception', e); return [] }
 }
 
 // All distinct tags across published combatants, groups, and arenas.
