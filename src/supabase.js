@@ -816,3 +816,91 @@ export async function publishCombatants(ids) {
     if (error) console.error('publishCombatants error', error)
   } catch (e) { console.error('publishCombatants exception', e) }
 }
+
+// ─── Arena Workshop operations ────────────────────────────────────────────────
+
+export async function createWorkshopArena({ id, name, bio, rules, tags = [], ownerId, ownerName, status = 'stashed' }) {
+  try {
+    const { error } = await supabase.from('arenas').insert({
+      id, name, bio: bio || '', rules: rules || '', tags,
+      owner_id: ownerId, owner_name: ownerName,
+      status, updated_at: new Date().toISOString(),
+    })
+    if (error) console.error('createWorkshopArena error', error)
+    return !error
+  } catch (e) { console.error('createWorkshopArena exception', e); return false }
+}
+
+export async function getWorkshopArenas(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('arenas')
+      .select('id, name, bio, bio_history, rules, tags, status, owner_id, owner_name, created_at, updated_at')
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+    if (error) { console.error('getWorkshopArenas error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getWorkshopArenas exception', e); return [] }
+}
+
+// Update an arena's name, bio, rules, and tags.
+// Appends the previous bio snapshot to bio_history before saving.
+// bioHistoryEntry: { name, bio, updatedAt, updatedBy }
+export async function updateWorkshopArena(id, { name, bio, rules, tags }, bioHistoryEntry, prevBioHistory = []) {
+  try {
+    const newHistory = [...prevBioHistory, bioHistoryEntry].slice(-20)
+    const { error } = await supabase.from('arenas').update({
+      name, bio: bio || '', rules: rules || '', tags,
+      bio_history: newHistory,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) console.error('updateWorkshopArena error', error)
+    return !error
+  } catch (e) { console.error('updateWorkshopArena exception', e); return false }
+}
+
+export async function setWorkshopArenaStatus(id, status) {
+  try {
+    const { error } = await supabase.from('arenas')
+      .update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('setWorkshopArenaStatus error', error)
+    return !error
+  } catch (e) { console.error('setWorkshopArenaStatus exception', e); return false }
+}
+
+// Only valid for stashed arenas — callers must verify status === 'stashed'.
+export async function deleteWorkshopArena(id) {
+  try {
+    const { error } = await supabase.from('arenas').delete().eq('id', id)
+    if (error) console.error('deleteWorkshopArena error', error)
+    return !error
+  } catch (e) { console.error('deleteWorkshopArena exception', e); return false }
+}
+
+// Called on game completion for any arena used in the finished game.
+// Safe to call with already-published arenas — the update is idempotent.
+export async function publishArenas(ids) {
+  if (!ids.length) return
+  try {
+    const { error } = await supabase
+      .from('arenas').update({ status: 'published', updated_at: new Date().toISOString() })
+      .in('id', ids)
+    if (error) console.error('publishArenas error', error)
+  } catch (e) { console.error('publishArenas exception', e) }
+}
+
+// Returns arenas visible to a host in the lobby arena picker:
+// all published arenas + the host's own stashed arenas.
+export async function getArenaPickerOptions(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('arenas')
+      .select('id, name, bio, rules, tags, status, owner_id')
+      .or(`status.eq.published,owner_id.eq.${ownerId}`)
+      .order('name', { ascending: true })
+    if (error) { console.error('getArenaPickerOptions error', error); return [] }
+    // Dedupe (owner's arenas appear in both halves of the OR when published)
+    const seen = new Set()
+    return (data || []).filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
+  } catch (e) { console.error('getArenaPickerOptions exception', e); return [] }
+}
