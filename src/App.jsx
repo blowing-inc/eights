@@ -19,6 +19,7 @@ import PlayersScreen from './screens/PlayersScreen.jsx'
 import PlayerProfile from './screens/PlayerProfile.jsx'
 import ArchiveScreen from './screens/ArchiveScreen.jsx'
 import GlobalCombatantDetail from './screens/GlobalCombatantDetail.jsx'
+import ArenaDetailScreen from './screens/ArenaDetailScreen.jsx'
 import SpectateScreen from './screens/SpectateScreen.jsx'
 import GameSummaryScreen from './screens/GameSummaryScreen.jsx'
 import WorkshopScreen from './screens/WorkshopScreen.jsx'
@@ -133,6 +134,7 @@ export default function App() {
   const [viewChronicles, setViewChronicles] = useState(false)
   const [viewArchive, setViewArchive] = useState(false)
   const [viewGlobalCombatant, setViewGlobalCombatant] = useState(null)
+  const [viewArena, setViewArena] = useState(null)
   const [viewPlayers, setViewPlayers] = useState(false)
   const [viewPlayerProfile, setViewPlayerProfile] = useState(null)
   const [viewHelp, setViewHelp] = useState(false)
@@ -256,8 +258,10 @@ export default function App() {
     content = <PlayersScreen playerId={playerId} onBack={() => setViewPlayers(false)} onViewPlayer={id => setViewPlayerProfile(id)} />
   else if (viewGlobalCombatant)
     content = <GlobalCombatantDetail key={viewGlobalCombatant?.id} combatant={viewGlobalCombatant} playerId={playerId} playerName={effectiveName} onBack={() => setViewGlobalCombatant(null)} onViewCombatant={setViewGlobalCombatant} />
+  else if (viewArena)
+    content = <ArenaDetailScreen key={viewArena?.id} arena={viewArena} playerId={playerId} onBack={() => setViewArena(null)} onViewArena={setViewArena} />
   else if (viewArchive)
-    content = <ArchiveScreen playerId={playerId} onBack={() => setViewArchive(false)} onViewCombatant={c => setViewGlobalCombatant(c)} />
+    content = <ArchiveScreen playerId={playerId} onBack={() => setViewArchive(false)} onViewCombatant={c => setViewGlobalCombatant(c)} onViewArena={a => setViewArena(a)} />
   else if (viewChronicles)
     content = <ChroniclesScreen onBack={() => setViewChronicles(false)} setViewCombatant={c => { setViewCombatant(c); setViewChronicles(false) }} playerId={playerId} onNextGame={r => { setViewChronicles(false); handleHostNextGame(r) }} />
   else if (viewCombatant)

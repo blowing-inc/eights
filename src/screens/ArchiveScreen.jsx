@@ -191,76 +191,91 @@ function GroupsTab({ query, activeTag, onFilterTag }) {
   )
 }
 
-// ─── Arenas tab ───────────────────────────────────────────────────────────────
+// ─── Arenas tab ─────────────────────────────────────────────────────────��─────
 
-function ArenasTab({ query, activeTag, onFilterTag }) {
+const POOL_LABEL = { standard: 'Standard', wacky: 'Wacky', league: 'League', 'weighted-liked': 'Popular' }
+const ARENA_POOLS = ['standard', 'wacky', 'league', 'weighted-liked']
+
+function ArenasTab({ query, activeTag, activePool, onFilterTag, onFilterPool, onViewArena }) {
   const [items, setItems]     = useState([])
   const [total, setTotal]     = useState(0)
   const [page, setPage]       = useState(0)
   const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(null)
 
-  useEffect(() => { setPage(0) }, [query, activeTag])
+  useEffect(() => { setPage(0) }, [query, activeTag, activePool])
 
   useEffect(() => {
     setLoading(true)
-    listPublishedArenas({ query, tag: activeTag, page, pageSize: PAGE_SIZE }).then(({ items, total }) => {
+    listPublishedArenas({ query, tag: activeTag, pool: activePool, page, pageSize: PAGE_SIZE }).then(({ items, total }) => {
       setItems(items); setTotal(total); setLoading(false)
     })
-  }, [query, activeTag, page])
+  }, [query, activeTag, activePool, page])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  if (loading) return <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>
-
-  if (!items.length) return (
-    <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-      {activeTag
-        ? `No arenas tagged "${activeTag}".`
-        : query.trim()
-          ? `No arenas matching "${query.trim()}".`
-          : 'No arenas yet — create some in The Workshop.'}
-    </p>
-  )
-
   return (
     <>
-      {items.map(a => {
-        const isExpanded = expanded === a.id
-        const tags = a.tags || []
+      {/* Pool filter row */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {ARENA_POOLS.map(p => (
+          <button key={p} onClick={() => onFilterPool(activePool === p ? null : p)} style={tab(activePool === p)}>
+            {POOL_LABEL[p]}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}
+
+      {!loading && items.length === 0 && (
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+          {activePool
+            ? `No arenas in the ${POOL_LABEL[activePool]} pool yet.`
+            : activeTag
+              ? `No arenas tagged "${activeTag}".`
+              : query.trim()
+                ? `No arenas matching "${query.trim()}".`
+                : 'No arenas yet — create some in The Workshop.'}
+        </p>
+      )}
+
+      {!loading && items.map(a => {
+        const tags   = a.tags || []
+        const pools  = (a.pools || []).filter(p => POOL_LABEL[p])
         const hasRules = !!a.rules?.trim()
         return (
-          <div key={a.id} style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, overflow: 'hidden' }}>
-            <button
-              onClick={() => setExpanded(isExpanded ? null : a.id)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
-                <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</span>
-                <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0, marginLeft: 8 }}>
-                  {a.likes    > 0 && <span>👍 {a.likes}</span>}
-                  {a.dislikes > 0 && <span>👎 {a.dislikes}</span>}
-                  {hasRules && <span style={{ fontSize: 11 }}>+ rules</span>}
-                </div>
+          <button key={a.id} onClick={() => onViewArena(a)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px',
+              background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)',
+              borderRadius: 'var(--border-radius-md)', marginBottom: 8, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{a.name}</span>
+              <div style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0, marginLeft: 8, alignItems: 'center' }}>
+                {a.likes    > 0 && <span>👍 {a.likes}</span>}
+                {a.dislikes > 0 && <span>👎 {a.dislikes}</span>}
+                {hasRules              && <span style={{ fontSize: 11 }}>+ rules</span>}
               </div>
-              {a.bio && (
-                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0', lineHeight: 1.4 }}>
-                  {!isExpanded && a.bio.length > 100 ? a.bio.slice(0, 100) + '…' : a.bio}
-                </p>
-              )}
-              {tags.length > 0 && (
-                <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
-                  <TagChips tags={tags} onFilter={onFilterTag} />
-                </div>
-              )}
-            </button>
-            {isExpanded && hasRules && (
-              <div style={{ padding: '0 14px 12px', borderTop: '0.5px solid var(--color-border-tertiary)' }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>House rules</p>
-                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 6px', lineHeight: 1.5 }}>{a.rules}</p>
-                <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: 0 }}>by {a.owner_name}</p>
+            </div>
+            {pools.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+                {pools.map(p => (
+                  <span key={p} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--color-background-success)',
+                    color: 'var(--color-text-success)', border: '0.5px solid var(--color-border-success)', borderRadius: 99 }}>
+                    {POOL_LABEL[p]}
+                  </span>
+                ))}
               </div>
             )}
-          </div>
+            {a.bio && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                {a.bio.length > 100 ? a.bio.slice(0, 100) + '…' : a.bio}
+              </p>
+            )}
+            {tags.length > 0 && (
+              <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                <TagChips tags={tags} onFilter={onFilterTag} />
+              </div>
+            )}
+          </button>
         )
       })}
 
@@ -323,10 +338,11 @@ const TABS = [
   { key: 'tags',   label: 'Tags'     },
 ]
 
-export default function ArchiveScreen({ onBack, onViewCombatant }) {
-  const [activeTab, setActiveTab] = useState('cast')
-  const [query, setQuery]         = useState('')
-  const [activeTag, setActiveTag] = useState(null)
+export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena }) {
+  const [activeTab,  setActiveTab]  = useState('cast')
+  const [query,      setQuery]      = useState('')
+  const [activeTag,  setActiveTag]  = useState(null)
+  const [activePool, setActivePool] = useState(null)
   const debounceRef = useRef(null)
 
   function handleSearch(val) {
@@ -334,8 +350,9 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
     debounceRef.current = setTimeout(() => setQuery(val), 280)
   }
 
-  function handleFilterTag(tag) { setActiveTag(tag) }
-  function clearTag()           { setActiveTag(null) }
+  function handleFilterTag(tag)   { setActiveTag(tag) }
+  function handleFilterPool(pool) { setActivePool(pool) }
+  function clearTag()             { setActiveTag(null) }
 
   return (
     <Screen title="The Archive" onBack={onBack}>
@@ -365,7 +382,7 @@ export default function ArchiveScreen({ onBack, onViewCombatant }) {
 
       {activeTab === 'cast'   && <CastTab   query={query} activeTag={activeTag} onFilterTag={handleFilterTag} onViewCombatant={onViewCombatant} />}
       {activeTab === 'groups' && <GroupsTab query={query} activeTag={activeTag} onFilterTag={handleFilterTag} />}
-      {activeTab === 'arenas' && <ArenasTab query={query} activeTag={activeTag} onFilterTag={handleFilterTag} />}
+      {activeTab === 'arenas' && <ArenasTab query={query} activeTag={activeTag} activePool={activePool} onFilterTag={handleFilterTag} onFilterPool={handleFilterPool} onViewArena={onViewArena} />}
       {activeTab === 'tags'   && <TagsTab   activeTag={activeTag} onFilterTag={handleFilterTag} />}
     </Screen>
   )
