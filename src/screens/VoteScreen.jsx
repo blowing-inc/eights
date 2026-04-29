@@ -6,7 +6,7 @@ import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
@@ -218,6 +218,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
+        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
       }
     })()
   }
@@ -268,6 +269,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
+        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
       }
     })()
   }
@@ -413,6 +415,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(combatants, rounds, rosterSize))
+        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
       }
     })()
   }
@@ -518,6 +521,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       if (isFinalRound(r)) {
         const { rosterSize } = normalizeRoomSettings(r.settings)
         await publishCombatants(getCombatantsToPublish(finalCombatants, rounds, rosterSize))
+        if (r.settings?.arena?.id) await publishArenas([r.settings.arena.id])
       }
     })()
   }

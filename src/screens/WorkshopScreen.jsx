@@ -13,6 +13,11 @@ import {
   getGroupsForPicker,
   getCombatantGroupIds,
   setCombatantGroups,
+  getWorkshopArenas,
+  createWorkshopArena,
+  updateWorkshopArena,
+  setWorkshopArenaStatus,
+  deleteWorkshopArena,
 } from '../supabase.js'
 
 // ─── Guest gate ───────────────────────────────────────────────────────────────
@@ -82,7 +87,7 @@ function GroupPicker({ selectedIds, onChange, ownerId }) {
   )
 }
 
-// ─── Create / Edit form ───────────────────────────────────────────────────────
+// ─── Combatant form ───────────────────────────────────────────────────────────
 
 function CombatantForm({ existing, onSave, onCancel, currentUser }) {
   const isEdit      = !!existing
@@ -255,7 +260,180 @@ function CombatantForm({ existing, onSave, onCancel, currentUser }) {
   )
 }
 
-// ─── Workshop card ────────────────────────────────────────────────────────────
+// ─── Arena form ───────────────────────────────────────────────────────────────
+
+function ArenaForm({ existing, onSave, onCancel, currentUser }) {
+  const isEdit      = !!existing
+  const isPublished = existing?.status === 'published'
+
+  const [name,    setName]    = useState(existing?.name    || '')
+  const [bio,     setBio]     = useState(existing?.bio     || '')
+  const [rules,   setRules]   = useState(existing?.rules   || '')
+  const [tags,    setTags]    = useState(existing?.tags    || [])
+  const [status,  setStatus]  = useState(existing?.status  || 'stashed')
+  const [saving,  setSaving]  = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const [error,   setError]   = useState('')
+
+  const bioChanged   = isEdit && bio.trim()   !== (existing.bio   || '').trim()
+  const nameChanged  = isEdit && name.trim()  !== existing.name.trim()
+  const rulesChanged = isEdit && rules.trim() !== (existing.rules || '').trim()
+  const tagsChanged  = isEdit && JSON.stringify(tags) !== JSON.stringify(existing.tags || [])
+  const hasChanges   = !isEdit || nameChanged || bioChanged || rulesChanged || tagsChanged
+
+  function validate() {
+    if (!name.trim()) { setError('Name is required.'); return false }
+    if (!bio.trim())  { setError('Description is required.'); return false }
+    return true
+  }
+
+  async function handleSave() {
+    if (!validate()) return
+    if (isEdit && isPublished && bioChanged && !confirm) {
+      setConfirm(true); return
+    }
+    setSaving(true); setError('')
+    if (isEdit) {
+      const bioHistoryEntry = {
+        name: existing.name,
+        bio:  existing.bio || '',
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.username,
+      }
+      const ok = await updateWorkshopArena(
+        existing.id,
+        { name: name.trim(), bio: bio.trim(), rules: rules.trim(), tags },
+        bioHistoryEntry,
+        existing.bio_history || [],
+      )
+      if (!ok) { setError('Save failed. Try again.'); setSaving(false); return }
+      onSave({
+        ...existing,
+        name:  name.trim(),
+        bio:   bio.trim(),
+        rules: rules.trim(),
+        tags,
+        bio_history: [...(existing.bio_history || []), bioHistoryEntry].slice(-20),
+      })
+    } else {
+      const id = uid()
+      const ok = await createWorkshopArena({
+        id, name: name.trim(), bio: bio.trim(), rules: rules.trim(), tags,
+        ownerId: currentUser.id, ownerName: currentUser.username,
+        status,
+      })
+      if (!ok) { setError('Save failed. Try again.'); setSaving(false); return }
+      onSave({
+        id, name: name.trim(), bio: bio.trim(), rules: rules.trim(), tags,
+        status, bio_history: [],
+        owner_id: currentUser.id, owner_name: currentUser.username,
+      })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <h3 style={{ fontSize: 17, fontWeight: 500, margin: '0 0 1.25rem', color: 'var(--color-text-primary)' }}>
+        {isEdit ? 'Edit arena' : 'New arena'}
+      </h3>
+
+      <label style={lbl}>Name *</label>
+      <input
+        style={inp()}
+        placeholder="What is this place called?"
+        value={name}
+        onChange={e => { setName(e.target.value); setError('') }}
+        maxLength={80}
+        autoFocus={!isEdit}
+      />
+
+      <label style={lbl}>Description *</label>
+      <textarea
+        style={{ ...inp(), minHeight: 80, resize: 'vertical', fontFamily: 'var(--font-sans)' }}
+        placeholder="The setting, the vibe, what makes this place interesting."
+        value={bio}
+        onChange={e => { setBio(e.target.value); setError(''); setConfirm(false) }}
+        maxLength={500}
+      />
+
+      <label style={lbl}>House rules</label>
+      <textarea
+        style={{ ...inp(), minHeight: 60, resize: 'vertical', fontFamily: 'var(--font-sans)' }}
+        placeholder="Optional rules for fights in this arena. Not enforced by the app."
+        value={rules}
+        onChange={e => { setRules(e.target.value); setError('') }}
+        maxLength={300}
+      />
+      {!rules.trim() && (
+        <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '-8px 0 12px' }}>
+          Leave blank if there are no special rules.
+        </p>
+      )}
+
+      <label style={lbl}>Tags</label>
+      <div style={{ marginBottom: 12 }}>
+        <TagInput value={tags} onChange={setTags} />
+      </div>
+
+      {!isEdit && (
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ ...lbl, marginBottom: 8 }}>Visibility</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setStatus('stashed')}
+              style={{ ...tab(status === 'stashed'), fontSize: 13, padding: '6px 14px' }}
+            >
+              Stash (private)
+            </button>
+            <button
+              onClick={() => setStatus('published')}
+              style={{ ...tab(status === 'published'), fontSize: 13, padding: '6px 14px' }}
+            >
+              Publish now
+            </button>
+          </div>
+          {status === 'stashed' && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '6px 0 0' }}>
+              Only you can see this until you publish it.
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && <p style={{ color: 'var(--color-text-danger)', fontSize: 13, margin: '0 0 12px' }}>{error}</p>}
+
+      {confirm && (
+        <div style={{ background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', marginBottom: 12 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--color-text-primary)' }}>
+            This arena is published — your description edit will be public. Continue?
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSave} disabled={saving} style={{ ...btn('primary'), padding: '7px 14px', fontSize: 13, width: 'auto' }}>
+              {saving ? 'Saving…' : 'Yes, save'}
+            </button>
+            <button onClick={() => setConfirm(false)} style={{ ...btn(), padding: '7px 14px', fontSize: 13, width: 'auto' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!confirm && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleSave} disabled={saving || !hasChanges} style={{ ...btn('primary'), width: 'auto', padding: '9px 18px', fontSize: 14 }}>
+            {saving ? 'Saving…' : isEdit ? 'Save' : status === 'published' ? 'Create & publish' : 'Add to stash'}
+          </button>
+          <button onClick={onCancel} style={{ ...btn(), width: 'auto', padding: '9px 18px', fontSize: 14 }}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Combatant Workshop card ──────────────────────────────────────────────────
 
 function WorkshopCard({ combatant, onEdit, onPublish, onUnpublish, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -322,20 +500,66 @@ function WorkshopCard({ combatant, onEdit, onPublish, onUnpublish, onDelete }) {
   )
 }
 
-// ─── Placeholder tab panels ───────────────────────────────────────────────────
+// ─── Arena Workshop card ──────────────────────────────────────────────────────
 
-function ArenasPlaceholder() {
-  return (
-    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-      Arena creation coming soon.
-    </div>
-  )
-}
+function ArenaCard({ arena, onEdit, onPublish, onUnpublish, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const isStashed   = arena.status === 'stashed'
+  const isPublished = arena.status === 'published'
 
-function GroupsPlaceholder() {
   return (
-    <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
-      Group creation coming soon.
+    <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', marginBottom: 8 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{arena.name}</span>
+          {isStashed && (
+            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-tertiary)' }}>
+              🔒 stashed
+            </span>
+          )}
+          {isPublished && (
+            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-success)', border: '0.5px solid var(--color-border-success)', color: 'var(--color-text-success)' }}>
+              published
+            </span>
+          )}
+        </div>
+        {arena.bio && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+            {arena.bio}
+          </p>
+        )}
+        {arena.rules && (
+          <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>
+            Rules: {arena.rules.length > 80 ? arena.rules.slice(0, 80) + '…' : arena.rules}
+          </p>
+        )}
+        {arena.tags?.length > 0 && (
+          <div style={{ marginTop: 5 }}>
+            <TagChips tags={arena.tags} />
+          </div>
+        )}
+      </div>
+
+      {confirmDelete ? (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Delete permanently?</span>
+          <button onClick={() => onDelete(arena)} style={{ ...btn(), padding: '4px 12px', fontSize: 12, width: 'auto', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Delete</button>
+          <button onClick={() => setConfirmDelete(false)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12 }}>Keep</button>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => onEdit(arena)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12 }}>Edit</button>
+          {isStashed && (
+            <button onClick={() => onPublish(arena)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, color: 'var(--color-text-success)', borderColor: 'var(--color-border-success)' }}>Publish</button>
+          )}
+          {isPublished && (
+            <button onClick={() => onUnpublish(arena)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12 }}>Move to stash</button>
+          )}
+          {isStashed && (
+            <button onClick={() => setConfirmDelete(true)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Delete</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -348,9 +572,18 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   const [section,    setSection]    = useState('combatants')  // 'combatants' | 'arenas' | 'groups'
   const [view,       setView]       = useState('library')     // 'library' | 'create' | 'edit'
   const [editTarget, setEditTarget] = useState(null)
-  const [items,      setItems]      = useState([])
   const [filter,     setFilter]     = useState('all')         // 'all' | 'stashed' | 'published'
-  const [loading,    setLoading]    = useState(true)
+
+  // Combatant section state
+  const [items,   setItems]   = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Arena section state
+  const [arenaItems,      setArenaItems]      = useState([])
+  const [arenaFilter,     setArenaFilter]     = useState('all')
+  const [arenaLoading,    setArenaLoading]    = useState(false)
+  const [arenaLoaded,     setArenaLoaded]     = useState(false)
+  const [arenaEditTarget, setArenaEditTarget] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -358,6 +591,17 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
       setItems(data); setLoading(false)
     })
   }, [currentUser.id])
+
+  // Lazy-load arenas on first visit to that section
+  useEffect(() => {
+    if (section !== 'arenas' || arenaLoaded) return
+    setArenaLoading(true)
+    getWorkshopArenas(currentUser.id).then(data => {
+      setArenaItems(data); setArenaLoading(false); setArenaLoaded(true)
+    })
+  }, [section, arenaLoaded, currentUser.id])
+
+  // ── Combatant handlers ──────────────────────────────────────────────────────
 
   function handleSaved(combatant) {
     if (view === 'create') {
@@ -380,10 +624,46 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   }
 
   async function handleDelete(combatant) {
-    if (combatant.status !== 'stashed') return  // published items cannot be deleted
+    if (combatant.status !== 'stashed') return
     const ok = await deleteWorkshopCombatant(combatant.id)
     if (ok) setItems(prev => prev.filter(c => c.id !== combatant.id))
   }
+
+  // ── Arena handlers ──────────────────────────────────────────────────────────
+
+  function handleArenaSaved(arena) {
+    if (view === 'create') {
+      setArenaItems(prev => [arena, ...prev])
+    } else if (view === 'edit') {
+      setArenaItems(prev => prev.map(a => a.id === arena.id ? arena : a))
+    }
+    setView('library')
+    setArenaEditTarget(null)
+  }
+
+  async function handleArenaPublish(arena) {
+    const ok = await setWorkshopArenaStatus(arena.id, 'published')
+    if (ok) setArenaItems(prev => prev.map(a => a.id === arena.id ? { ...a, status: 'published' } : a))
+  }
+
+  async function handleArenaUnpublish(arena) {
+    const ok = await setWorkshopArenaStatus(arena.id, 'stashed')
+    if (ok) setArenaItems(prev => prev.map(a => a.id === arena.id ? { ...a, status: 'stashed' } : a))
+  }
+
+  async function handleArenaDelete(arena) {
+    if (arena.status !== 'stashed') return
+    const ok = await deleteWorkshopArena(arena.id)
+    if (ok) setArenaItems(prev => prev.filter(a => a.id !== arena.id))
+  }
+
+  function cancelForm() {
+    setView('library')
+    setEditTarget(null)
+    setArenaEditTarget(null)
+  }
+
+  // ── Derived values ──────────────────────────────────────────────────────────
 
   const visible = filter === 'all'
     ? items
@@ -392,15 +672,31 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   const stashedCount   = items.filter(c => c.status === 'stashed').length
   const publishedCount = items.filter(c => c.status === 'published').length
 
+  const arenaVisible       = arenaFilter === 'all' ? arenaItems : arenaItems.filter(a => a.status === arenaFilter)
+  const arenaStashedCount  = arenaItems.filter(a => a.status === 'stashed').length
+  const arenaPublishedCount = arenaItems.filter(a => a.status === 'published').length
+
+  // ── Form view (shared across sections) ─────────────────────────────────────
+
   if (view === 'create' || view === 'edit') {
     return (
-      <Screen title="My Workshop" onBack={() => { setView('library'); setEditTarget(null) }}>
-        <CombatantForm
-          existing={view === 'edit' ? editTarget : null}
-          onSave={handleSaved}
-          onCancel={() => { setView('library'); setEditTarget(null) }}
-          currentUser={currentUser}
-        />
+      <Screen title="My Workshop" onBack={cancelForm}>
+        {section === 'combatants' && (
+          <CombatantForm
+            existing={view === 'edit' ? editTarget : null}
+            onSave={handleSaved}
+            onCancel={cancelForm}
+            currentUser={currentUser}
+          />
+        )}
+        {section === 'arenas' && (
+          <ArenaForm
+            existing={view === 'edit' ? arenaEditTarget : null}
+            onSave={handleArenaSaved}
+            onCancel={cancelForm}
+            currentUser={currentUser}
+          />
+        )}
       </Screen>
     )
   }
@@ -418,9 +714,14 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
         <button onClick={() => setSection('groups')}     style={tab(section === 'groups')}>Groups</button>
       </div>
 
-      {section === 'arenas' && <ArenasPlaceholder />}
-      {section === 'groups' && <GroupsPlaceholder />}
+      {/* ── Groups placeholder ── */}
+      {section === 'groups' && (
+        <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+          Group creation coming soon.
+        </div>
+      )}
 
+      {/* ── Combatants section ── */}
       {section === 'combatants' && (
         <>
           <button
@@ -460,6 +761,51 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
               onPublish={handlePublish}
               onUnpublish={handleUnpublish}
               onDelete={handleDelete}
+            />
+          ))}
+        </>
+      )}
+
+      {/* ── Arenas section ── */}
+      {section === 'arenas' && (
+        <>
+          <button
+            onClick={() => setView('create')}
+            style={{ ...btn('primary'), marginBottom: '1.25rem' }}
+          >
+            + New arena
+          </button>
+
+          {arenaItems.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <button onClick={() => setArenaFilter('all')}       style={tab(arenaFilter === 'all')}>All ({arenaItems.length})</button>
+              <button onClick={() => setArenaFilter('stashed')}   style={tab(arenaFilter === 'stashed')}>Stashed ({arenaStashedCount})</button>
+              <button onClick={() => setArenaFilter('published')} style={tab(arenaFilter === 'published')}>Published ({arenaPublishedCount})</button>
+            </div>
+          )}
+
+          {arenaLoading && <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>Loading…</p>}
+
+          {!arenaLoading && arenaItems.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              Nothing here yet. Create your first arena above.
+            </div>
+          )}
+
+          {!arenaLoading && arenaItems.length > 0 && arenaVisible.length === 0 && (
+            <p style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+              Nothing in this filter yet.
+            </p>
+          )}
+
+          {arenaVisible.map(arena => (
+            <ArenaCard
+              key={arena.id}
+              arena={arena}
+              onEdit={a => { setArenaEditTarget(a); setView('edit') }}
+              onPublish={handleArenaPublish}
+              onUnpublish={handleArenaUnpublish}
+              onDelete={handleArenaDelete}
             />
           ))}
         </>

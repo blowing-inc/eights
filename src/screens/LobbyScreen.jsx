@@ -5,7 +5,7 @@ import ShareLinkButton from '../components/ShareLinkButton.jsx'
 import SpectatorList from '../components/SpectatorList.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn } from '../styles.js'
-import { sset, subscribeToRoom, trackRoomPresence } from '../supabase.js'
+import { sset, subscribeToRoom, trackRoomPresence, getArenaPickerOptions } from '../supabase.js'
 
 export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, onLogin, onStart, onBack, onViewPlayer }) {
   const [room, setLocal]           = useState(init)
@@ -14,11 +14,19 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   // 'idle' | 'confirming' — guest-host gate before starting the game
   const [guestStartPrompt, setGuestStartPrompt] = useState('idle')
 
+  // Arena picker state (host only)
+  const [arenas,           setArenas]           = useState([])
+  const [arenaPickerOpen,  setArenaPickerOpen]  = useState(false)
+  // Track the currently selected arena object separately for badge display
+  const [selectedArena,    setSelectedArena]    = useState(init.settings?.arena ?? null)
+
   const isHost = room.host === playerId
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
       setLocal(r); setRoom(r)
+      // Sync selected arena if another host session updated it
+      setSelectedArena(r.settings?.arena ?? null)
       if (r.phase === 'draft') onStart()
       if (r.phase === 'ended') onBack()
     })
@@ -30,6 +38,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
     })
   }, [room.id])
 
+  // Load arena options for the host picker
+  useEffect(() => {
+    if (!isHost) return
+    getArenaPickerOptions(playerId).then(setArenas)
+  }, [isHost, playerId])
+
   async function startGame() {
     const updated = { ...room, phase: 'draft' }
     await sset('room:' + room.id, updated)
@@ -37,8 +51,6 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   }
 
   function handleStartClick() {
-    // If the host is a guest, show a one-tap confirmation before proceeding.
-    // Losing the session as host means no one can advance the game.
     if (isGuest) {
       setGuestStartPrompt('confirming')
     } else {
@@ -50,6 +62,23 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
     const updated = { ...room, phase: 'ended', cancelledAt: Date.now() }
     await sset('room:' + room.id, updated)
     onBack()
+  }
+
+  async function pickArena(arena) {
+    const snapshot = { id: arena.id, name: arena.name, bio: arena.bio, rules: arena.rules || null, tags: arena.tags }
+    const updated  = { ...room, settings: { ...(room.settings || {}), arena: snapshot } }
+    await sset('room:' + room.id, updated)
+    setLocal(updated); setRoom(updated)
+    setSelectedArena(arena)
+    setArenaPickerOpen(false)
+  }
+
+  async function clearArena() {
+    const { arena: _removed, ...restSettings } = room.settings || {}
+    const updated = { ...room, settings: restSettings }
+    await sset('room:' + room.id, updated)
+    setLocal(updated); setRoom(updated)
+    setSelectedArena(null)
   }
 
   return (
@@ -71,6 +100,104 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
           </div>
         ))}
       </div>
+
+      {/* ── Arena picker (host only) ── */}
+      {isHost && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 8px' }}>Arena (optional)</h3>
+
+          {selectedArena ? (
+            <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedArena.name}</span>
+                    {selectedArena.status === 'stashed' && (
+                      <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-tertiary)' }}>
+                        🔒 stashed
+                      </span>
+                    )}
+                  </div>
+                  {selectedArena.bio && (
+                    <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                      {selectedArena.bio}
+                    </p>
+                  )}
+                  {selectedArena.rules && (
+                    <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>
+                      Rules: {selectedArena.rules.length > 60 ? selectedArena.rules.slice(0, 60) + '…' : selectedArena.rules}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button onClick={() => setArenaPickerOpen(true)} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12 }}>Change</button>
+                <button onClick={clearArena} style={{ ...btn('ghost'), padding: '4px 12px', fontSize: 12, color: 'var(--color-text-tertiary)' }}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setArenaPickerOpen(o => !o)}
+              style={{ ...btn('ghost'), width: '100%', fontSize: 13, color: 'var(--color-text-secondary)' }}
+            >
+              {arenaPickerOpen ? 'Close picker ↑' : '+ Choose an arena'}
+            </button>
+          )}
+
+          {arenaPickerOpen && !selectedArena && (
+            <div style={{ marginTop: 8, border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden', maxHeight: 280, overflowY: 'auto' }}>
+              {arenas.length === 0 && (
+                <p style={{ padding: '12px 14px', fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                  No arenas available. Create one in My Workshop or wait for published arenas to appear.
+                </p>
+              )}
+              {arenas.map((arena, i) => (
+                <button
+                  key={arena.id}
+                  onClick={() => pickArena(arena)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '10px 14px',
+                    background: i % 2 === 0 ? 'var(--color-background-secondary)' : 'var(--color-background-primary)',
+                    border: 'none',
+                    borderTop: i === 0 ? 'none' : '0.5px solid var(--color-border-tertiary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{arena.name}</span>
+                    {arena.status === 'stashed' && (
+                      <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-tertiary)' }}>
+                        🔒 stashed
+                      </span>
+                    )}
+                  </div>
+                  {arena.bio && (
+                    <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
+                      {arena.bio}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Show selected arena to non-host players ── */}
+      {!isHost && selectedArena && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 8px' }}>Arena</h3>
+          <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px' }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedArena.name}</span>
+            {selectedArena.bio && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0' }}>{selectedArena.bio}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {isHost ? (
         <>
