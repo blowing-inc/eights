@@ -29,7 +29,23 @@ export function normalizeRoomSettings(settings) {
     allowEvolutions:      true,
     allowDraws:           true,
     allowMerges:          true,
+    arenaMode:            'none',
+    arenaConfig:          null,
     ...settings,
+  }
+}
+
+/**
+ * Builds a round.arena snapshot from an arena DB record.
+ * Maps arena.bio → description and arena.rules → houseRules per the schema contract.
+ */
+export function buildArenaSnapshot(arena) {
+  return {
+    id:          arena.id,
+    name:        arena.name,
+    description: arena.bio   || '',
+    houseRules:  arena.rules || null,
+    tags:        arena.tags  || [],
   }
 }
 

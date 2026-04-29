@@ -3,8 +3,8 @@ import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence } from '../supabase.js'
-import { uid, canUndoLastRound, undoRound, tallyReactions } from '../gameLogic.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain } from '../supabase.js'
+import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
 
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onChronicles, onHome, onNextGame, onRejoinNextGame }) {
   const [room, setLocal] = useState(init)
@@ -51,7 +51,25 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   async function startRound() {
     const roundNum = room.currentRound + 1
     const matchup = room.players.map(p => (room.combatants[p.id] || [])[roundNum - 1]).filter(Boolean)
-    const newRound = { id: uid(), number: roundNum, combatants: matchup, picks: {}, winner: null, createdAt: Date.now() }
+
+    // Attach arena snapshot based on the configured delivery mode
+    const { arenaMode, arenaConfig } = normalizeRoomSettings(room.settings)
+    let arena = null
+    if (arenaMode === 'single') {
+      arena = arenaConfig?.arenaSnapshot || null
+    } else if (arenaMode === 'random-pool') {
+      // Collect arena IDs already used in this game
+      let excludeIds = (room.rounds || []).map(r => r.arena?.id).filter(Boolean)
+      // If series exclusion is on, also collect from prior games in the series
+      if (arenaConfig?.excludeSeries && room.seriesId && room.prevRoomId) {
+        const chain = await getHeritageChain(room.prevRoomId)
+        const seriesIds = chain.flatMap(r => (r.rounds || []).map(rd => rd.arena?.id)).filter(Boolean)
+        excludeIds = [...new Set([...excludeIds, ...seriesIds])]
+      }
+      arena = await getRandomArenaFromPool(arenaConfig?.pool || 'standard', excludeIds)
+    }
+
+    const newRound = { id: uid(), number: roundNum, combatants: matchup, picks: {}, winner: null, createdAt: Date.now(), arena }
     const updated = { ...room, phase: 'voting', currentRound: roundNum, rounds: [...room.rounds, newRound] }
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); onVote()
@@ -127,7 +145,10 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           {room.rounds.map(r => (
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, border: '0.5px solid var(--color-border-tertiary)' }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {r.number}</span>
-              <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>{r.combatants.map(c => c.name).join(' vs ')}</span>
+              <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>
+                {r.combatants.map(c => c.name).join(' vs ')}
+                {r.arena && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 6 }}>@ {r.arena.name}</span>}
+              </span>
               {r.winner
                 ? <>
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)', flexShrink: 0 }}>🏆 {r.winner.name}</span>
