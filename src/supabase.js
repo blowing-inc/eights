@@ -234,9 +234,14 @@ export async function setFavoriteCombatant(userId, combatantId, combatantName) {
   } catch (e) { console.error('setFavoriteCombatant exception', e) }
 }
 
-// Admin: grant or revoke Super Host role. Routes through admin-action Edge Function.
+// Admin: grant or revoke Super Host role. Direct update — same pattern as setUserPin.
 export async function adminSetSuperHost(userId, isSuperHost) {
-  await callAdminAction('set-super-host', { userId, isSuperHost })
+  try {
+    const { error } = await supabase.from('users')
+      .update({ is_super_host: isSuperHost, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+    if (error) throw new Error(error.message)
+  } catch (e) { console.error('adminSetSuperHost error', e); throw e }
 }
 
 // ─── Super Host ───────────────────────────────────────────────────────────────

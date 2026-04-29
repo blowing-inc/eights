@@ -289,13 +289,19 @@ function SuperHostSection() {
 
   useEffect(() => { listUsers().then(setUsers) }, [])
 
+  const [error, setError] = useState('')
+
   async function toggle(user) {
-    setSaving(user.id); setMsg('')
-    await adminSetSuperHost(user.id, !user.is_super_host)
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_super_host: !u.is_super_host } : u))
-    setMsg(!user.is_super_host
-      ? `${user.username} is now a Super Host.`
-      : `${user.username} is no longer a Super Host.`)
+    setSaving(user.id); setMsg(''); setError('')
+    try {
+      await adminSetSuperHost(user.id, !user.is_super_host)
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_super_host: !u.is_super_host } : u))
+      setMsg(!user.is_super_host
+        ? `${user.username} is now a Super Host.`
+        : `${user.username} is no longer a Super Host.`)
+    } catch {
+      setError('Failed to update. Check the console for details.')
+    }
     setSaving(null)
   }
 
@@ -310,6 +316,7 @@ function SuperHostSection() {
         Trusted users who can edit tags on any entity, manage group memberships, curate arena pools, merge tags globally, and induct combatants into the Hall of Fame.
       </p>
       {msg && <Notice msg={msg} />}
+      {error && <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{error}</p>}
       <input
         style={{ ...inp(), marginBottom: '1rem', fontSize: 14 }}
         placeholder="Search by username…"
