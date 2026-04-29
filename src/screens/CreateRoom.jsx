@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl, tab } from '../styles.js'
-import { sset, getArenaPickerOptions } from '../supabase.js'
+import { sset, getArenaPickerOptions, getPlaylistPickerOptions } from '../supabase.js'
 import { playerColor, buildArenaSnapshot } from '../gameLogic.js'
 
 function SettingRow({ label, description, value, onToggle, indented }) {
@@ -52,7 +52,7 @@ const ARENA_MODES = [
   { value: 'none',        label: 'None' },
   { value: 'single',      label: 'Single' },
   { value: 'random-pool', label: 'Random pool' },
-  { value: 'playlist',    label: 'Playlist', disabled: true },
+  { value: 'playlist',    label: 'Playlist' },
 ]
 
 const POOL_OPTIONS = [
@@ -72,17 +72,34 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
   const [arenaSearch,  setArenaSearch]  = useState('')
   const [arenasLoaded, setArenasLoaded] = useState(false)
 
+  // Playlist picker state
+  const [playlists,       setPlaylists]       = useState([])
+  const [playlistSearch,  setPlaylistSearch]  = useState('')
+  const [playlistsLoaded, setPlaylistsLoaded] = useState(false)
+
   function toggle(key) { setSettings(s => ({ ...s, [key]: !s[key] })) }
 
   function selectArenaMode(mode) {
     setSettings(s => ({ ...s, arenaMode: mode, arenaConfig: null }))
     setArenaSearch('')
+    setPlaylistSearch('')
     if (mode === 'single' && !arenasLoaded) {
       getArenaPickerOptions(playerId).then(data => { setArenas(data); setArenasLoaded(true) })
     }
     if (mode === 'random-pool') {
       setSettings(s => ({ ...s, arenaMode: mode, arenaConfig: { pool: 'standard', excludeSeries: false } }))
     }
+    if (mode === 'playlist' && !playlistsLoaded) {
+      getPlaylistPickerOptions(playerId).then(data => { setPlaylists(data); setPlaylistsLoaded(true) })
+    }
+  }
+
+  function pickPlaylist(playlist) {
+    setSettings(s => ({ ...s, arenaConfig: { playlistId: playlist.id, playlistName: playlist.name } }))
+  }
+
+  function clearPlaylistSelection() {
+    setSettings(s => ({ ...s, arenaConfig: null }))
   }
 
   function pickArena(arena) {
@@ -122,7 +139,12 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
     ? arenas.filter(a => a.name.toLowerCase().includes(arenaSearch.trim().toLowerCase()) || (a.bio || '').toLowerCase().includes(arenaSearch.trim().toLowerCase()))
     : arenas
 
+  const filteredPlaylists = playlistSearch.trim()
+    ? playlists.filter(p => p.name.toLowerCase().includes(playlistSearch.trim().toLowerCase()))
+    : playlists
+
   const selectedArenaSnapshot = settings.arenaConfig?.arenaSnapshot || null
+  const selectedPlaylist = settings.arenaConfig?.playlistId ? { id: settings.arenaConfig.playlistId, name: settings.arenaConfig.playlistName } : null
 
   return (
     <Screen title="New room" onBack={onBack}>
@@ -284,11 +306,54 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
           </div>
         )}
 
-        {/* Playlist mode: gated */}
+        {/* Playlist mode: playlist search + select */}
         {settings.arenaMode === 'playlist' && (
-          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
-            Playlist delivery coming soon.
-          </p>
+          <div>
+            {selectedPlaylist ? (
+              <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-secondary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedPlaylist.name}</div>
+                  </div>
+                  <button onClick={clearPlaylistSelection} style={{ ...btn('ghost'), padding: '3px 10px', fontSize: 12, flexShrink: 0 }}>Change</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input
+                  style={{ ...inp(), margin: '0 0 6px', fontSize: 14 }}
+                  value={playlistSearch}
+                  onChange={e => setPlaylistSearch(e.target.value)}
+                  placeholder="Search playlists…"
+                  autoFocus
+                />
+                {!playlistsLoaded ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading…</p>
+                ) : filteredPlaylists.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                    {playlists.length === 0 ? 'No playlists yet — create one in The Workshop first.' : 'No playlists match your search.'}
+                  </p>
+                ) : (
+                  <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden', maxHeight: 240, overflowY: 'auto' }}>
+                    {filteredPlaylists.map((playlist, i) => (
+                      <button
+                        key={playlist.id}
+                        onClick={() => pickPlaylist(playlist)}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: i % 2 === 0 ? 'var(--color-background-secondary)' : 'var(--color-background-primary)', border: 'none', borderTop: i === 0 ? 'none' : '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)' }}>{playlist.name}</span>
+                          {playlist.status === 'stashed' && (
+                            <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-tertiary)' }}>stashed</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         )}
       </div>
 

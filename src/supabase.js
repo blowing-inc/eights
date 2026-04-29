@@ -1020,6 +1020,155 @@ export async function getArenaPickerOptions(ownerId) {
   } catch (e) { console.error('getArenaPickerOptions exception', e); return [] }
 }
 
+// ─── Playlist Workshop operations ─────────────────────────────────────────────
+
+// Returns the new playlist id, or null on failure.
+export async function createWorkshopPlaylist({ name, tags = [], ownerId, ownerName, status = 'stashed' }) {
+  try {
+    const { data, error } = await supabase.from('arena_playlists').insert({
+      name, tags, owner_id: ownerId, owner_name: ownerName,
+      status, updated_at: new Date().toISOString(),
+    }).select('id').single()
+    if (error) console.error('createWorkshopPlaylist error', error)
+    return data?.id || null
+  } catch (e) { console.error('createWorkshopPlaylist exception', e); return null }
+}
+
+// Returns playlists owned by ownerId, each with a slot_count field.
+export async function getWorkshopPlaylists(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('arena_playlists')
+      .select('id, name, tags, status, owner_id, owner_name, created_at, updated_at')
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+    if (error) { console.error('getWorkshopPlaylists error', error); return [] }
+    const rows = data || []
+    if (!rows.length) return rows
+    const ids = rows.map(p => p.id)
+    const { data: slots } = await supabase.from('arena_playlist_slots').select('playlist_id').in('playlist_id', ids)
+    const countMap = {}
+    for (const s of (slots || [])) countMap[s.playlist_id] = (countMap[s.playlist_id] || 0) + 1
+    return rows.map(p => ({ ...p, slot_count: countMap[p.id] || 0 }))
+  } catch (e) { console.error('getWorkshopPlaylists exception', e); return [] }
+}
+
+export async function updateWorkshopPlaylist(id, { name, tags }) {
+  try {
+    const { error } = await supabase.from('arena_playlists')
+      .update({ name, tags, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('updateWorkshopPlaylist error', error)
+    return !error
+  } catch (e) { console.error('updateWorkshopPlaylist exception', e); return false }
+}
+
+export async function setWorkshopPlaylistStatus(id, status) {
+  try {
+    const { error } = await supabase.from('arena_playlists')
+      .update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('setWorkshopPlaylistStatus error', error)
+    return !error
+  } catch (e) { console.error('setWorkshopPlaylistStatus exception', e); return false }
+}
+
+// Only valid for stashed playlists — callers must verify status === 'stashed'.
+// Deletes slots first (no cascade in schema).
+export async function deleteWorkshopPlaylist(id) {
+  try {
+    await supabase.from('arena_playlist_slots').delete().eq('playlist_id', id)
+    const { error } = await supabase.from('arena_playlists').delete().eq('id', id)
+    if (error) console.error('deleteWorkshopPlaylist error', error)
+    return !error
+  } catch (e) { console.error('deleteWorkshopPlaylist exception', e); return false }
+}
+
+// Returns a playlist row with its slots joined to arena metadata for the edit form.
+// slots: [{ id, position, arena_id, arenaName, arenaBio, arenaStatus }] ordered by position.
+export async function getPlaylistWithSlots(playlistId) {
+  try {
+    const [playlistRes, slotsRes] = await Promise.all([
+      supabase.from('arena_playlists').select('*').eq('id', playlistId).single(),
+      supabase.from('arena_playlist_slots').select('id, position, arena_id').eq('playlist_id', playlistId).order('position'),
+    ])
+    if (playlistRes.error) { console.error('getPlaylistWithSlots error', playlistRes.error); return null }
+    const slots = slotsRes.data || []
+    if (!slots.length) return { ...playlistRes.data, slots: [] }
+    const { data: arenas } = await supabase.from('arenas').select('id, name, bio, status').in('id', slots.map(s => s.arena_id))
+    const arenaMap = Object.fromEntries((arenas || []).map(a => [a.id, a]))
+    return {
+      ...playlistRes.data,
+      slots: slots.map(s => ({
+        id:          s.id,
+        position:    s.position,
+        arena_id:    s.arena_id,
+        arenaName:   arenaMap[s.arena_id]?.name   || 'Unknown arena',
+        arenaBio:    arenaMap[s.arena_id]?.bio     || '',
+        arenaStatus: arenaMap[s.arena_id]?.status  || 'published',
+      })),
+    }
+  } catch (e) { console.error('getPlaylistWithSlots exception', e); return null }
+}
+
+// Replaces all slots for a playlist with the given ordered arenaIds (1-based positions).
+export async function setPlaylistSlots(playlistId, arenaIds) {
+  try {
+    await supabase.from('arena_playlist_slots').delete().eq('playlist_id', playlistId)
+    if (!arenaIds.length) return true
+    const rows = arenaIds.map((arenaId, i) => ({ playlist_id: playlistId, arena_id: arenaId, position: i + 1 }))
+    const { error } = await supabase.from('arena_playlist_slots').insert(rows)
+    if (error) console.error('setPlaylistSlots error', error)
+    return !error
+  } catch (e) { console.error('setPlaylistSlots exception', e); return false }
+}
+
+// Returns published + owner's stashed playlists for the lobby picker.
+export async function getPlaylistPickerOptions(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('arena_playlists')
+      .select('id, name, tags, status, owner_id')
+      .or(`status.eq.published,owner_id.eq.${ownerId}`)
+      .order('name', { ascending: true })
+    if (error) { console.error('getPlaylistPickerOptions error', error); return [] }
+    const seen = new Set()
+    return (data || []).filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true })
+  } catch (e) { console.error('getPlaylistPickerOptions exception', e); return [] }
+}
+
+// Returns ordered arena snapshots for playlist delivery at round-open time.
+// Shape matches round.arena: { id, name, description, houseRules, tags }.
+export async function getPlaylistForDelivery(playlistId) {
+  try {
+    const { data: slots, error } = await supabase
+      .from('arena_playlist_slots')
+      .select('position, arena_id')
+      .eq('playlist_id', playlistId)
+      .order('position')
+    if (error || !slots?.length) return []
+    const { data: arenas } = await supabase
+      .from('arenas')
+      .select('id, name, bio, rules, tags')
+      .in('id', slots.map(s => s.arena_id))
+    const arenaMap = Object.fromEntries((arenas || []).map(a => [a.id, a]))
+    return slots.map(s => {
+      const a = arenaMap[s.arena_id]
+      if (!a) return null
+      return { id: a.id, name: a.name, description: a.bio || '', houseRules: a.rules || null, tags: a.tags || [] }
+    }).filter(Boolean)
+  } catch (e) { console.error('getPlaylistForDelivery exception', e); return [] }
+}
+
+// Called on game completion for the playlist used in the finished game.
+// Idempotent — safe to call on an already-published playlist.
+export async function publishPlaylist(id) {
+  if (!id) return
+  try {
+    const { error } = await supabase.from('arena_playlists')
+      .update({ status: 'published', updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('publishPlaylist error', error)
+  } catch (e) { console.error('publishPlaylist exception', e) }
+}
+
 // ─── Archive listing functions ────────────────────────────────────────────────
 
 // Published groups with aggregated member count, combined W/L, and most-decorated

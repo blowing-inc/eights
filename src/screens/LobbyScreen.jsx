@@ -58,7 +58,7 @@ function ArenaModeDisplay({ settings }) {
         )}
         {arenaMode === 'playlist' && (
           <span style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>
-            Playlist · {arenaConfig?.playlistId || 'not configured'}
+            Playlist · {arenaConfig?.playlistName || arenaConfig?.playlistId || 'not configured'}
           </span>
         )}
       </div>
