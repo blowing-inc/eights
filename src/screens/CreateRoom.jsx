@@ -40,6 +40,7 @@ function RosterSizeRow({ value, onChange }) {
 }
 
 const SETTINGS = [
+  ['isPublic',               'Open lobby',              'Anyone can browse and join without an invite code'],
   ['spectatorsAllowed',      'Allow spectators',        'Let others watch without playing'],
   ['anonymousCombatants',    'Anonymous combatants',    'Hide owner names during voting'],
   ['blindVoting',            'Blind voting',            'Hide votes until everyone has picked'],
@@ -65,7 +66,7 @@ const POOL_OPTIONS = [
 export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState({ rosterSize: 8, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null, arenaEvolutionEnabled: false })
+  const [settings, setSettings] = useState({ rosterSize: 8, isPublic: false, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null, arenaEvolutionEnabled: false })
 
   // Arena picker state for single mode
   const [arenas,       setArenas]       = useState([])

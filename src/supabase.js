@@ -74,6 +74,43 @@ export async function getActiveRoomsForPlayer(playerId) {
   } catch (e) { console.error('getActiveRoomsForPlayer exception', e); return [] }
 }
 
+// Public lobbies for the join screen browser.
+// One table scan: collects open public rooms and (if playerId given) computes
+// how many completed games the current player has had with each host, used for
+// the default "familiar" sort order.
+export async function getPublicLobbies(playerId = null) {
+  try {
+    const { data, error } = await supabase.from('rooms').select('data').order('updated_at', { ascending: false })
+    if (error) { console.error('getPublicLobbies error', error); return [] }
+    const hostFrequency = {}
+    const publicLobbies = []
+    for (const row of (data || [])) {
+      const r = row.data
+      if (!r || r.devMode) continue
+      if (playerId && r.phase === 'ended' && (r.players || []).some(p => p.id === playerId && !p.isBot)) {
+        hostFrequency[r.host] = (hostFrequency[r.host] || 0) + 1
+      }
+      if (r.phase === 'lobby' && r.settings?.isPublic && !r.nextRoomId) {
+        publicLobbies.push({
+          code:        r.id,
+          hostId:      r.host,
+          hostName:    (r.players || []).find(p => p.id === r.host)?.name || 'Unknown',
+          playerCount: (r.players || []).filter(p => !p.isBot).length,
+          createdAt:   r.createdAt,
+          arenaMode:   r.settings?.arenaMode || 'none',
+        })
+      }
+    }
+    return publicLobbies
+      .map(lobby => ({ ...lobby, timesPlayedWithHost: hostFrequency[lobby.hostId] || 0 }))
+      .sort((a, b) =>
+        b.timesPlayedWithHost - a.timesPlayedWithHost ||
+        b.playerCount - a.playerCount ||
+        b.createdAt - a.createdAt
+      )
+  } catch (e) { console.error('getPublicLobbies exception', e); return [] }
+}
+
 // ─── Realtime ────────────────────────────────────────────────────────────────
 
 // Subscribe to live updates for a single room row.
