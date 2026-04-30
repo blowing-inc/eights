@@ -134,6 +134,19 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
                     : <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>No result recorded</span>}
               </div>
 
+              {rd.arena && (
+                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--color-background-tertiary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Arena</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{rd.arena.name}</div>
+                  {rd.arena.description && (
+                    <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0', lineHeight: 1.5 }}>{rd.arena.description}</p>
+                  )}
+                  {rd.arena.houseRules && (
+                    <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '3px 0 0', fontStyle: 'italic' }}>Rules: {rd.arena.houseRules}</p>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {(rd.combatants || []).map(c => {
                   const isWinner = rd.winner?.id === c.id

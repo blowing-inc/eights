@@ -144,6 +144,20 @@ function RoundCard({ round, playerById }) {
         })}
       </div>
 
+      {/* Arena context */}
+      {round.arena && (
+        <div style={{ padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Arena</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{round.arena.name}</div>
+          {round.arena.description && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '3px 0 0', lineHeight: 1.5 }}>{round.arena.description}</p>
+          )}
+          {round.arena.houseRules && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '4px 0 0', fontStyle: 'italic' }}>Rules: {round.arena.houseRules}</p>
+          )}
+        </div>
+      )}
+
       {/* Vote breakdown — only show if there are any picks */}
       {Object.values(picks).length > 0 && (
         <div style={{ padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
