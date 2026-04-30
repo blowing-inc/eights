@@ -795,6 +795,36 @@ export async function setCombatantGroups(combatantId, groupIds, addedBy) {
   } catch (e) { console.error('setCombatantGroups exception', e); return false }
 }
 
+// Fetch published group memberships for multiple combatants at once.
+// Returns { [combatantId]: [{ id, name }] } — only published groups are included.
+// Stashed groups owned by others are invisible; only published groups appear here.
+export async function getGroupsForCombatants(combatantIds) {
+  if (!combatantIds?.length) return {}
+  try {
+    const { data: memberships, error: mErr } = await supabase
+      .from('combatant_groups')
+      .select('combatant_id, group_id')
+      .in('combatant_id', combatantIds)
+    if (mErr) { console.error('getGroupsForCombatants memberships error', mErr); return {} }
+    const groupIds = [...new Set((memberships || []).map(m => m.group_id))]
+    if (!groupIds.length) return {}
+    const { data: groups, error: gErr } = await supabase
+      .from('groups')
+      .select('id, name')
+      .in('id', groupIds)
+      .eq('status', 'published')
+    if (gErr) { console.error('getGroupsForCombatants groups error', gErr); return {} }
+    const groupMap = Object.fromEntries((groups || []).map(g => [g.id, g]))
+    const result = {}
+    for (const m of memberships || []) {
+      if (!groupMap[m.group_id]) continue
+      if (!result[m.combatant_id]) result[m.combatant_id] = []
+      result[m.combatant_id].push(groupMap[m.group_id])
+    }
+    return result
+  } catch (e) { console.error('getGroupsForCombatants exception', e); return {} }
+}
+
 // Create a new combatant from The Workshop.
 // Status defaults to 'stashed' unless the caller explicitly passes 'published'.
 export async function createWorkshopCombatant({ id, name, bio, tags = [], ownerId, ownerName, status = 'stashed' }) {

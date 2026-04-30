@@ -6,7 +6,7 @@ import RoundChat from '../components/RoundChat.jsx'
 import EvolutionForm from '../components/EvolutionForm.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, publishPlaylist, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, publishPlaylist, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getGroupsForCombatants, getCombatantGroupIds, setCombatantGroups } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
@@ -131,6 +131,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
   const [voteNudgeDone,    setVoteNudgeDone]    = useState(false)  // one-time guest nudge after first pick
   const [arenaReaction,    setArenaReaction]    = useState(null)   // 'like' | 'dislike' | null
   const [arenaReacting,    setArenaReacting]    = useState(false)
+  const [combatantGroups,  setCombatantGroupsState] = useState({})  // { [combatantId]: [{ id, name }] }
 
   // Draw / merge flow state machine.
   // null                                                           — no flow in progress
@@ -172,6 +173,12 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     if (!arenaId || !playerId) { setArenaReaction(null); return }
     getArenaReaction(arenaId, playerId).then(setArenaReaction)
   }, [arenaId, playerId])
+
+  useEffect(() => {
+    if (!round?.combatants?.length) return
+    const ids = round.combatants.map(c => c.id)
+    getGroupsForCombatants(ids).then(setCombatantGroupsState)
+  }, [round?.id])
 
   async function handleArenaReaction(value) {
     if (!arenaId || !playerId || arenaReacting) return
@@ -403,6 +410,11 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       ownerId: primaryParent.ownerId, ownerName: primaryParent.ownerName, lineage,
     })
 
+    // Inherit the union of all parents' group memberships.
+    const allGroupIds = (await Promise.all(parents.map(c => getCombatantGroupIds(c.id)))).flat()
+    const uniqueGroupIds = [...new Set(allGroupIds)]
+    if (uniqueGroupIds.length) await setCombatantGroups(newId, uniqueGroupIds, primaryParent.ownerId)
+
     const merge = {
       fromIds,
       fromNames:        parents.map(c => c.name),
@@ -523,6 +535,10 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       id: newId, name: newName, bio: variantBio,
       ownerId, ownerName: winner.ownerName, lineage,
     })
+
+    // Inherit parent's group memberships — variant continues the same group affiliations.
+    const parentGroupIds = await getCombatantGroupIds(winner.id)
+    if (parentGroupIds.length) await setCombatantGroups(newId, parentGroupIds, ownerId)
 
     // Apply win/loss to the original. The draft roster is immutable — the variant
     // does not replace the original in any future round of this game. It enters
@@ -655,6 +671,18 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     return null
   })()
 
+  // Groups shared by two or more combatants in this round — signals a civil war.
+  const civilWarGroups = (() => {
+    const tally = {}
+    for (const c of round.combatants) {
+      for (const g of combatantGroups[c.id] || []) {
+        if (!tally[g.id]) tally[g.id] = { name: g.name, combatantNames: [] }
+        tally[g.id].combatantNames.push(c.name)
+      }
+    }
+    return Object.values(tally).filter(x => x.combatantNames.length >= 2)
+  })()
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (<>
@@ -736,6 +764,15 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
         </div>
       )}
 
+      {civilWarGroups.length > 0 && (
+        <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>⚔️</span>
+          <span style={{ fontSize: 13, color: 'var(--color-text-warning)', fontWeight: 500 }}>
+            Civil war — {civilWarGroups.map(g => g.name).join(', ')}
+          </span>
+        </div>
+      )}
+
       {/* ── Combatant cards ─────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: '1.5rem' }}>
         {round.combatants.map(c => {
@@ -788,6 +825,15 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
                       )
                       return null
                     })}
+                  </div>
+                )}
+                {(combatantGroups[c.id] || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: 5, marginTop: 8, flexWrap: 'wrap' }}>
+                    {(combatantGroups[c.id] || []).map(g => (
+                      <span key={g.id} style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-tertiary)', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
+                        {g.name}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
