@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import { btn, tab, inp } from '../styles.js'
-import { listCombatants, searchCast, listPublishedGroups, listPublishedArenas, listAllDistinctTags, superHostSetEntityTags } from '../supabase.js'
+import { listCombatants, searchCast, listPublishedGroups, listPublishedArenas, listAllDistinctTags, superHostSetEntityTags, listHofCombatants } from '../supabase.js'
 import TagInput from '../components/TagInput.jsx'
 
 const PAGE_SIZE = 20
@@ -78,6 +78,9 @@ function CastTab({ query, activeTag, onFilterTag, onViewCombatant }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 24 }}>#{page * PAGE_SIZE + idx + 1}</span>
                 <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                {c.hall_of_fame && (
+                  <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 99, whiteSpace: 'nowrap' }}>Hall of Fame</span>
+                )}
                 {isVariant && (
                   <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99, whiteSpace: 'nowrap' }}>
                     ⚡ gen {c.lineage.generation}
@@ -321,6 +324,71 @@ function ArenasTab({ query, activeTag, activePool, onFilterTag, onFilterPool, on
   )
 }
 
+// ─── Hall of Fame tab ─────────────────────────────────────────────────────────
+
+function HofTab({ onViewCombatant }) {
+  const [items, setItems]     = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    listHofCombatants().then(data => { setItems(data); setLoading(false) })
+  }, [])
+
+  if (loading) return <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>
+
+  if (!items.length) return (
+    <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+      No combatants have been inducted yet.
+    </p>
+  )
+
+  return (
+    <>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, margin: '0 0 1.25rem' }}>
+        Inducted by Super Hosts. A permanent honour — the record lives on even if the badge is removed.
+      </p>
+      {items.map((c, idx) => {
+        const isVariant = !!c.lineage
+        return (
+          <button key={c.id} onClick={() => onViewCombatant(c)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 16px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', marginBottom: 10, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 20 }}>#{idx + 1}</span>
+                <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                <span style={{ fontSize: 11, padding: '2px 7px', background: 'var(--color-background-warning)', color: 'var(--color-text-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 99, flexShrink: 0 }}>Hall of Fame</span>
+                {isVariant && (
+                  <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-background-info)', color: 'var(--color-text-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 99 }}>
+                    ⚡ gen {c.lineage.generation}
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', flexShrink: 0, marginLeft: 8 }}>{c.wins}W – {c.losses}L</span>
+            </div>
+            <div style={{ paddingLeft: 28 }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+                by {c.owner_name || 'unknown'}
+              </span>
+              {c.inducted_at && (
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 8 }}>
+                  · inducted {new Date(c.inducted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {c.inducted_by && ` by ${c.inducted_by}`}
+                </span>
+              )}
+            </div>
+            {c.induction_note && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0 28px', lineHeight: 1.4, fontStyle: 'italic' }}>"{c.induction_note}"</p>
+            )}
+            {c.bio && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0 28px', lineHeight: 1.4 }}>{c.bio.length > 100 ? c.bio.slice(0, 100) + '…' : c.bio}</p>
+            )}
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
 // ─── Tags tab ─────────────────────────────────────────────────────────────────
 
 function TagsTab({ activeTag, onFilterTag }) {
@@ -363,10 +431,11 @@ function TagsTab({ activeTag, onFilterTag }) {
 // ─── Archive screen ───────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'cast',   label: 'The Cast' },
-  { key: 'groups', label: 'Groups'   },
-  { key: 'arenas', label: 'Arenas'   },
-  { key: 'tags',   label: 'Tags'     },
+  { key: 'cast',   label: 'The Cast'     },
+  { key: 'hof',    label: 'Hall of Fame' },
+  { key: 'groups', label: 'Groups'       },
+  { key: 'arenas', label: 'Arenas'       },
+  { key: 'tags',   label: 'Tags'         },
 ]
 
 export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena, isSuperHost }) {
@@ -412,6 +481,7 @@ export default function ArchiveScreen({ onBack, onViewCombatant, onViewArena, is
       </div>
 
       {activeTab === 'cast'   && <CastTab   query={query} activeTag={activeTag} onFilterTag={handleFilterTag} onViewCombatant={onViewCombatant} />}
+      {activeTab === 'hof'    && <HofTab    onViewCombatant={onViewCombatant} />}
       {activeTab === 'groups' && <GroupsTab query={query} activeTag={activeTag} onFilterTag={handleFilterTag} isSuperHost={isSuperHost} />}
       {activeTab === 'arenas' && <ArenasTab query={query} activeTag={activeTag} activePool={activePool} onFilterTag={handleFilterTag} onFilterPool={handleFilterPool} onViewArena={onViewArena} />}
       {activeTab === 'tags'   && <TagsTab   activeTag={activeTag} onFilterTag={handleFilterTag} />}

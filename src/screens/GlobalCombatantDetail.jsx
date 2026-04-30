@@ -3,7 +3,7 @@ import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget, superHostSetEntityTags, superHostInductHoF, superHostRemoveHoF, setCombatantGroups, getCombatantGroupIds, listPublishedGroups } from '../supabase.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget, superHostSetEntityTags, superHostInductHoF, superHostRemoveHoF, superHostEditHofNote, setCombatantGroups, getCombatantGroupIds, listPublishedGroups } from '../supabase.js'
 import { buildStoryFromLineageTree, computeSuperlatives } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
@@ -242,6 +242,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [shHofOpen,     setShHofOpen]     = useState(false)
   const [shHofNote,     setShHofNote]     = useState('')
   const [shHofSaving,   setShHofSaving]   = useState(false)
+  const [shNoteEdit,    setShNoteEdit]    = useState(false)
+  const [shNoteVal,     setShNoteVal]     = useState('')
   const [shGroupOpen,   setShGroupOpen]   = useState(false)
   const [shGroupIds,    setShGroupIds]    = useState(null)  // null = not loaded
   const [shAllGroups,   setShAllGroups]   = useState(null)
@@ -338,6 +340,13 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     const ok = await superHostRemoveHoF(c.id, playerName)
     if (ok) setC(prev => ({ ...prev, hall_of_fame: false, removed_at: new Date().toISOString(), removed_by: playerName }))
     setShHofSaving(false)
+  }
+
+  async function shSaveNote() {
+    setShHofSaving(true)
+    const ok = await superHostEditHofNote(c.id, shNoteVal)
+    if (ok) setC(prev => ({ ...prev, induction_note: shNoteVal }))
+    setShHofSaving(false); setShNoteEdit(false)
   }
 
   async function shOpenGroups() {
@@ -610,17 +619,45 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>Hall of Fame</span>
-              {c.hall_of_fame
-                ? <button onClick={shRemoveHof} disabled={shHofSaving} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>{shHofSaving ? '…' : 'Remove'}</button>
-                : <button onClick={() => setShHofOpen(o => !o)} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Induct</button>
-              }
+              <div style={{ display: 'flex', gap: 6 }}>
+                {c.hall_of_fame && !shNoteEdit && (
+                  <button onClick={() => { setShNoteEdit(true); setShNoteVal(c.induction_note || '') }} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Edit note</button>
+                )}
+                {c.hall_of_fame
+                  ? <button onClick={shRemoveHof} disabled={shHofSaving} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>{shHofSaving ? '…' : 'Remove'}</button>
+                  : !shHofOpen && <button onClick={() => setShHofOpen(true)} style={{ ...btn('ghost'), padding: '2px 8px', fontSize: 12 }}>Induct</button>
+                }
+              </div>
             </div>
-            {c.hall_of_fame && c.inducted_at && (
+            {/* Induction record — visible whether currently inducted or previously removed */}
+            {c.inducted_at && !shNoteEdit && (
               <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 0 4px' }}>
-                Inducted {new Date(c.inducted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {c.hall_of_fame ? 'Inducted' : 'Previously inducted'}{' '}
+                {new Date(c.inducted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 {c.inducted_by && ` by ${c.inducted_by}`}
                 {c.induction_note && ` — "${c.induction_note}"`}
+                {!c.hall_of_fame && c.removed_at && (
+                  <span>
+                    {' · Removed '}
+                    {new Date(c.removed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {c.removed_by && ` by ${c.removed_by}`}
+                  </span>
+                )}
               </p>
+            )}
+            {shNoteEdit && (
+              <>
+                <input
+                  style={{ ...inp(), fontSize: 13, marginBottom: 6 }}
+                  placeholder="Induction note (optional)"
+                  value={shNoteVal}
+                  onChange={e => setShNoteVal(e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={shSaveNote} disabled={shHofSaving} style={{ ...btn('primary'), flex: 1, fontSize: 13, padding: '7px' }}>{shHofSaving ? 'Saving…' : 'Save note'}</button>
+                  <button onClick={() => setShNoteEdit(false)} style={{ ...btn(), flex: 1, fontSize: 13, padding: '7px' }}>Cancel</button>
+                </div>
+              </>
             )}
             {!c.hall_of_fame && shHofOpen && (
               <>
