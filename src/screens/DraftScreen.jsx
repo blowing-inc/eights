@@ -6,12 +6,12 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants, createWorkshopCombatant } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants, createWorkshopCombatant, stashKickedCombatants } from '../supabase.js'
 import {
   uid, ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
-  normalizeRoomSettings, buildActiveFormMap,
+  normalizeRoomSettings, buildActiveFormMap, kickPlayerFromRoom,
 } from '../gameLogic.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {
@@ -38,6 +38,8 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [submitted, setSubmitted] = useState(existing.length === rosterSize)
   const [forceStarting, setForceStarting] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  // playerId being confirmed for kick, or null
+  const [confirmKick, setConfirmKick] = useState(null)
   const isHost = room.host === playerId
   const isSeries = !!room.prevRoomId
   const cancelLabel = isSeries ? 'End series' : 'Cancel game'
@@ -75,6 +77,10 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
+      if (!(r.players || []).some(p => p.id === playerId)) {
+        localStorage.setItem('eights_kicked', JSON.stringify({ code: r.code, at: Date.now() }))
+        onBack(); return
+      }
       setLocal(r); setRoom(r)
       if (r.phase === 'battle') onDone()
     })
@@ -177,6 +183,16 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     setLocal(updated); setRoom(updated); setForceStarting(false); onDone()
   }
 
+  async function kickPlayer(kickedId) {
+    const kickedPlayer = room.players.find(p => p.id === kickedId)
+    const { room: updated, submittedCombatants } = kickPlayerFromRoom(room, kickedId)
+    if (submittedCombatants.length > 0 && kickedPlayer && !kickedPlayer.isGuest) {
+      await stashKickedCombatants(submittedCombatants)
+    }
+    await sset('room:' + room.id, updated)
+    setLocal(updated); setRoom(updated); setConfirmKick(null)
+  }
+
   if (submitted) {
     const realPlayers = room.players.filter(p => !p.isBot)
     const readyCount  = getReadyPlayerCount(room.players, room.combatants, rosterSize)
@@ -196,11 +212,29 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
           {room.players.map(p => {
             const done = p.isBot || (room.combatants[p.id] || []).length === rosterSize
             return (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
-                <AvatarWithHover player={p} onViewProfile={null} />
-                <span style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>{p.name}</span>
-                {p.isBot && <Pill>bot</Pill>}
-                <span style={{ marginLeft: 'auto', fontSize: 13 }}>{done ? '✓' : '…'}</span>
+              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: confirmKick === p.id ? 'var(--border-radius-md) var(--border-radius-md) 0 0' : 'var(--border-radius-md)' }}>
+                  <AvatarWithHover player={p} onViewProfile={null} />
+                  <span style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>{p.name}</span>
+                  {p.isBot && <Pill>bot</Pill>}
+                  {confirmKick !== p.id && <span style={{ marginLeft: 'auto', fontSize: 13 }}>{done ? '✓' : '…'}</span>}
+                  {isHost && !p.isBot && p.id !== playerId && confirmKick !== p.id && (
+                    <button
+                      onClick={() => setConfirmKick(p.id)}
+                      style={{ background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '4px 6px' }}
+                      title="Remove player"
+                    >✕</button>
+                  )}
+                  {isHost && confirmKick === p.id && (
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-danger)' }}>Remove?</span>
+                  )}
+                </div>
+                {isHost && confirmKick === p.id && (
+                  <div style={{ display: 'flex', gap: 0, background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-md) var(--border-radius-md)', overflow: 'hidden' }}>
+                    <button onClick={() => kickPlayer(p.id)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', borderRight: '0.5px solid var(--color-border-danger)', fontSize: 13, color: 'var(--color-text-danger)', cursor: 'pointer' }}>Yes, remove</button>
+                    <button onClick={() => setConfirmKick(null)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', fontSize: 13, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Never mind</button>
+                  </div>
+                )}
               </div>
             )
           })}

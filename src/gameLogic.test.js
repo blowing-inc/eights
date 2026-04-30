@@ -31,6 +31,7 @@ import {
   getEphemeralBadges,
   computeSuperlatives,
   getCombatantsToPublish,
+  kickPlayerFromRoom,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2432,6 +2433,80 @@ describe('replacePlayerIdInRoom', () => {
     const original = JSON.parse(JSON.stringify(room))
     replacePlayerIdInRoom(room, OLD, NEW)
     expect(room).toEqual(original)
+  })
+})
+
+// ─── kickPlayerFromRoom ───────────────────────────────────────────────────────
+
+describe('kickPlayerFromRoom', () => {
+  function makeKickRoom() {
+    return {
+      id: 'ROOM1', code: 'ROOM1', host: 'p1', phase: 'draft',
+      players: [
+        { id: 'p1', name: 'Alice', color: '#fff', isBot: false },
+        { id: 'p2', name: 'Bob',   color: '#000', isBot: false },
+        { id: 'p3', name: 'Carol', color: '#aaa', isBot: false },
+      ],
+      combatants: {
+        p1: [{ id: 'c1', name: 'Fighter', ownerId: 'p1' }],
+        p2: [{ id: 'c2', name: 'Brawler', ownerId: 'p2' }],
+      },
+      drafts: { p3: { names: ['Draft'], bios: [''], globalIds: [null] } },
+    }
+  }
+
+  it('removes kicked player from players array', () => {
+    const { room } = kickPlayerFromRoom(makeKickRoom(), 'p2')
+    expect(room.players.map(p => p.id)).toEqual(['p1', 'p3'])
+  })
+
+  it('removes kicked player combatants from combatants map', () => {
+    const { room } = kickPlayerFromRoom(makeKickRoom(), 'p2')
+    expect(room.combatants).not.toHaveProperty('p2')
+    expect(room.combatants).toHaveProperty('p1')
+  })
+
+  it('returns submitted combatants for stashing', () => {
+    const { submittedCombatants } = kickPlayerFromRoom(makeKickRoom(), 'p2')
+    expect(submittedCombatants).toHaveLength(1)
+    expect(submittedCombatants[0].id).toBe('c2')
+  })
+
+  it('returns empty submittedCombatants when player has not submitted', () => {
+    const { submittedCombatants } = kickPlayerFromRoom(makeKickRoom(), 'p3')
+    expect(submittedCombatants).toEqual([])
+  })
+
+  it('removes kicked player draft from drafts map', () => {
+    const { room } = kickPlayerFromRoom(makeKickRoom(), 'p3')
+    expect(room.drafts).not.toHaveProperty('p3')
+  })
+
+  it('preserves other players drafts when kicking', () => {
+    const base = makeKickRoom()
+    base.drafts.p2 = { names: ['Kick'], bios: [''], globalIds: [null] }
+    const { room } = kickPlayerFromRoom(base, 'p3')
+    expect(room.drafts).toHaveProperty('p2')
+  })
+
+  it('preserves prevWinners (historical record)', () => {
+    const base = makeKickRoom()
+    base.prevWinners = { p2: [{ id: 'pw1', name: 'Legend' }] }
+    const { room } = kickPlayerFromRoom(base, 'p2')
+    expect(room.prevWinners).toHaveProperty('p2')
+  })
+
+  it('returns unchanged room when player not found', () => {
+    const base = makeKickRoom()
+    const { room } = kickPlayerFromRoom(base, 'ghost')
+    expect(room).toEqual(base)
+  })
+
+  it('does not mutate the input', () => {
+    const base = makeKickRoom()
+    const original = JSON.parse(JSON.stringify(base))
+    kickPlayerFromRoom(base, 'p2')
+    expect(base).toEqual(original)
   })
 })
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { btn } from '../styles.js'
 import { slist } from '../supabase.js'
 import { buildTickerMessages } from '../gameLogic.js'
@@ -34,9 +34,26 @@ function HomeTicker() {
 }
 
 export default function HomeScreen({ onCreate, onJoin, onChronicles, onArchive, onPlayers, onWorkshop, onSuperHost, onDev, currentUser, onLogin, onLogout, onAdmin, openLobbies, onLobbies, onHelp }) {
+  const [kickedNotice, setKickedNotice] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('eights_kicked') || 'null') } catch { return null }
+  })
+
+  const dismissKick = useCallback(() => {
+    localStorage.removeItem('eights_kicked')
+    setKickedNotice(null)
+  }, [])
+
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem', position: 'relative' }}>
       <button onClick={onHelp} title="How to play" style={{ position: 'absolute', top: '1rem', left: '1rem', background: 'transparent', border: '0.5px solid var(--color-border-tertiary)', borderRadius: '50%', width: 28, height: 28, fontSize: 13, color: 'var(--color-text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>?</button>
+      {kickedNotice && (
+        <div style={{ position: 'absolute', top: '1rem', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 2rem)', maxWidth: 320, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--color-background-warning)', border: '0.5px solid var(--color-border-warning)', borderRadius: 'var(--border-radius-md)', zIndex: 10 }}>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--color-text-warning)' }}>
+            You were removed from game {kickedNotice.code} by the host.
+          </span>
+          <button onClick={dismissKick} style={{ background: 'transparent', border: 'none', fontSize: 16, color: 'var(--color-text-warning)', cursor: 'pointer', padding: '2px 4px', lineHeight: 1, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
         <HomeTicker />
         <div style={{ fontSize: 56, marginBottom: '0.5rem' }}>⚔️</div>

@@ -1023,6 +1023,27 @@ export async function createWorkshopCombatant({ id, name, bio, tags = [], ownerI
   } catch (e) { console.error('createWorkshopCombatant exception', e); return false }
 }
 
+// Stash a set of combatants into a player's Workshop after a kick.
+// The combatants already exist in global_combatants (upserted on draft submit);
+// we flip source to 'created' and status to 'stashed' so they appear in the Workshop.
+export async function stashKickedCombatants(combatants) {
+  if (!combatants?.length) return
+  try {
+    const rows = combatants.map(c => ({
+      id: c.id,
+      name: c.name,
+      bio: c.bio || '',
+      owner_id: c.ownerId || '',
+      owner_name: c.ownerName || '',
+      source: 'created',
+      status: 'stashed',
+      updated_at: new Date().toISOString(),
+    }))
+    const { error } = await supabase.from('combatants').upsert(rows, { onConflict: 'id', ignoreDuplicates: false })
+    if (error) console.error('stashKickedCombatants error', error)
+  } catch (e) { console.error('stashKickedCombatants exception', e) }
+}
+
 // Fetch all combatants for a Workshop owner — stashed and published.
 // Stashed rows are private to the owner so we scope by owner_id; no status filter.
 export async function getWorkshopCombatants(ownerId) {

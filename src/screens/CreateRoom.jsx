@@ -125,7 +125,7 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
     const roomCode = Math.random().toString(36).slice(2, 6).toUpperCase()
     const room = {
       id: roomCode, code: roomCode, host: playerId, phase: 'lobby',
-      players: [{ id: playerId, name: name.trim(), color: playerColor(0), ready: false }],
+      players: [{ id: playerId, name: name.trim(), color: playerColor(0), ready: false, isGuest }],
       combatants: {}, rounds: [], currentRound: 0, createdAt: Date.now(),
       settings,
     }

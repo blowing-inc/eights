@@ -1108,6 +1108,38 @@ export function replacePlayerIdInRoom(room, oldId, newId) {
   }
 }
 
+// ─── Host kick ────────────────────────────────────────────────────────────────
+
+/**
+ * Removes a player from the room. Returns the updated room and any combatants
+ * the player had already submitted, so the caller can stash or discard them.
+ *
+ * Touches: players[], combatants map, drafts map.
+ * prevWinners is preserved — it is a historical record from a prior game.
+ */
+export function kickPlayerFromRoom(room, kickedId) {
+  if (!room || !kickedId) return { room, submittedCombatants: [] }
+  if (!(room.players || []).some(p => p.id === kickedId)) return { room, submittedCombatants: [] }
+
+  const players = (room.players || []).filter(p => p.id !== kickedId)
+  const submittedCombatants = room.combatants?.[kickedId] || []
+
+  const { [kickedId]: _c, ...remainingCombatants } = room.combatants || {}
+
+  const drafts = room.drafts ? { ...room.drafts } : undefined
+  if (drafts) delete drafts[kickedId]
+
+  return {
+    room: {
+      ...room,
+      players,
+      combatants: remainingCombatants,
+      ...(drafts !== undefined ? { drafts } : {}),
+    },
+    submittedCombatants,
+  }
+}
+
 // ─── Series standings ─────────────────────────────────────────────────────────
 
 /**
