@@ -291,6 +291,30 @@ export async function superHostRemoveHoF(combatantId, removedBy) {
   } catch (e) { console.error('superHostRemoveHoF exception', e); return false }
 }
 
+// Update the induction note only — does not alter inducted_at, inducted_by, or hall_of_fame status.
+export async function superHostEditHofNote(combatantId, note) {
+  try {
+    const { error } = await supabase.from('combatants')
+      .update({ induction_note: note, updated_at: new Date().toISOString() })
+      .eq('id', combatantId)
+    if (error) console.error('superHostEditHofNote error', error)
+    return !error
+  } catch (e) { console.error('superHostEditHofNote exception', e); return false }
+}
+
+// All currently inducted Hall of Fame combatants, sorted by inducted_at desc.
+export async function listHofCombatants() {
+  try {
+    const { data, error } = await supabase.from('combatants')
+      .select('id, name, bio, owner_name, wins, losses, draws, reactions_heart, reactions_angry, reactions_cry, lineage, tags, inducted_at, inducted_by, induction_note')
+      .eq('status', 'published')
+      .eq('hall_of_fame', true)
+      .order('inducted_at', { ascending: false })
+    if (error) { console.error('listHofCombatants error', error); return [] }
+    return data || []
+  } catch (e) { console.error('listHofCombatants exception', e); return [] }
+}
+
 // Paginated combatants by owner, published only
 export async function getPlayerCombatants({ ownerId, query = '', sort = 'wins', ascending = false, page = 0, pageSize = 20 } = {}) {
   try {
