@@ -1185,6 +1185,11 @@ describe('normalizeRoomSettings', () => {
     expect(normalizeRoomSettings({ allowMerges: false }).allowMerges).toBe(false)
   })
 
+  it('isPublic defaults to false, can be set true', () => {
+    expect(normalizeRoomSettings({}).isPublic).toBe(false)
+    expect(normalizeRoomSettings({ isPublic: true }).isPublic).toBe(true)
+  })
+
   it('is non-destructive — does not mutate the input', () => {
     const input = { rosterSize: 6 }
     const result = normalizeRoomSettings(input)

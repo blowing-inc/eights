@@ -32,6 +32,7 @@ export function normalizeRoomSettings(settings) {
     arenaMode:            'none',
     arenaConfig:          null,
     arenaEvolutionEnabled: false,
+    isPublic:             false,
     ...settings,
   }
 }
