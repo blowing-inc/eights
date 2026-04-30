@@ -825,6 +825,110 @@ export async function getGroupsForCombatants(combatantIds) {
   } catch (e) { console.error('getGroupsForCombatants exception', e); return {} }
 }
 
+// ─── Group Workshop operations ────────────────────────────────────────────────
+
+export async function createWorkshopGroup({ id, name, description, tags = [], ownerId, ownerName, status = 'stashed' }) {
+  try {
+    const { error } = await supabase.from('groups').insert({
+      id, name, description: description || '', tags,
+      owner_id: ownerId, owner_name: ownerName,
+      status, updated_at: new Date().toISOString(),
+    })
+    if (error) console.error('createWorkshopGroup error', error)
+    return !error
+  } catch (e) { console.error('createWorkshopGroup exception', e); return false }
+}
+
+// Fetch all groups for a Workshop owner — stashed and published — with member_count.
+export async function getWorkshopGroups(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('groups')
+      .select('id, name, description, tags, status, owner_id, owner_name, created_at, updated_at')
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+    if (error) { console.error('getWorkshopGroups error', error); return [] }
+    const rows = data || []
+    if (!rows.length) return rows
+    const ids = rows.map(g => g.id)
+    const { data: memberships } = await supabase.from('combatant_groups').select('group_id').in('group_id', ids)
+    const countMap = {}
+    for (const m of (memberships || [])) countMap[m.group_id] = (countMap[m.group_id] || 0) + 1
+    return rows.map(g => ({ ...g, member_count: countMap[g.id] || 0 }))
+  } catch (e) { console.error('getWorkshopGroups exception', e); return [] }
+}
+
+export async function updateWorkshopGroup(id, { name, description, tags }) {
+  try {
+    const { error } = await supabase.from('groups').update({
+      name, description: description || '', tags,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    if (error) console.error('updateWorkshopGroup error', error)
+    return !error
+  } catch (e) { console.error('updateWorkshopGroup exception', e); return false }
+}
+
+export async function setWorkshopGroupStatus(id, status) {
+  try {
+    const { error } = await supabase.from('groups')
+      .update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) console.error('setWorkshopGroupStatus error', error)
+    return !error
+  } catch (e) { console.error('setWorkshopGroupStatus exception', e); return false }
+}
+
+// Only valid for stashed groups. Removes combatant_groups rows for this group first.
+export async function deleteWorkshopGroup(id) {
+  try {
+    await supabase.from('combatant_groups').delete().eq('group_id', id)
+    const { error } = await supabase.from('groups').delete().eq('id', id)
+    if (error) console.error('deleteWorkshopGroup error', error)
+    return !error
+  } catch (e) { console.error('deleteWorkshopGroup exception', e); return false }
+}
+
+// Replace all combatant memberships for a group (from the group side).
+// Mirrors setCombatantGroups but keyed on group_id instead of combatant_id.
+export async function setGroupCombatants(groupId, combatantIds, addedBy) {
+  try {
+    const { error: delErr } = await supabase.from('combatant_groups').delete().eq('group_id', groupId)
+    if (delErr) { console.error('setGroupCombatants delete error', delErr); return false }
+    if (!combatantIds.length) return true
+    const rows = combatantIds.map(combatant_id => ({ combatant_id, group_id: groupId, added_by: addedBy }))
+    const { error: insErr } = await supabase.from('combatant_groups').insert(rows)
+    if (insErr) console.error('setGroupCombatants insert error', insErr)
+    return !insErr
+  } catch (e) { console.error('setGroupCombatants exception', e); return false }
+}
+
+// Fetch combatant IDs belonging to a group — used when opening the group edit form.
+export async function getGroupCombatantIds(groupId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatant_groups')
+      .select('combatant_id')
+      .eq('group_id', groupId)
+    if (error) { console.error('getGroupCombatantIds error', error); return [] }
+    return (data || []).map(r => r.combatant_id)
+  } catch (e) { console.error('getGroupCombatantIds exception', e); return [] }
+}
+
+// Returns combatants available to add to a group: the owner's own combatants (any status)
+// plus all published combatants from any owner. Deduped and sorted by name.
+export async function getCombatantPickerOptions(ownerId) {
+  try {
+    const { data, error } = await supabase
+      .from('combatants')
+      .select('id, name, bio, status, owner_id')
+      .or(`owner_id.eq.${ownerId},status.eq.published`)
+      .order('name', { ascending: true })
+    if (error) { console.error('getCombatantPickerOptions error', error); return [] }
+    const seen = new Set()
+    return (data || []).filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
+  } catch (e) { console.error('getCombatantPickerOptions exception', e); return [] }
+}
+
 // Create a new combatant from The Workshop.
 // Status defaults to 'stashed' unless the caller explicitly passes 'published'.
 export async function createWorkshopCombatant({ id, name, bio, tags = [], ownerId, ownerName, status = 'stashed' }) {
