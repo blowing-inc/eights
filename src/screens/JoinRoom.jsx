@@ -86,7 +86,7 @@ export default function JoinRoom({ playerId, playerName, setPlayerName, lockedNa
     }
 
     // Join as player
-    room.players.push({ id: playerId, name: name.trim(), color: playerColor(room.players.length), ready: false })
+    room.players.push({ id: playerId, name: name.trim(), color: playerColor(room.players.length), ready: false, isGuest })
     await sset('room:' + room.id, room)
     sessionStorage.setItem('eights_pname', name.trim()); setPlayerName(name.trim())
     setLoading(false); onJoined(room)

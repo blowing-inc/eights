@@ -6,7 +6,7 @@ import SpectatorList from '../components/SpectatorList.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn } from '../styles.js'
 import { sset, subscribeToRoom, trackRoomPresence } from '../supabase.js'
-import { normalizeRoomSettings } from '../gameLogic.js'
+import { normalizeRoomSettings, kickPlayerFromRoom } from '../gameLogic.js'
 
 const POOL_LABELS = {
   'standard':       'Standard',
@@ -72,11 +72,17 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   const [presentIds, setPresentIds] = useState([])
   // 'idle' | 'confirming' — guest-host gate before starting the game
   const [guestStartPrompt, setGuestStartPrompt] = useState('idle')
+  // playerId being confirmed for kick, or null
+  const [confirmKick, setConfirmKick] = useState(null)
 
   const isHost = room.host === playerId
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
+      if (!(r.players || []).some(p => p.id === playerId)) {
+        localStorage.setItem('eights_kicked', JSON.stringify({ code: r.code, at: Date.now() }))
+        onBack(); return
+      }
       setLocal(r); setRoom(r)
       if (r.phase === 'draft') onStart()
       if (r.phase === 'ended') onBack()
@@ -109,6 +115,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
     onBack()
   }
 
+  async function kickPlayer(kickedId) {
+    const { room: updated } = kickPlayerFromRoom(room, kickedId)
+    await sset('room:' + room.id, updated)
+    setLocal(updated); setRoom(updated); setConfirmKick(null)
+  }
+
   return (
     <Screen title={`Room ${room.code}`} onBack={onBack} right={<SpectatorList spectators={room.spectators} />}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>Share this code with your friends</p>
@@ -121,10 +133,28 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 12px' }}>Players ({room.players.length})</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '2rem' }}>
         {room.players.map(p => (
-          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)' }}>
-            <AvatarWithHover player={p} onViewProfile={!p.isBot ? onViewPlayer : null} />
-            <span style={{ color: 'var(--color-text-primary)', fontSize: 15 }}>{p.name}</span>
-            {p.id === room.host && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-tertiary)', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-tertiary)', padding: '2px 6px', borderRadius: 99 }}>host</span>}
+          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: confirmKick === p.id ? 'var(--border-radius-md) var(--border-radius-md) 0 0' : 'var(--border-radius-md)' }}>
+              <AvatarWithHover player={p} onViewProfile={!p.isBot ? onViewPlayer : null} />
+              <span style={{ color: 'var(--color-text-primary)', fontSize: 15 }}>{p.name}</span>
+              {p.id === room.host && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-tertiary)', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-tertiary)', padding: '2px 6px', borderRadius: 99 }}>host</span>}
+              {isHost && p.id !== room.host && p.id !== confirmKick && (
+                <button
+                  onClick={() => setConfirmKick(p.id)}
+                  style={{ marginLeft: p.id === room.host ? 0 : 'auto', background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '4px 6px' }}
+                  title="Remove player"
+                >✕</button>
+              )}
+              {isHost && confirmKick === p.id && (
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-danger)' }}>Remove?</span>
+              )}
+            </div>
+            {isHost && confirmKick === p.id && (
+              <div style={{ display: 'flex', gap: 0, background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-md) var(--border-radius-md)', overflow: 'hidden' }}>
+                <button onClick={() => kickPlayer(p.id)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', borderRight: '0.5px solid var(--color-border-danger)', fontSize: 13, color: 'var(--color-text-danger)', cursor: 'pointer' }}>Yes, remove</button>
+                <button onClick={() => setConfirmKick(null)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', fontSize: 13, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Never mind</button>
+              </div>
+            )}
           </div>
         ))}
       </div>
