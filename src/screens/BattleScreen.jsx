@@ -286,10 +286,25 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
           {room.rounds.map(r => (
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', marginBottom: 8, border: '0.5px solid var(--color-border-tertiary)' }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', minWidth: 52 }}>Round {r.number}</span>
-              <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>
-                {r.combatants.map(c => c.name).join(' vs ')}
-                {r.arena && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 6 }}>@ {r.arena.name}</span>}
-              </span>
+              {r.draw ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', flex: 1, alignItems: 'center' }}>
+                  {r.combatants.map((c, i) => (
+                    <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      {i > 0 && <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '0 4px' }}>vs</span>}
+                      <span style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>{c.name}</span>
+                      <button onClick={() => setSheetCombatant({ id: c.id, inRoom: c })}
+                        title={c.name}
+                        style={{ background: 'transparent', border: 'none', fontSize: 13, cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-tertiary)', lineHeight: 1 }}>📊</button>
+                    </span>
+                  ))}
+                  {r.arena && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 2 }}>@ {r.arena.name}</span>}
+                </div>
+              ) : (
+                <span style={{ fontSize: 13, color: 'var(--color-text-primary)', flex: 1 }}>
+                  {r.combatants.map(c => c.name).join(' vs ')}
+                  {r.arena && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 6 }}>@ {r.arena.name}</span>}
+                </span>
+              )}
               {r.winner
                 ? <>
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-success)', flexShrink: 0 }}>🏆 {r.winner.name}</span>
@@ -299,13 +314,15 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                   ? <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', flexShrink: 0 }}>🤝 Draw</span>
                   : <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', flexShrink: 0 }}>deliberating…</span>}
               {r.arenaEvolution && <span style={{ fontSize: 11, color: 'var(--color-text-info)', flexShrink: 0 }}>🏟️ → {r.arenaEvolution.variantName}</span>}
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                {r.combatants.map(c => (
-                  <button key={c.id} onClick={() => setSheetCombatant({ id: c.id, inRoom: c })}
-                    title={c.name}
-                    style={{ background: 'transparent', border: 'none', fontSize: 13, cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-tertiary)', lineHeight: 1 }}>📊</button>
-                ))}
-              </div>
+              {!r.draw && (
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {r.combatants.map(c => (
+                    <button key={c.id} onClick={() => setSheetCombatant({ id: c.id, inRoom: c })}
+                      title={c.name}
+                      style={{ background: 'transparent', border: 'none', fontSize: 13, cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-tertiary)', lineHeight: 1 }}>📊</button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
