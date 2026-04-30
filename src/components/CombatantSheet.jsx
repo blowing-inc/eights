@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { btn, inp, lbl } from '../styles.js'
-import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantRoundHistory } from '../supabase.js'
+import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, getGroupsForCombatants } from '../supabase.js'
 import { buildStoryFromLineageTree } from '../gameLogic.js'
 
 /**
@@ -203,12 +203,17 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
   const [ownChainTree,  setOwnChainTree]  = useState([])
   const [h2hOpen,  setH2hOpen]  = useState(false)
   const [h2hRows,  setH2hRows]  = useState(null)
+  const [groups,   setGroups]   = useState([])
 
   // Reset all state when combatant changes (sheet back-stack navigation)
   useEffect(() => {
     setC(init); setEditMode(false); setEditName(init.name); setEditBio(init.bio || '')
     setLineageStory([]); setLineageTree([]); setOwnChainStory([]); setOwnChainTree([])
-    setH2hOpen(false); setH2hRows(null)
+    setH2hOpen(false); setH2hRows(null); setGroups([])
+  }, [init.id])
+
+  useEffect(() => {
+    getGroupsForCombatants([init.id]).then(map => setGroups(map[init.id] || []))
   }, [init.id])
 
   const canEdit    = c.owner_id === playerId
@@ -285,6 +290,17 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
             <div key={icon} style={{ padding: '4px 10px', background: 'var(--color-background-secondary)', borderRadius: 99, border: '0.5px solid var(--color-border-tertiary)', fontSize: 13, color: 'var(--color-text-secondary)' }}>
               {icon} {count}
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Groups */}
+      {groups.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
+          {groups.map(g => (
+            <span key={g.id} style={{ fontSize: 12, padding: '3px 9px', background: 'var(--color-background-tertiary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 99 }}>
+              {g.name}
+            </span>
           ))}
         </div>
       )}
