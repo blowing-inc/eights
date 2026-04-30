@@ -9,6 +9,19 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
+// ─── In-memory cache ──────────────────────────────────────────────────────────
+const _cache = {}
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+function getCached(key) {
+  const entry = _cache[key]
+  if (!entry) return null
+  if (Date.now() - entry.ts > CACHE_TTL) { delete _cache[key]; return null }
+  return entry.data
+}
+function setCached(key, data) { _cache[key] = { data, ts: Date.now() } }
+function bustCache(key) { delete _cache[key] }
+
 export async function sget(key) {
   try {
     const id = key.replace(/^room:/, '')
@@ -293,6 +306,7 @@ export async function superHostSetEntityTags(type, id, tags) {
       .update({ tags, updated_at: new Date().toISOString() })
       .eq('id', id)
     if (error) console.error('superHostSetEntityTags error', error)
+    bustCache('all_distinct_tags'); bustCache('published_groups')
   } catch (e) { console.error('superHostSetEntityTags exception', e) }
 }
 
@@ -770,6 +784,7 @@ export async function mergeTagsGlobal(oldTag, newTag) {
   try {
     const { data, error } = await supabase.rpc('merge_tags', { old_tag: oldTag, new_tag: newTag })
     if (error) { console.error('mergeTagsGlobal error', error); return 0 }
+    bustCache('all_distinct_tags')
     return data || 0
   } catch (e) { console.error('mergeTagsGlobal exception', e); return 0 }
 }
@@ -848,10 +863,11 @@ export async function setCombatantGroups(combatantId, groupIds, addedBy) {
       .delete()
       .eq('combatant_id', combatantId)
     if (delErr) { console.error('setCombatantGroups delete error', delErr); return false }
-    if (!groupIds.length) return true
+    if (!groupIds.length) { bustCache('published_groups'); return true }
     const rows = groupIds.map(group_id => ({ combatant_id: combatantId, group_id, added_by: addedBy }))
     const { error: insErr } = await supabase.from('combatant_groups').insert(rows)
     if (insErr) console.error('setCombatantGroups insert error', insErr)
+    bustCache('published_groups')
     return !insErr
   } catch (e) { console.error('setCombatantGroups exception', e); return false }
 }
@@ -926,6 +942,7 @@ export async function updateWorkshopGroup(id, { name, description, tags }) {
       updated_at: new Date().toISOString(),
     }).eq('id', id)
     if (error) console.error('updateWorkshopGroup error', error)
+    bustCache('published_groups')
     return !error
   } catch (e) { console.error('updateWorkshopGroup exception', e); return false }
 }
@@ -935,6 +952,7 @@ export async function setWorkshopGroupStatus(id, status) {
     const { error } = await supabase.from('groups')
       .update({ status, updated_at: new Date().toISOString() }).eq('id', id)
     if (error) console.error('setWorkshopGroupStatus error', error)
+    bustCache('published_groups')
     return !error
   } catch (e) { console.error('setWorkshopGroupStatus exception', e); return false }
 }
@@ -945,6 +963,7 @@ export async function deleteWorkshopGroup(id) {
     await supabase.from('combatant_groups').delete().eq('group_id', id)
     const { error } = await supabase.from('groups').delete().eq('id', id)
     if (error) console.error('deleteWorkshopGroup error', error)
+    bustCache('published_groups')
     return !error
   } catch (e) { console.error('deleteWorkshopGroup exception', e); return false }
 }
@@ -955,10 +974,11 @@ export async function setGroupCombatants(groupId, combatantIds, addedBy) {
   try {
     const { error: delErr } = await supabase.from('combatant_groups').delete().eq('group_id', groupId)
     if (delErr) { console.error('setGroupCombatants delete error', delErr); return false }
-    if (!combatantIds.length) return true
+    if (!combatantIds.length) { bustCache('published_groups'); return true }
     const rows = combatantIds.map(combatant_id => ({ combatant_id, group_id: groupId, added_by: addedBy }))
     const { error: insErr } = await supabase.from('combatant_groups').insert(rows)
     if (insErr) console.error('setGroupCombatants insert error', insErr)
+    bustCache('published_groups')
     return !insErr
   } catch (e) { console.error('setGroupCombatants exception', e); return false }
 }
@@ -1370,39 +1390,44 @@ export async function publishPlaylist(id) {
 // member name. Three queries aggregated client-side (acceptable at expected scale).
 export async function listPublishedGroups({ query = '', tag = null } = {}) {
   try {
-    const [groupsRes, membershipsRes, combatantsRes] = await Promise.all([
-      supabase.from('groups').select('id, name, description, owner_name, tags').eq('status', 'published'),
-      supabase.from('combatant_groups').select('combatant_id, group_id'),
-      supabase.from('combatants').select('id, name, wins, losses, reactions_heart, reactions_angry, reactions_cry').eq('status', 'published'),
-    ])
-    if (groupsRes.error || membershipsRes.error || combatantsRes.error) return []
+    let groups = getCached('published_groups')
+    if (!groups) {
+      const [groupsRes, membershipsRes, combatantsRes] = await Promise.all([
+        supabase.from('groups').select('id, name, description, owner_name, tags').eq('status', 'published'),
+        supabase.from('combatant_groups').select('combatant_id, group_id'),
+        supabase.from('combatants').select('id, name, wins, losses, reactions_heart, reactions_angry, reactions_cry').eq('status', 'published'),
+      ])
+      if (groupsRes.error || membershipsRes.error || combatantsRes.error) return []
 
-    const combatantMap = Object.fromEntries((combatantsRes.data || []).map(c => [c.id, c]))
-    const membersByGroup = {}
-    for (const row of (membershipsRes.data || [])) {
-      if (!membersByGroup[row.group_id]) membersByGroup[row.group_id] = []
-      if (combatantMap[row.combatant_id]) membersByGroup[row.group_id].push(combatantMap[row.combatant_id])
+      const combatantMap = Object.fromEntries((combatantsRes.data || []).map(c => [c.id, c]))
+      const membersByGroup = {}
+      for (const row of (membershipsRes.data || [])) {
+        if (!membersByGroup[row.group_id]) membersByGroup[row.group_id] = []
+        if (combatantMap[row.combatant_id]) membersByGroup[row.group_id].push(combatantMap[row.combatant_id])
+      }
+
+      groups = (groupsRes.data || []).map(g => {
+        const members = membersByGroup[g.id] || []
+        const wins   = members.reduce((s, c) => s + (c.wins   || 0), 0)
+        const losses = members.reduce((s, c) => s + (c.losses || 0), 0)
+        const mostDecorated = members.reduce((best, c) => {
+          const score     = (c.wins || 0) * 3 + (c.reactions_heart || 0) + (c.reactions_angry || 0) + (c.reactions_cry || 0)
+          const bestScore = best ? (best.wins || 0) * 3 + (best.reactions_heart || 0) + (best.reactions_angry || 0) + (best.reactions_cry || 0) : -1
+          return score > bestScore ? c : best
+        }, null)
+        return { ...g, member_count: members.length, wins, losses, most_decorated: mostDecorated?.name ?? null }
+      }).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name))
+      setCached('published_groups', groups)
     }
 
-    let groups = (groupsRes.data || []).map(g => {
-      const members = membersByGroup[g.id] || []
-      const wins   = members.reduce((s, c) => s + (c.wins   || 0), 0)
-      const losses = members.reduce((s, c) => s + (c.losses || 0), 0)
-      const mostDecorated = members.reduce((best, c) => {
-        const score     = (c.wins || 0) * 3 + (c.reactions_heart || 0) + (c.reactions_angry || 0) + (c.reactions_cry || 0)
-        const bestScore = best ? (best.wins || 0) * 3 + (best.reactions_heart || 0) + (best.reactions_angry || 0) + (best.reactions_cry || 0) : -1
-        return score > bestScore ? c : best
-      }, null)
-      return { ...g, member_count: members.length, wins, losses, most_decorated: mostDecorated?.name ?? null }
-    })
-
-    if (tag)         groups = groups.filter(g => (g.tags || []).includes(tag))
+    let filtered = groups
+    if (tag)         filtered = filtered.filter(g => (g.tags || []).includes(tag))
     if (query.trim()) {
       const q = query.trim().toLowerCase()
-      groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q))
+      filtered = filtered.filter(g => g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q))
     }
 
-    return groups.sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name))
+    return filtered
   } catch (e) { console.error('listPublishedGroups exception', e); return [] }
 }
 
@@ -1542,6 +1567,8 @@ export async function hasPlayerEncounteredArena(arenaId, playerId) {
 // All distinct tags across published combatants, groups, and arenas.
 // Returns [{tag, count}] sorted by frequency desc then alphabetical.
 export async function listAllDistinctTags() {
+  const cached = getCached('all_distinct_tags')
+  if (cached) return cached
   try {
     const [combRes, grpRes, arenaRes] = await Promise.all([
       supabase.from('combatants').select('tags').eq('status', 'published'),
@@ -1552,8 +1579,10 @@ export async function listAllDistinctTags() {
     for (const row of [...(combRes.data || []), ...(grpRes.data || []), ...(arenaRes.data || [])]) {
       for (const t of (row.tags || [])) counts[t] = (counts[t] || 0) + 1
     }
-    return Object.entries(counts)
+    const result = Object.entries(counts)
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+    setCached('all_distinct_tags', result)
+    return result
   } catch (e) { console.error('listAllDistinctTags exception', e); return [] }
 }
