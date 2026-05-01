@@ -5,6 +5,7 @@ import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery, createPendingAward, appendMvpRecord, createAutoAwards } from '../supabase.js'
 import VotingPanel from '../components/VotingPanel.jsx'
+import ContextStrip from '../components/ContextStrip.jsx'
 import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings, computeGameAutoAwards } from '../gameLogic.js'
 
 // Inline form for evolving the current arena after a round resolves.
@@ -322,6 +323,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       <ConnectionStatus players={room.players} presentIds={presentIds} isHost={isHost} roomCode={room.code} />
+      <ContextStrip room={room} currentArena={null} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Battle arena</h2>
         <div style={{ display: 'flex', gap: 6 }}>
