@@ -3,8 +3,8 @@ import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget, superHostSetEntityTags, superHostInductHoF, superHostRemoveHoF, superHostEditHofNote, setCombatantGroups, getCombatantGroupIds, listPublishedGroups } from '../supabase.js'
-import { buildStoryFromLineageTree, computeSuperlatives } from '../gameLogic.js'
+import { updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, sget, superHostSetEntityTags, superHostInductHoF, superHostRemoveHoF, superHostEditHofNote, setCombatantGroups, getCombatantGroupIds, listPublishedGroups, getAwardsForCombatant } from '../supabase.js'
+import { buildStoryFromLineageTree, computeSuperlatives, AWARD_TYPE_LABELS } from '../gameLogic.js'
 import { downloadFile, formatCombatantHistory } from '../export.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 
@@ -249,6 +249,8 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
   const [shAllGroups,   setShAllGroups]   = useState(null)
   const [shGroupSaving, setShGroupSaving] = useState(false)
 
+  const [combatantAwards, setCombatantAwards] = useState([])
+
   const canEdit = c.owner_id === playerId
   const totalRounds = (c.wins || 0) + (c.losses || 0) + (c.draws || 0)
   const history    = c.bio_history || []
@@ -273,6 +275,10 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     }
     // Load h2h eagerly so superlatives can show on first render.
     getCombatantRoundHistory(c.id).then(setH2hRows)
+    // Load awards from the awards table (excludes mvp_record which is shown separately)
+    getAwardsForCombatant(c.id).then(awards => {
+      setCombatantAwards(awards.filter(a => a.type !== 'mvp'))
+    })
   }, [rootId, c.id])
 
   function nameSlug() {
@@ -473,6 +479,41 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
           </div>
         </div>
       )}
+
+      {/* ── Awards ───────────────────────────────────────────────────────── */}
+      {combatantAwards.length > 0 && (() => {
+        const LAYER_ORDER = ['game', 'series', 'season', 'league']
+        const byLayer = {}
+        for (const a of combatantAwards) {
+          if (!byLayer[a.layer]) byLayer[a.layer] = []
+          byLayer[a.layer].push(a)
+        }
+        return (
+          <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+            <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Awards
+            </h3>
+            {LAYER_ORDER.filter(l => byLayer[l]).map(layer => (
+              <div key={layer} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>{layer}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {byLayer[layer].map(a => (
+                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13 }}>
+                      <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                        {AWARD_TYPE_LABELS[a.type] || a.type}
+                        {a.co_award && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>(shared)</span>}
+                      </span>
+                      {a.value != null && (
+                        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 8 }}>{a.value}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* ── Bio ──────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: '1.5rem' }}>

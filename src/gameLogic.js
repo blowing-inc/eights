@@ -1411,3 +1411,202 @@ export function getSeriesEvolutionNominees(rooms) {
 // Season-scoped aliases — same room-structure logic, different semantic scope.
 export const getSeasonCombatantNominees = getSeriesCombatantNominees
 export const getSeasonEvolutionNominees  = getSeriesEvolutionNominees
+
+// ─── Automatic award computation ──────────────────────────────────────────────
+
+// Returns the shaped objects for `createAutoAwards`. Each object is fully
+// resolved (awarded_at set by caller) and has no ballot_state.
+//
+// Shape: { type, layer, scope_id, scope_type, recipient_id, recipient_name,
+//          recipient_type, value, co_award }
+
+function coAwardRows(entries, { type, layer, scopeId, scopeType, recipientType, value }) {
+  const coAward = entries.length > 1
+  return entries.map(([id, name]) => ({
+    type, layer,
+    scope_id:       scopeId,
+    scope_type:     scopeType,
+    recipient_id:   id,
+    recipient_name: name,
+    recipient_type: recipientType,
+    value:          value ?? null,
+    co_award:       coAward,
+  }))
+}
+
+/**
+ * Computes automatic game-level awards from a completed room record.
+ * Skips dev-mode games and games with no resolved rounds.
+ *
+ * Awards: most_wins (player), undefeated (player), shutout (player),
+ *         most_reactions (combatant)
+ */
+export function computeGameAutoAwards(room) {
+  if (room.devMode) return []
+
+  const resolvedRounds = (room.rounds || []).filter(r => r.winner || r.draw)
+  if (resolvedRounds.length === 0) return []
+
+  const players = (room.players || []).filter(p => !p.isBot)
+  if (players.length === 0) return []
+
+  const scope = { layer: 'game', scopeId: room.id, scopeType: 'game' }
+  const awards = []
+
+  // ── Per-player round tallies ─────────────────────────────────────────────
+  const tally = {}
+  for (const p of players) tally[p.id] = { wins: 0, losses: 0, name: p.name }
+
+  for (const round of resolvedRounds) {
+    if (round.winner) {
+      if (tally[round.winner.ownerId]) tally[round.winner.ownerId].wins++
+      for (const c of (round.combatants || []).filter(c => c.id !== round.winner.id)) {
+        if (tally[c.ownerId]) tally[c.ownerId].losses++
+      }
+    } else if (round.draw) {
+      // draws don't break undefeated; don't count as wins or losses
+    }
+  }
+
+  // most_wins
+  const maxWins = Math.max(...Object.values(tally).map(p => p.wins))
+  if (maxWins > 0) {
+    const tops = Object.entries(tally).filter(([, p]) => p.wins === maxWins).map(([id, p]) => [id, p.name])
+    awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxWins, type: 'most_wins' }))
+  }
+
+  // undefeated: ≥1 win, 0 losses
+  const undefeated = Object.entries(tally).filter(([, p]) => p.wins > 0 && p.losses === 0).map(([id, p]) => [id, p.name])
+  for (const [id, name] of undefeated) {
+    awards.push(...coAwardRows([[id, name]], { ...scope, recipientType: 'player', value: null, type: 'undefeated' }))
+  }
+
+  // shutout: 0 wins, ≥1 loss
+  const shutout = Object.entries(tally).filter(([, p]) => p.wins === 0 && p.losses > 0).map(([id, p]) => [id, p.name])
+  for (const [id, name] of shutout) {
+    awards.push(...coAwardRows([[id, name]], { ...scope, recipientType: 'player', value: null, type: 'shutout' }))
+  }
+
+  // most_reactions: combatant with most total reactions across all rounds
+  const reactionTotals = {}
+  for (const combatants of Object.values(room.combatants || {})) {
+    for (const c of combatants) {
+      if (c.isBot) continue
+      let total = 0
+      for (const round of resolvedRounds) {
+        const { heart, angry, cry } = tallyReactions(round.playerReactions, c.id)
+        total += heart + angry + cry
+      }
+      if (total > 0) reactionTotals[c.id] = { total, name: c.name }
+    }
+  }
+  const maxReactions = Math.max(...Object.values(reactionTotals).map(r => r.total), 0)
+  if (maxReactions > 0) {
+    const tops = Object.entries(reactionTotals).filter(([, r]) => r.total === maxReactions).map(([id, r]) => [id, r.name])
+    awards.push(...coAwardRows(tops, { ...scope, recipientType: 'combatant', value: maxReactions, type: 'most_reactions' }))
+  }
+
+  return awards
+}
+
+/**
+ * Computes automatic series-level awards from all rooms in a series.
+ * Only considers rooms with phase 'ended' (not endedEarly, not dev).
+ *
+ * Awards: most_wins (player), most_evolutions (player)
+ */
+export function computeSeriesAutoAwards(rooms, seriesId) {
+  const valid = (rooms || []).filter(r => r.phase === 'ended' && !r.endedEarly && !r.devMode)
+  if (valid.length === 0) return []
+
+  const scope = { layer: 'series', scopeId: seriesId, scopeType: 'series' }
+  const awards = []
+
+  // most_wins: reuse standings logic
+  const standings = computeSeriesStandings(valid)
+  if (standings.length > 0) {
+    const maxWins = standings[0].wins
+    if (maxWins > 0) {
+      const tops = standings.filter(s => s.wins === maxWins).map(s => [s.playerId, s.playerName])
+      awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxWins, type: 'most_wins' }))
+    }
+  }
+
+  // most_evolutions: player who triggered the most evolutions
+  const evoCount = {}
+  for (const room of valid) {
+    const playerMap = Object.fromEntries((room.players || []).filter(p => !p.isBot).map(p => [p.id, p.name]))
+    for (const round of (room.rounds || [])) {
+      if (!round.evolution || !round.winner) continue
+      const ownerId = round.winner.ownerId
+      const ownerName = playerMap[ownerId] || round.winner.ownerName
+      if (!ownerId || !ownerName) continue
+      if (!evoCount[ownerId]) evoCount[ownerId] = { count: 0, name: ownerName }
+      evoCount[ownerId].count++
+    }
+  }
+  const maxEvos = Math.max(...Object.values(evoCount).map(e => e.count), 0)
+  if (maxEvos > 0) {
+    const tops = Object.entries(evoCount).filter(([, e]) => e.count === maxEvos).map(([id, e]) => [id, e.name])
+    awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxEvos, type: 'most_evolutions' }))
+  }
+
+  return awards
+}
+
+/**
+ * Computes automatic season-level awards from all rooms in a season.
+ * Same logic as series but scoped to the season container.
+ *
+ * Awards: most_wins (player), most_evolutions (player)
+ */
+export function computeSeasonAutoAwards(rooms, seasonId) {
+  const valid = (rooms || []).filter(r => r.phase === 'ended' && !r.endedEarly && !r.devMode)
+  if (valid.length === 0) return []
+
+  const scope = { layer: 'season', scopeId: seasonId, scopeType: 'season' }
+  const awards = []
+
+  const standings = computeSeriesStandings(valid)
+  if (standings.length > 0) {
+    const maxWins = standings[0].wins
+    if (maxWins > 0) {
+      const tops = standings.filter(s => s.wins === maxWins).map(s => [s.playerId, s.playerName])
+      awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxWins, type: 'most_wins' }))
+    }
+  }
+
+  const evoCount = {}
+  for (const room of valid) {
+    const playerMap = Object.fromEntries((room.players || []).filter(p => !p.isBot).map(p => [p.id, p.name]))
+    for (const round of (room.rounds || [])) {
+      if (!round.evolution || !round.winner) continue
+      const ownerId = round.winner.ownerId
+      const ownerName = playerMap[ownerId] || round.winner.ownerName
+      if (!ownerId || !ownerName) continue
+      if (!evoCount[ownerId]) evoCount[ownerId] = { count: 0, name: ownerName }
+      evoCount[ownerId].count++
+    }
+  }
+  const maxEvos = Math.max(...Object.values(evoCount).map(e => e.count), 0)
+  if (maxEvos > 0) {
+    const tops = Object.entries(evoCount).filter(([, e]) => e.count === maxEvos).map(([id, e]) => [id, e.name])
+    awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxEvos, type: 'most_evolutions' }))
+  }
+
+  return awards
+}
+
+// Human-readable labels for every award type used in display components.
+export const AWARD_TYPE_LABELS = {
+  mvp:                    'MVP',
+  most_wins:              'Most Round Wins',
+  undefeated:             'Undefeated',
+  shutout:                'Shutout',
+  most_reactions:         'Most Reactive',
+  most_evolutions:        'Most Evolutions',
+  favorite_combatant:     'Favorite Combatant',
+  most_creative_combatant:'Most Creative',
+  best_evolution:         'Best Evolution',
+  best_combatant:         'Best Combatant',
+}

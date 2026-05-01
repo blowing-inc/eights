@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn, tab } from '../styles.js'
-import { tallyReactions, groupRoomsForHistory, computeSeriesStandings } from '../gameLogic.js'
-import { slist } from '../supabase.js'
+import { tallyReactions, groupRoomsForHistory, computeSeriesStandings, computeSeriesAutoAwards, AWARD_TYPE_LABELS } from '../gameLogic.js'
+import { slist, getAwardsForScope, createAutoAwards } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 
 // NOTE: The round display logic in ChroniclesRoomDetail is partially duplicated with RoundCard
@@ -377,6 +377,7 @@ function StandingsTable({ rooms }) {
 
 function SeriesRow({ item, onSelect, playerId }) {
   const [expanded, setExpanded] = useState(false)
+  const [awards,   setAwards]   = useState(null)
   const { rooms, seriesId } = item
 
   const allPlayers = [...new Map(
@@ -390,11 +391,30 @@ function SeriesRow({ item, onSelect, playerId }) {
 
   const totalRounds = rooms.reduce((n, r) => n + (r.rounds || []).filter(rd => rd.winner || rd.draw).length, 0)
 
+  useEffect(() => {
+    if (!expanded) return
+    getAwardsForScope(seriesId).then(scopeAwards => {
+      setAwards(scopeAwards)
+      const allEnded = rooms.every(r => r.phase === 'ended')
+      const hasAuto  = scopeAwards.some(a => a.type === 'most_wins' || a.type === 'most_evolutions')
+      if (allEnded && !hasAuto) {
+        const autoAwards = computeSeriesAutoAwards(rooms, seriesId)
+        if (autoAwards.length > 0) {
+          createAutoAwards(autoAwards)
+            .then(() => getAwardsForScope(seriesId).then(setAwards))
+            .catch(e => console.error('createAutoAwards series', e))
+        }
+      }
+    })
+  }, [expanded, seriesId])
+
   function exportSeries() {
     const sorted = [...rooms].sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
     const slug   = seriesId.slice(0, 6).toUpperCase()
     downloadFile(`eights-series-${slug}.txt`, formatSeriesAsText(sorted))
   }
+
+  const resolvedAwards = (awards || []).filter(a => a.awarded_at)
 
   return (
     <div style={{ marginBottom: 10 }}>
@@ -423,6 +443,25 @@ function SeriesRow({ item, onSelect, playerId }) {
       {expanded && (
         <div style={{ background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-info)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-lg) var(--border-radius-lg)', overflow: 'hidden' }}>
           <StandingsTable rooms={rooms} />
+          {resolvedAwards.length > 0 && (
+            <div style={{ padding: '12px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 8 }}>Series awards</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {resolvedAwards.map(a => (
+                  <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13 }}>
+                    <span style={{ color: 'var(--color-text-secondary)' }}>
+                      {AWARD_TYPE_LABELS[a.type] || a.type}
+                      {a.co_award && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>(shared)</span>}
+                    </span>
+                    <span style={{ color: 'var(--color-text-primary)', fontWeight: 500, marginLeft: 12 }}>
+                      {a.recipient_name}
+                      {a.value != null && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>{a.value}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ padding: '0 12px 4px' }}>
             {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} playerId={playerId} />)}
           </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl } from '../styles.js'
-import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward } from '../supabase.js'
-import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees } from '../gameLogic.js'
+import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward, getAwardsForScope, createAutoAwards } from '../supabase.js'
+import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, AWARD_TYPE_LABELS } from '../gameLogic.js'
 import VotingPanel from '../components/VotingPanel.jsx'
 
 function ToggleRow({ label, description, value, onToggle }) {
@@ -71,7 +71,9 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
   const [seasonRooms, setSeasonRooms] = useState(null)
   const [closing, setClosing] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
+  const [seasonAwards, setSeasonAwards] = useState(null)
   const awardCreationRef = useRef(false)
+  const autoAwardRef    = useRef(false)
 
   useEffect(() => {
     getSeasonRooms(season.id).then(rooms => {
@@ -111,6 +113,36 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
       .then(updated => setSeason(updated))
       .catch(e => console.error('createSeasonAwards', e))
   }, [season.status, season.votes, seasonRooms])
+
+  // Compute and store automatic season awards once (idempotent guard via autoAwardRef).
+  useEffect(() => {
+    if (season.status !== 'ended') return
+    if (!seasonRooms || seasonRooms.length === 0) return
+    if (autoAwardRef.current) return
+    autoAwardRef.current = true
+
+    getAwardsForScope(season.id).then(existing => {
+      const hasAuto = existing.some(a => a.type === 'most_wins' || a.type === 'most_evolutions')
+      if (hasAuto) {
+        setSeasonAwards(existing)
+        return
+      }
+      const autoAwards = computeSeasonAutoAwards(seasonRooms, season.id)
+      if (autoAwards.length === 0) {
+        setSeasonAwards(existing)
+        return
+      }
+      createAutoAwards(autoAwards)
+        .then(() => getAwardsForScope(season.id).then(setSeasonAwards))
+        .catch(e => { console.error('createAutoAwards season', e); setSeasonAwards(existing) })
+    })
+  }, [season.status, season.id, seasonRooms])
+
+  // Refresh resolved awards list when ballot votes are cast (season.votes changes).
+  useEffect(() => {
+    if (season.status !== 'ended') return
+    getAwardsForScope(season.id).then(setSeasonAwards)
+  }, [season.votes, season.id, season.status])
 
   async function handleCloseEarly() {
     setClosing(true)
@@ -286,8 +318,33 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
         const seasonCombatantNominees = seasonRooms ? getSeasonCombatantNominees(seasonRooms) : []
         const seasonEvolutionNominees = seasonRooms ? getSeasonEvolutionNominees(seasonRooms)  : []
 
+        const AUTO_AWARD_TYPES = ['most_wins', 'most_evolutions']
+        const resolvedAutoAwards = (seasonAwards || []).filter(a => a.awarded_at && AUTO_AWARD_TYPES.includes(a.type))
+
         return (
           <div>
+            {/* Automatic awards */}
+            {resolvedAutoAwards.length > 0 && (
+              <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 10 }}>Season awards</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {resolvedAutoAwards.map(a => (
+                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13 }}>
+                      <span style={{ color: 'var(--color-text-secondary)' }}>
+                        {AWARD_TYPE_LABELS[a.type] || a.type}
+                        {a.co_award && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>(shared)</span>}
+                      </span>
+                      <span style={{ color: 'var(--color-text-primary)', fontWeight: 500, marginLeft: 12 }}>
+                        {a.recipient_name}
+                        {a.value != null && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>{a.value}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Voted awards */}
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 12 }}>Season votes</div>
 
             {!season.votes && (
@@ -304,7 +361,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
                   voters={seasonVoters}
                   playerId={playerId}
                   isHost={isCreator}
-                  onResolved={() => {}}
+                  onResolved={() => getAwardsForScope(season.id).then(setSeasonAwards)}
                 />
                 <VotingPanel
                   key={season.votes.mostCreativeAwardId}
@@ -314,7 +371,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
                   voters={seasonVoters}
                   playerId={playerId}
                   isHost={isCreator}
-                  onResolved={() => {}}
+                  onResolved={() => getAwardsForScope(season.id).then(setSeasonAwards)}
                 />
                 {seasonEvolutionNominees.length > 0 && (
                   <VotingPanel
@@ -325,7 +382,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
                     voters={seasonVoters}
                     playerId={playerId}
                     isHost={isCreator}
-                    onResolved={() => {}}
+                    onResolved={() => getAwardsForScope(season.id).then(setSeasonAwards)}
                   />
                 )}
               </>

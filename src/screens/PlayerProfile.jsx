@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import PlayerStatsBlurb from '../components/PlayerStatsBlurb.jsx'
 import { btn, inp, tab } from '../styles.js'
-import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, getPlayerRooms, setFavoriteCombatant } from '../supabase.js'
+import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, getPlayerRooms, setFavoriteCombatant, getAwardsForPlayer } from '../supabase.js'
+import { AWARD_TYPE_LABELS } from '../gameLogic.js'
 
 const PROFILE_SORTS = [
   { key: 'wins',   label: 'Wins',   asc: false },
@@ -23,13 +24,15 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
   const [loading,   setLoading]   = useState(true)
   const [combLoading, setCombLoading] = useState(true)
   const [savingFav, setSavingFav] = useState(null)
-  const [games, setGames] = useState([])
+  const [games,     setGames]     = useState([])
+  const [awards,    setAwards]    = useState([])
   const searchTimer = useRef(null)
 
   useEffect(() => {
     getUserProfile(profileId).then(setProfile)
     getPlayerRoomStats(profileId).then(setStats)
     getPlayerRooms(profileId).then(setGames)
+    getAwardsForPlayer(profileId).then(setAwards)
   }, [profileId])
 
   function loadCombatants(q, s, p) {
@@ -63,6 +66,32 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
         <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 8 }}>{username}</div>
         <PlayerStatsBlurb stats={stats} favoriteName={profile?.favorite_combatant_name} />
       </div>
+
+      {awards.length > 0 && (
+        <>
+          <h3 style={{ fontSize: 14, fontWeight: 400, color: 'var(--color-text-secondary)', margin: '0 0 10px' }}>
+            Awards
+          </h3>
+          <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {awards.map(a => (
+                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 13 }}>
+                  <div>
+                    <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                      {AWARD_TYPE_LABELS[a.type] || a.type}
+                    </span>
+                    {a.co_award && <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 4 }}>(shared)</span>}
+                    <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginLeft: 6, textTransform: 'capitalize' }}>{a.layer}</span>
+                  </div>
+                  {a.value != null && (
+                    <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginLeft: 8 }}>{a.value}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {games.length > 0 && (
         <>
