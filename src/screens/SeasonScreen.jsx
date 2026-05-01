@@ -3,7 +3,7 @@ import Screen from '../components/Screen.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward, getAwardsForScope, createAutoAwards } from '../supabase.js'
-import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, AWARD_TYPE_LABELS } from '../gameLogic.js'
+import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, computeSeasonToneDisplay, AWARD_TYPE_LABELS } from '../gameLogic.js'
 import VotingPanel from '../components/VotingPanel.jsx'
 
 function ToggleRow({ label, description, value, onToggle }) {
@@ -225,6 +225,30 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
       {seasonRooms !== null && seasonRooms.length > 0 && (
         <StandingsTable rooms={seasonRooms} />
       )}
+
+      {/* Derived tone display */}
+      {seasonRooms !== null && (() => {
+        const display = computeSeasonToneDisplay(seasonRooms)
+        if (!display) return null
+        return (
+          <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 7 }}>Tone</div>
+            {display.type === 'varied'
+              ? <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>So Many Tones</span>
+              : <>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: display.premise ? 6 : 0 }}>
+                    {display.tags.map(t => (
+                      <span key={t} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-secondary)' }}>{t}</span>
+                    ))}
+                  </div>
+                  {display.premise && (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{display.premise}</p>
+                  )}
+                </>
+            }
+          </div>
+        )
+      })()}
 
       {/* Series history */}
       {[...seriesItems, ...standaloneItems].length > 0 && (

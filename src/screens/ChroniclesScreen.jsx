@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import RoundChat from '../components/RoundChat.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { btn, tab } from '../styles.js'
-import { tallyReactions, groupRoomsForHistory, computeSeriesStandings, computeSeriesAutoAwards, AWARD_TYPE_LABELS } from '../gameLogic.js'
+import { tallyReactions, groupRoomsForHistory, computeSeriesStandings, computeSeriesAutoAwards, computeSeasonToneDisplay, AWARD_TYPE_LABELS } from '../gameLogic.js'
 import { slist, getAwardsForScope, createAutoAwards } from '../supabase.js'
 import { downloadFile, formatRoomAsText, formatSeriesAsText } from '../export.js'
 
@@ -62,6 +62,20 @@ function ChroniclesRoomDetail({ room, onBack, setViewCombatant, playerId, onNext
         <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-info)', border: '0.5px solid var(--color-border-info)', borderRadius: 'var(--border-radius-lg)' }}>
           <p style={{ fontSize: 13, color: 'var(--color-text-info)', margin: '0 0 10px' }}>You hosted this game. Continue the series with the same players.</p>
           <button onClick={() => onNextGame(room)} style={{ ...btn('ghost'), padding: '6px 14px', fontSize: 13, color: 'var(--color-text-info)', borderColor: 'var(--color-border-info)' }}>Continue series ⚔️</button>
+        </div>
+      )}
+
+      {room.tone?.tags?.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 7 }}>Tone</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: room.tone.premise ? 6 : 0 }}>
+            {room.tone.tags.map(t => (
+              <span key={t} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-secondary)' }}>{t}</span>
+            ))}
+          </div>
+          {room.tone.premise && (
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{room.tone.premise}</p>
+          )}
         </div>
       )}
 
@@ -462,6 +476,28 @@ function SeriesRow({ item, onSelect, playerId }) {
               </div>
             </div>
           )}
+          {(() => {
+            const display = computeSeasonToneDisplay(rooms)
+            if (!display) return null
+            return (
+              <div style={{ padding: '10px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 7 }}>Tone</div>
+                {display.type === 'varied'
+                  ? <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>So Many Tones</span>
+                  : <>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: display.premise ? 6 : 0 }}>
+                        {display.tags.map(t => (
+                          <span key={t} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-secondary)' }}>{t}</span>
+                        ))}
+                      </div>
+                      {display.premise && (
+                        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{display.premise}</p>
+                      )}
+                    </>
+                }
+              </div>
+            )
+          })()}
           <div style={{ padding: '0 12px 4px' }}>
             {rooms.map(r => <RoomRow key={r.id} room={r} onSelect={onSelect} playerId={playerId} />)}
           </div>
