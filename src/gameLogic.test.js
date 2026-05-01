@@ -15,6 +15,7 @@ import {
   canUndoLastRound, canEditCombatant,
   extractPreviousWinners,
   normalizeRoomSettings,
+  resolveTone,
   simulateGameToEnd,
   getLineageStats,
   buildActiveFormMap,
@@ -3310,5 +3311,51 @@ describe('computeSeasonAutoAwards', () => {
   it('returns empty for rooms with no completed games', () => {
     const room = { id: 'room1', phase: 'battle', players: [], combatants: {}, rounds: [] }
     expect(computeSeasonAutoAwards([room], 'season1')).toEqual([])
+  })
+})
+
+// ─── resolveTone ──────────────────────────────────────────────────────────────
+
+describe('resolveTone', () => {
+  const TONE = { tags: ['absurdist', 'horror'], premise: 'Everyone is a food item.' }
+  const SEASON_TONE = { tags: ['wholesome'], premise: '' }
+
+  it('returns game-level tone when explicitly set', () => {
+    const game = { settings: { tone: TONE } }
+    expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(TONE)
+  })
+
+  it('falls back to season tone when game tone is null', () => {
+    const game = { settings: { tone: null } }
+    expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(SEASON_TONE)
+  })
+
+  it('falls back to season tone when game has no settings.tone key', () => {
+    const game = { settings: {} }
+    expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(SEASON_TONE)
+  })
+
+  it('returns null when neither game nor season has a tone', () => {
+    const game = { settings: { tone: null } }
+    expect(resolveTone(game, { tone: null })).toBeNull()
+  })
+
+  it('returns null when season is null', () => {
+    const game = { settings: { tone: null } }
+    expect(resolveTone(game, null)).toBeNull()
+  })
+
+  it('returns null when game is null', () => {
+    expect(resolveTone(null, null)).toBeNull()
+  })
+
+  it('returns game tone even when season has a different tone', () => {
+    const game = { settings: { tone: TONE } }
+    expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(TONE)
+  })
+
+  it('returns season tone when game has no settings at all', () => {
+    const game = {}
+    expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(SEASON_TONE)
   })
 })

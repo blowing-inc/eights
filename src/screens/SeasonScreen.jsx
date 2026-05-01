@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
+import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward, getAwardsForScope, createAutoAwards } from '../supabase.js'
 import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, AWARD_TYPE_LABELS } from '../gameLogic.js'
@@ -75,6 +76,12 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
   const awardCreationRef = useRef(false)
   const autoAwardRef    = useRef(false)
 
+  // Tone edit state (season creator only, between games)
+  const [toneEnabled,  setToneEnabled]  = useState(() => !!initialSeason.tone)
+  const [toneTags,     setToneTags]     = useState(() => initialSeason.tone?.tags || [])
+  const [tonePremise,  setTonePremise]  = useState(() => initialSeason.tone?.premise || '')
+  const [savingTone,   setSavingTone]   = useState(false)
+
   useEffect(() => {
     getSeasonRooms(season.id).then(rooms => {
       setSeasonRooms(rooms)
@@ -143,6 +150,19 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
     if (season.status !== 'ended') return
     getAwardsForScope(season.id).then(setSeasonAwards)
   }, [season.votes, season.id, season.status])
+
+  async function handleSaveTone() {
+    setSavingTone(true)
+    const tone = toneEnabled && toneTags.length > 0
+      ? { tags: toneTags, premise: tonePremise.trim() }
+      : null
+    try {
+      const updated = await updateSeason(season.id, { tone })
+      setSeason(updated)
+    } finally {
+      setSavingTone(false)
+    }
+  }
 
   async function handleCloseEarly() {
     setClosing(true)
@@ -255,6 +275,50 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
             A series is currently in progress. Close it between series to continue the season or close early.
           </p>
+        </div>
+      )}
+
+      {/* Tone settings (season creator, between games) */}
+      {season.status === 'active' && playerId === season.owner_id && !anyActive && (
+        <div style={{ marginBottom: '1.5rem', padding: '12px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: toneEnabled ? 12 : 0 }}>
+            <div style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>Season tone</div>
+            <button
+              onClick={() => setToneEnabled(v => !v)}
+              style={{ flexShrink: 0, marginLeft: 16, width: 40, height: 22, borderRadius: 99, border: 'none', outline: toneEnabled ? 'none' : '0.5px solid var(--color-border-secondary)', padding: 0, background: toneEnabled ? 'var(--color-text-info)' : 'var(--color-background-tertiary)', cursor: 'pointer', position: 'relative', transition: 'background 0.15s' }}
+            >
+              <span style={{ position: 'absolute', top: 3, left: toneEnabled ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.15s', display: 'block' }} />
+            </button>
+          </div>
+          {toneEnabled && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 5 }}>Tags (2–3)</div>
+                <TagInput value={toneTags} onChange={setToneTags} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 5 }}>Premise <span style={{ opacity: 0.6 }}>(optional)</span></div>
+                <textarea
+                  value={tonePremise}
+                  onChange={e => setTonePremise(e.target.value)}
+                  placeholder="Set the scene in a sentence or two…"
+                  maxLength={280}
+                  rows={2}
+                  style={{ ...inp(), resize: 'vertical', margin: 0 }}
+                />
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleSaveTone}
+            disabled={savingTone || (toneEnabled && toneTags.length < 2)}
+            style={{ ...btn('primary'), marginTop: toneEnabled ? 12 : 10, fontSize: 13, padding: '7px 14px' }}
+          >
+            {savingTone ? 'Saving…' : 'Save tone'}
+          </button>
+          {toneEnabled && toneTags.length < 2 && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', margin: '6px 0 0' }}>Add at least 2 tags to save.</p>
+          )}
         </div>
       )}
 
