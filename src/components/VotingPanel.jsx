@@ -146,12 +146,19 @@ export default function VotingPanel({ awardId, label, nominees, voters, playerId
       return
     }
 
+    // Tally votes in the final phase so callers can compute vote share.
+    const finalPhaseVotes = votes.filter(v => v.phase === phase)
+    const votesByNomineeId = {}
+    finalPhaseVotes.forEach(v => {
+      votesByNomineeId[v.nominee_id] = (votesByNomineeId[v.nominee_id] || 0) + 1
+    })
+
     const winners = winnerIds.map(id => {
       const n = activeNominees.find(x => x.id === id)
       return n || { id, name: id, type: 'combatant' }
     })
     await resolveAward({ awardId, winners, coAward: outcome === 'co_award' })
-    onResolved({ outcome, winners })
+    onResolved({ outcome, winners, votesByNomineeId })
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
