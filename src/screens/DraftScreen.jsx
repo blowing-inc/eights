@@ -3,6 +3,7 @@ import Screen from '../components/Screen.jsx'
 import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import Pill from '../components/Pill.jsx'
 import DevBanner from '../components/DevBanner.jsx'
+import ContextStrip from '../components/ContextStrip.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
@@ -18,7 +19,7 @@ import {
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {
   const [room, setLocal] = useState(init)
-  const { rosterSize } = normalizeRoomSettings(init.settings)
+  const { rosterSize, arenaMode, arenaConfig } = normalizeRoomSettings(init.settings)
   // substitutions: { [originalId]: combatant } — active-form overrides for heritage games
   const [substitutions, setSubstitutions] = useState({})
   // stashedCombatants: logged-in player's private stash — shown only in their own autocomplete
@@ -429,6 +430,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     <div style={{ padding: '1rem', maxWidth: 500, margin: '0 auto' }}>
       {room.devMode && <DevBanner />}
       <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13, marginBottom: '1rem' }}>← Back</button>
+      <ContextStrip room={room} currentArena={arenaMode === 'single' ? arenaConfig?.arenaSnapshot : null} />
       <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 4px' }}>The Fight Card</p>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Your {rosterSize} combatants</h2>

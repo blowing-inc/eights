@@ -8,6 +8,7 @@ import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, publishCombatants, publishArenas, publishPlaylist, subscribeToRoom, createVariantCombatant, checkCombatantNameExists, getCombatant, trackRoomPresence, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getGroupsForCombatants, getCombatantGroupIds, setCombatantGroups } from '../supabase.js'
 import SpectatorList from '../components/SpectatorList.jsx'
+import ContextStrip from '../components/ContextStrip.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import { uid, canEditCombatant, simulateGameToEnd, applyWinner, applyDraw, applyMerge, toggleReaction, tallyReactions, isFinalRound, normalizeRoomSettings, buildEvolutionRound, getEphemeralBadges, getCombatantsToPublish, resolveAllAdvanceSelection } from '../gameLogic.js'
 
@@ -694,6 +695,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
           {simulating ? 'Simulating…' : '🧪 Simulate to end of game'}
         </button>
       )}
+      <ContextStrip room={room} currentArena={round.arena} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>Round {round.number}</h2>
