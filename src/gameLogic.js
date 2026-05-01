@@ -1363,10 +1363,10 @@ export function computeSuperlatives(c, h2h) {
   return superlatives
 }
 
-// ─── Series award nomination pools ────────────────────────────────────────────
+// ─── Award nomination pools ───────────────────────────────────────────────────
 
-// All distinct combatants that appeared in any game in the series.
-// rooms: array of completed room records from getHeritageChain.
+// All distinct combatants that appeared in any game across a series or season.
+// rooms: array of room records (from getHeritageChain or getSeasonRooms).
 export function getSeriesCombatantNominees(rooms) {
   const seen = new Set()
   const nominees = []
@@ -1383,10 +1383,10 @@ export function getSeriesCombatantNominees(rooms) {
   return nominees
 }
 
-// All evolutions that occurred in the series as nominee objects.
+// All evolutions that occurred across a series or season as nominee objects.
 // Display name includes opponent context per the narrative principle:
 // "they beat [opponent] and became this."
-// rooms: array of completed room records from getHeritageChain.
+// rooms: array of room records (from getHeritageChain or getSeasonRooms).
 export function getSeriesEvolutionNominees(rooms) {
   const seen = new Set()
   const nominees = []
@@ -1407,3 +1407,7 @@ export function getSeriesEvolutionNominees(rooms) {
   }
   return nominees
 }
+
+// Season-scoped aliases — same room-structure logic, different semantic scope.
+export const getSeasonCombatantNominees = getSeriesCombatantNominees
+export const getSeasonEvolutionNominees  = getSeriesEvolutionNominees
