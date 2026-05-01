@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
-import { btn, inp, lbl, tab } from '../styles.js'
-import { createSeason, getSeasons, updateSeason, getSeasonRooms } from '../supabase.js'
-import { uid, computeSeriesStandings, groupRoomsForHistory } from '../gameLogic.js'
+import { btn, inp, lbl } from '../styles.js'
+import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward } from '../supabase.js'
+import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees } from '../gameLogic.js'
+import VotingPanel from '../components/VotingPanel.jsx'
 
 function ToggleRow({ label, description, value, onToggle }) {
   return (
@@ -70,6 +71,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
   const [seasonRooms, setSeasonRooms] = useState(null)
   const [closing, setClosing] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
+  const awardCreationRef = useRef(false)
 
   useEffect(() => {
     getSeasonRooms(season.id).then(rooms => {
@@ -85,6 +87,30 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
       }
     })
   }, [season.id, season.status, season.series_played, season.series_count])
+
+  // Auto-create the three season award rows the moment the season closes.
+  useEffect(() => {
+    if (season.status !== 'ended') return
+    if (season.votes) return
+    if (!seasonRooms) return
+    if (awardCreationRef.current) return
+    awardCreationRef.current = true
+
+    const now = new Date().toISOString()
+    const favId  = uid()
+    const mccId  = uid()
+    const bestId = uid()
+    const pending = { ballot_state: { phase: 'nomination', lockedVoterIds: [], runoffPool: null }, created_at: now, updated_at: now }
+
+    Promise.all([
+      createPendingAward({ id: favId,  type: 'favorite_combatant',     layer: 'season', scope_id: season.id, scope_type: 'season', recipient_type: 'combatant', ...pending }),
+      createPendingAward({ id: mccId,  type: 'most_creative_combatant', layer: 'season', scope_id: season.id, scope_type: 'season', recipient_type: 'combatant', ...pending }),
+      createPendingAward({ id: bestId, type: 'best_evolution',          layer: 'season', scope_id: season.id, scope_type: 'season', recipient_type: 'combatant', ...pending }),
+    ])
+      .then(() => updateSeason(season.id, { votes: { favoriteCombatantAwardId: favId, mostCreativeAwardId: mccId, bestEvolutionAwardId: bestId } }))
+      .then(updated => setSeason(updated))
+      .catch(e => console.error('createSeasonAwards', e))
+  }, [season.status, season.votes, seasonRooms])
 
   async function handleCloseEarly() {
     setClosing(true)
@@ -239,11 +265,74 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
         </div>
       )}
 
-      {season.status === 'ended' && (
-        <div style={{ padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)' }}>
-          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>This season is complete.</p>
-        </div>
-      )}
+      {season.status === 'ended' && (() => {
+        const isCreator = playerId === season.owner_id
+
+        const seasonVoters = (() => {
+          if (!seasonRooms) return []
+          const seen = new Set()
+          const result = []
+          for (const r of seasonRooms) {
+            for (const p of (r.players || [])) {
+              if (!p.isBot && p.id && !seen.has(p.id)) {
+                seen.add(p.id)
+                result.push({ id: p.id, name: p.name })
+              }
+            }
+          }
+          return result
+        })()
+
+        const seasonCombatantNominees = seasonRooms ? getSeasonCombatantNominees(seasonRooms) : []
+        const seasonEvolutionNominees = seasonRooms ? getSeasonEvolutionNominees(seasonRooms)  : []
+
+        return (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 12 }}>Season votes</div>
+
+            {!season.votes && (
+              <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Opening ballots…</p>
+            )}
+
+            {season.votes && (
+              <>
+                <VotingPanel
+                  key={season.votes.favoriteCombatantAwardId}
+                  awardId={season.votes.favoriteCombatantAwardId}
+                  label="Favorite combatant of the season"
+                  nominees={seasonCombatantNominees}
+                  voters={seasonVoters}
+                  playerId={playerId}
+                  isHost={isCreator}
+                  onResolved={() => {}}
+                />
+                <VotingPanel
+                  key={season.votes.mostCreativeAwardId}
+                  awardId={season.votes.mostCreativeAwardId}
+                  label="Most creative combatant"
+                  nominees={seasonCombatantNominees}
+                  voters={seasonVoters}
+                  playerId={playerId}
+                  isHost={isCreator}
+                  onResolved={() => {}}
+                />
+                {seasonEvolutionNominees.length > 0 && (
+                  <VotingPanel
+                    key={season.votes.bestEvolutionAwardId}
+                    awardId={season.votes.bestEvolutionAwardId}
+                    label="Best evolution of the season"
+                    nominees={seasonEvolutionNominees}
+                    voters={seasonVoters}
+                    playerId={playerId}
+                    isHost={isCreator}
+                    onResolved={() => {}}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        )
+      })()}
     </Screen>
   )
 }
