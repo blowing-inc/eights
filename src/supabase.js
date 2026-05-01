@@ -634,6 +634,67 @@ export async function getHeritageChain(startRoomId) {
   return rooms
 }
 
+// ─── Room invitations ─────────────────────────────────────────────────────────
+
+// Send an invitation from host to a registered user. Returns the new invitation id or null.
+export async function createRoomInvitation(roomId, inviteeId, inviteeName, invitedBy) {
+  try {
+    const { data, error } = await supabase
+      .from('room_invitations')
+      .insert({ room_id: roomId, invitee_id: inviteeId, invitee_name: inviteeName, invited_by: invitedBy })
+      .select('id')
+      .single()
+    if (error) { console.error('createRoomInvitation error', error); return null }
+    return data?.id ?? null
+  } catch (e) { console.error('createRoomInvitation exception', e); return null }
+}
+
+// Cancel a pending invitation (host action). Hard delete — no record needed.
+export async function deleteRoomInvitation(invitationId) {
+  try {
+    const { error } = await supabase.from('room_invitations').delete().eq('id', invitationId)
+    if (error) console.error('deleteRoomInvitation error', error)
+    return !error
+  } catch (e) { console.error('deleteRoomInvitation exception', e); return false }
+}
+
+// Update invitation status — 'accepted' or 'declined'.
+export async function updateRoomInvitationStatus(invitationId, status) {
+  try {
+    const { error } = await supabase.from('room_invitations').update({ status }).eq('id', invitationId)
+    if (error) console.error('updateRoomInvitationStatus error', error)
+    return !error
+  } catch (e) { console.error('updateRoomInvitationStatus exception', e); return false }
+}
+
+// Pending invitations for a room — for the host's lobby view.
+export async function getRoomInvitations(roomId) {
+  try {
+    const { data, error } = await supabase
+      .from('room_invitations')
+      .select('id, invitee_id, invitee_name, invited_at')
+      .eq('room_id', roomId)
+      .eq('status', 'pending')
+      .order('invited_at', { ascending: true })
+    if (error) { console.error('getRoomInvitations error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getRoomInvitations exception', e); return [] }
+}
+
+// Pending invitations for a player — drives the "Invited" entries in My Open Lobbies.
+export async function getPendingInvitationsForPlayer(playerId) {
+  try {
+    const { data, error } = await supabase
+      .from('room_invitations')
+      .select('id, room_id, invitee_name, invited_by, invited_at')
+      .eq('invitee_id', playerId)
+      .eq('status', 'pending')
+      .order('invited_at', { ascending: false })
+    if (error) { console.error('getPendingInvitationsForPlayer error', error); return [] }
+    return data || []
+  } catch (e) { console.error('getPendingInvitationsForPlayer exception', e); return [] }
+}
+
 // ─── Admin action dispatcher ─────────────────────────────────────────────────
 //
 // Routes admin write operations through the admin-action Edge Function, which

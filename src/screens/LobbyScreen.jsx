@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Screen from '../components/Screen.jsx'
 import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import ShareLinkButton from '../components/ShareLinkButton.jsx'
 import SpectatorList from '../components/SpectatorList.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn } from '../styles.js'
-import { sset, subscribeToRoom, trackRoomPresence } from '../supabase.js'
+import { sset, subscribeToRoom, trackRoomPresence, searchUsers, createRoomInvitation, deleteRoomInvitation, getRoomInvitations } from '../supabase.js'
 import { normalizeRoomSettings, kickPlayerFromRoom } from '../gameLogic.js'
 
 const POOL_LABELS = {
@@ -75,6 +75,18 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   // playerId being confirmed for kick, or null
   const [confirmKick, setConfirmKick] = useState(null)
 
+  // Pending invitations (host-only view)
+  const [pendingInvitees, setPendingInvitees] = useState([])
+  const [cancelInviteId, setCancelInviteId] = useState(null)
+
+  // Invite panel state
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteQuery, setInviteQuery] = useState('')
+  const [inviteResults, setInviteResults] = useState([])
+  const [inviteSearching, setInviteSearching] = useState(false)
+  const [inviteSending, setInviteSending] = useState(null) // inviteeId being sent
+  const inviteInputRef = useRef(null)
+
   const isHost = room.host === playerId
 
   useEffect(() => {
@@ -94,6 +106,34 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       onPresenceChange: setPresentIds,
     })
   }, [room.id])
+
+  // Load pending invitees for host; refresh when player count changes (catches accepts)
+  useEffect(() => {
+    if (!isHost) return
+    getRoomInvitations(room.id).then(setPendingInvitees)
+  }, [room.players?.length, isHost])
+
+  // Debounced user search for the invite panel
+  useEffect(() => {
+    if (!inviteOpen) return
+    if (!inviteQuery.trim()) { setInviteResults([]); return }
+    setInviteSearching(true)
+    const t = setTimeout(async () => {
+      const { items } = await searchUsers({ query: inviteQuery, pageSize: 8 })
+      const joinedIds  = new Set((room.players || []).map(p => p.id))
+      const invitedIds = new Set(pendingInvitees.map(p => p.invitee_id))
+      setInviteResults(
+        items.filter(u => !joinedIds.has(u.id) && !invitedIds.has(u.id) && u.id !== playerId)
+      )
+      setInviteSearching(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [inviteQuery, inviteOpen, room.players, pendingInvitees])
+
+  // Focus the search input when the panel opens
+  useEffect(() => {
+    if (inviteOpen) inviteInputRef.current?.focus()
+  }, [inviteOpen])
 
   async function startGame() {
     const updated = { ...room, phase: 'draft' }
@@ -121,6 +161,29 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
     setLocal(updated); setRoom(updated); setConfirmKick(null)
   }
 
+  async function sendInvite(user) {
+    setInviteSending(user.id)
+    const id = await createRoomInvitation(room.id, user.id, user.username, playerId)
+    if (id) {
+      setPendingInvitees(prev => [...prev, { id, invitee_id: user.id, invitee_name: user.username }])
+      setInviteResults(prev => prev.filter(u => u.id !== user.id))
+      setInviteQuery('')
+    }
+    setInviteSending(null)
+  }
+
+  async function cancelInvite(invitationId) {
+    await deleteRoomInvitation(invitationId)
+    setPendingInvitees(prev => prev.filter(p => p.id !== invitationId))
+    setCancelInviteId(null)
+  }
+
+  function closeInvitePanel() {
+    setInviteOpen(false)
+    setInviteQuery('')
+    setInviteResults([])
+  }
+
   return (
     <Screen title={`Room ${room.code}`} onBack={onBack} right={<SpectatorList spectators={room.spectators} />}>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1rem' }}>Share this code with your friends</p>
@@ -131,7 +194,8 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       <ConnectionStatus players={room.players} presentIds={presentIds} isHost={isHost} roomCode={room.code} />
 
       <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: '0 0 12px' }}>Players ({room.players.length})</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1rem' }}>
+        {/* Joined players */}
         {room.players.map(p => (
           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', borderRadius: confirmKick === p.id ? 'var(--border-radius-md) var(--border-radius-md) 0 0' : 'var(--border-radius-md)' }}>
@@ -157,6 +221,85 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
             )}
           </div>
         ))}
+
+        {/* Pending invitees (host view) */}
+        {isHost && pendingInvitees.map(inv => (
+          <div key={inv.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: cancelInviteId === inv.id ? 'var(--border-radius-md) var(--border-radius-md) 0 0' : 'var(--border-radius-md)', opacity: 0.75 }}>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>⏳</span>
+              <span style={{ color: 'var(--color-text-primary)', fontSize: 15 }}>{inv.invitee_name}</span>
+              <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)', background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-tertiary)', padding: '2px 6px', borderRadius: 99 }}>invited</span>
+              {cancelInviteId !== inv.id && (
+                <button
+                  onClick={() => setCancelInviteId(inv.id)}
+                  style={{ marginLeft: 'auto', background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-tertiary)', cursor: 'pointer', padding: '4px 6px' }}
+                  title="Cancel invitation"
+                >✕</button>
+              )}
+              {cancelInviteId === inv.id && (
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--color-text-danger)' }}>Cancel?</span>
+              )}
+            </div>
+            {cancelInviteId === inv.id && (
+              <div style={{ display: 'flex', gap: 0, background: 'var(--color-background-danger)', border: '0.5px solid var(--color-border-danger)', borderTop: 'none', borderRadius: '0 0 var(--border-radius-md) var(--border-radius-md)', overflow: 'hidden' }}>
+                <button onClick={() => cancelInvite(inv.id)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', borderRight: '0.5px solid var(--color-border-danger)', fontSize: 13, color: 'var(--color-text-danger)', cursor: 'pointer' }}>Yes, cancel</button>
+                <button onClick={() => setCancelInviteId(null)} style={{ flex: 1, padding: '8px', background: 'transparent', border: 'none', fontSize: 13, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Never mind</button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Invite panel (host only) */}
+        {isHost && !inviteOpen && (
+          <button
+            onClick={() => setInviteOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'transparent', border: '0.5px dashed var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', color: 'var(--color-text-tertiary)', fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Invite a player
+          </button>
+        )}
+        {isHost && inviteOpen && (
+          <div style={{ border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderBottom: inviteResults.length > 0 || inviteSearching ? '0.5px solid var(--color-border-tertiary)' : 'none' }}>
+              <input
+                ref={inviteInputRef}
+                value={inviteQuery}
+                onChange={e => setInviteQuery(e.target.value)}
+                placeholder="Search by username…"
+                style={{ flex: 1, padding: '10px 14px', background: 'var(--color-background-secondary)', border: 'none', outline: 'none', fontSize: 14, color: 'var(--color-text-primary)' }}
+              />
+              <button
+                onClick={closeInvitePanel}
+                style={{ padding: '10px 14px', background: 'transparent', border: 'none', fontSize: 12, color: 'var(--color-text-tertiary)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+            {inviteSearching && (
+              <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--color-text-tertiary)', background: 'var(--color-background-secondary)' }}>
+                Searching…
+              </div>
+            )}
+            {!inviteSearching && inviteQuery.trim() && inviteResults.length === 0 && (
+              <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--color-text-tertiary)', background: 'var(--color-background-secondary)' }}>
+                No registered players found
+              </div>
+            )}
+            {inviteResults.map(user => (
+              <button
+                key={user.id}
+                onClick={() => sendInvite(user)}
+                disabled={inviteSending === user.id}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 14px', background: 'var(--color-background-secondary)', border: 'none', borderTop: '0.5px solid var(--color-border-tertiary)', fontSize: 14, color: inviteSending === user.id ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)', cursor: inviteSending === user.id ? 'default' : 'pointer', textAlign: 'left' }}
+              >
+                <span>{user.username}</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+                  {inviteSending === user.id ? 'Sending…' : 'Invite'}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <ArenaModeDisplay settings={room.settings} />
