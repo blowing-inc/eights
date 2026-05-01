@@ -33,6 +33,8 @@ import {
   getCombatantsToPublish,
   kickPlayerFromRoom,
   resolveVotingPhase,
+  getSeriesCombatantNominees,
+  getSeriesEvolutionNominees,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2961,5 +2963,79 @@ describe('resolveVotingPhase', () => {
     expect(pending.winnerIds).toEqual([])
     const noVotes = resolveVotingPhase({ votes: [], voterCount: 2, lockedVoterIds: ['p1', 'p2'], phase: 'nomination', hostClose: false })
     expect(noVotes.winnerIds).toEqual([])
+  })
+})
+
+// ─── getSeriesCombatantNominees ───────────────────────────────────────────────
+
+describe('getSeriesCombatantNominees', () => {
+  it('returns all distinct combatants across all rooms', () => {
+    const rooms = [
+      { combatants: { p1: [{ id: 'c1', name: 'Fighter1' }], p2: [{ id: 'c2', name: 'Fighter2' }] } },
+      { combatants: { p1: [{ id: 'c1', name: 'Fighter1' }], p2: [{ id: 'c3', name: 'Fighter3' }] } },
+    ]
+    const nominees = getSeriesCombatantNominees(rooms)
+    expect(nominees).toHaveLength(3)
+    expect(nominees.map(n => n.id).sort()).toEqual(['c1', 'c2', 'c3'])
+    expect(nominees.every(n => n.type === 'combatant')).toBe(true)
+  })
+
+  it('deduplicates combatants that appear in multiple games', () => {
+    const c = { id: 'c1', name: 'Fighter' }
+    const rooms = [
+      { combatants: { p1: [c] } },
+      { combatants: { p1: [c] } },
+    ]
+    expect(getSeriesCombatantNominees(rooms)).toHaveLength(1)
+  })
+
+  it('returns empty for no rooms', () => {
+    expect(getSeriesCombatantNominees([])).toEqual([])
+  })
+
+  it('returns empty when rooms have no combatants', () => {
+    expect(getSeriesCombatantNominees([{ combatants: {} }])).toEqual([])
+  })
+})
+
+// ─── getSeriesEvolutionNominees ───────────────────────────────────────────────
+
+describe('getSeriesEvolutionNominees', () => {
+  const evolRound = {
+    evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'SuperFighter' },
+    combatants: [{ id: 'c1', name: 'Fighter' }, { id: 'c2', name: 'Rival' }],
+  }
+
+  it('returns evolution nominees with opponent name in display', () => {
+    const nominees = getSeriesEvolutionNominees([{ rounds: [evolRound] }])
+    expect(nominees).toHaveLength(1)
+    expect(nominees[0].id).toBe('v1')
+    expect(nominees[0].type).toBe('combatant')
+    expect(nominees[0].name).toContain('SuperFighter')
+    expect(nominees[0].name).toContain('Fighter')
+    expect(nominees[0].name).toContain('Rival')
+  })
+
+  it('deduplicates evolutions that appear across multiple rooms', () => {
+    const rooms = [{ rounds: [evolRound] }, { rounds: [evolRound] }]
+    expect(getSeriesEvolutionNominees(rooms)).toHaveLength(1)
+  })
+
+  it('returns empty when no evolutions occurred', () => {
+    const rooms = [{ rounds: [{ winner: { id: 'c1' }, combatants: [{ id: 'c1' }, { id: 'c2' }] }] }]
+    expect(getSeriesEvolutionNominees(rooms)).toHaveLength(0)
+  })
+
+  it('returns empty for no rooms', () => {
+    expect(getSeriesEvolutionNominees([])).toEqual([])
+  })
+
+  it('falls back to "?" when opponent cannot be identified', () => {
+    const round = {
+      evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'SuperFighter' },
+      combatants: [{ id: 'c1', name: 'Fighter' }],
+    }
+    const nominees = getSeriesEvolutionNominees([{ rounds: [round] }])
+    expect(nominees[0].name).toContain('?')
   })
 })

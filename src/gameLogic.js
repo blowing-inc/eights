@@ -1362,3 +1362,48 @@ export function computeSuperlatives(c, h2h) {
 
   return superlatives
 }
+
+// ─── Series award nomination pools ────────────────────────────────────────────
+
+// All distinct combatants that appeared in any game in the series.
+// rooms: array of completed room records from getHeritageChain.
+export function getSeriesCombatantNominees(rooms) {
+  const seen = new Set()
+  const nominees = []
+  for (const room of rooms) {
+    for (const combatants of Object.values(room.combatants || {})) {
+      for (const c of combatants) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id)
+          nominees.push({ id: c.id, name: c.name, type: 'combatant' })
+        }
+      }
+    }
+  }
+  return nominees
+}
+
+// All evolutions that occurred in the series as nominee objects.
+// Display name includes opponent context per the narrative principle:
+// "they beat [opponent] and became this."
+// rooms: array of completed room records from getHeritageChain.
+export function getSeriesEvolutionNominees(rooms) {
+  const seen = new Set()
+  const nominees = []
+  for (const room of rooms) {
+    for (const round of (room.rounds || [])) {
+      if (!round.evolution) continue
+      const { fromId, fromName, toId, toName } = round.evolution
+      if (seen.has(toId)) continue
+      seen.add(toId)
+      const opponent = (round.combatants || []).find(c => c.id !== fromId)
+      const opponentName = opponent?.name || '?'
+      nominees.push({
+        id:   toId,
+        name: `${toName} (${fromName} beat ${opponentName})`,
+        type: 'combatant',
+      })
+    }
+  }
+  return nominees
+}
