@@ -6,12 +6,14 @@ import DevBanner from '../components/DevBanner.jsx'
 import FighterAutocomplete from '../components/FighterAutocomplete.jsx'
 import CombatantStatsPill from '../components/CombatantStatsPill.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants, createWorkshopCombatant, stashKickedCombatants } from '../supabase.js'
+import { sget, sset, upsertGlobalCombatant, subscribeToRoom, getHeritageChain, getCombatantsByIds, getPlayerStashedCombatants, createWorkshopCombatant, stashKickedCombatants, createPendingAward } from '../supabase.js'
+import VotingPanel from '../components/VotingPanel.jsx'
 import {
   uid, ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
   normalizeRoomSettings, buildActiveFormMap, kickPlayerFromRoom,
+  getSeriesCombatantNominees, getSeriesEvolutionNominees,
 } from '../gameLogic.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {
@@ -40,6 +42,10 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   const [confirmCancel, setConfirmCancel] = useState(false)
   // playerId being confirmed for kick, or null
   const [confirmKick, setConfirmKick] = useState(null)
+  // Series awards: chain of completed rooms, loaded for heritage games
+  const [seriesChain, setSeriesChain] = useState(null)
+  const [bestCombatantStarting, setBestCombatantStarting] = useState(false)
+  const [bestEvolutionStarting, setBestEvolutionStarting] = useState(false)
   const isHost = room.host === playerId
   const isSeries = !!room.prevRoomId
   const cancelLabel = isSeries ? 'End series' : 'Cancel game'
@@ -93,6 +99,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
   useEffect(() => {
     if (!init.prevRoomId) return
     getHeritageChain(init.prevRoomId).then(async chain => {
+      setSeriesChain(chain)
       const activeFormMap = buildActiveFormMap(chain)
       if (!Object.keys(activeFormMap).length) return
       const variantIds = Object.values(activeFormMap)
@@ -183,6 +190,61 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     setLocal(updated); setRoom(updated); setForceStarting(false); onDone()
   }
 
+  async function enterSeriesAwards() {
+    setConfirmCancel(false)
+    const r = await sget('room:' + room.id)
+    if (!r) return
+    const updated = { ...r, seriesVotes: {} }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+  }
+
+  async function startBestCombatantVote() {
+    setBestCombatantStarting(true)
+    const r = await sget('room:' + room.id)
+    if (!r || r.seriesVotes?.bestCombatantAwardId) { setBestCombatantStarting(false); return }
+    const awardId = uid()
+    const now = new Date().toISOString()
+    await createPendingAward({
+      id:             awardId,
+      type:           'favorite_combatant',
+      layer:          'series',
+      scope_id:       r.seriesId || r.prevRoomId,
+      scope_type:     'series',
+      recipient_type: 'combatant',
+      ballot_state:   { phase: 'nomination', lockedVoterIds: [], runoffPool: null },
+      created_at:     now,
+      updated_at:     now,
+    })
+    const updated = { ...r, seriesVotes: { ...r.seriesVotes, bestCombatantAwardId: awardId } }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    setBestCombatantStarting(false)
+  }
+
+  async function startBestEvolutionVote() {
+    setBestEvolutionStarting(true)
+    const r = await sget('room:' + room.id)
+    if (!r || r.seriesVotes?.bestEvolutionAwardId) { setBestEvolutionStarting(false); return }
+    const awardId = uid()
+    const now = new Date().toISOString()
+    await createPendingAward({
+      id:             awardId,
+      type:           'best_evolution',
+      layer:          'series',
+      scope_id:       r.seriesId || r.prevRoomId,
+      scope_type:     'series',
+      recipient_type: 'combatant',
+      ballot_state:   { phase: 'nomination', lockedVoterIds: [], runoffPool: null },
+      created_at:     now,
+      updated_at:     now,
+    })
+    const updated = { ...r, seriesVotes: { ...r.seriesVotes, bestEvolutionAwardId: awardId } }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    setBestEvolutionStarting(false)
+  }
+
   async function kickPlayer(kickedId) {
     const kickedPlayer = room.players.find(p => p.id === kickedId)
     const { room: updated, submittedCombatants } = kickPlayerFromRoom(room, kickedId)
@@ -191,6 +253,95 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
     }
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); setConfirmKick(null)
+  }
+
+  // ── Series awards section ─────────────────────────────────────────────────
+  // Rendered for all players when the host has entered the series awards phase.
+  // seriesVotes on the room is the shared truth — set by the host via enterSeriesAwards().
+  const inSeriesAwardsPhase = isSeries && room.seriesVotes !== undefined
+  const seriesVoters = room.players.filter(p => !p.isBot).map(p => ({ id: p.id, name: p.name }))
+  const seriesCombatantNominees = seriesChain ? getSeriesCombatantNominees(seriesChain) : []
+  const seriesEvolutionNominees = seriesChain ? getSeriesEvolutionNominees(seriesChain) : []
+
+  if (inSeriesAwardsPhase) {
+    return (
+      <Screen title="Series wrap-up" onBack={null}>
+        {room.devMode && <DevBanner />}
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: '0 0 1.5rem' }}>
+          The series is over. Run any votes before closing it out.
+        </p>
+
+        {/* ── Best combatant of the series ── */}
+        {room.seriesVotes.bestCombatantAwardId
+          ? (
+              <VotingPanel
+                key={room.seriesVotes.bestCombatantAwardId}
+                awardId={room.seriesVotes.bestCombatantAwardId}
+                label="Best combatant of the series"
+                nominees={seriesCombatantNominees}
+                voters={seriesVoters}
+                playerId={playerId}
+                isHost={isHost}
+                onResolved={() => {}}
+              />
+            )
+          : isHost && (
+              <div style={{ marginBottom: 12, padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Best combatant of the series (optional)</div>
+                {seriesChain
+                  ? <button
+                      onClick={startBestCombatantVote}
+                      disabled={bestCombatantStarting}
+                      style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}
+                    >
+                      {bestCombatantStarting ? 'Opening vote…' : 'Start vote'}
+                    </button>
+                  : <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading nominees…</p>
+                }
+              </div>
+            )
+        }
+
+        {/* ── Best evolution of the series ── */}
+        {(seriesChain === null || seriesEvolutionNominees.length > 0 || room.seriesVotes.bestEvolutionAwardId) && (
+          room.seriesVotes.bestEvolutionAwardId
+            ? (
+                <VotingPanel
+                  key={room.seriesVotes.bestEvolutionAwardId}
+                  awardId={room.seriesVotes.bestEvolutionAwardId}
+                  label="Best evolution"
+                  nominees={seriesEvolutionNominees}
+                  voters={seriesVoters}
+                  playerId={playerId}
+                  isHost={isHost}
+                  onResolved={() => {}}
+                />
+              )
+            : isHost && seriesChain && seriesEvolutionNominees.length > 0 && (
+                <div style={{ marginBottom: 12, padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Best evolution (optional)</div>
+                  <button
+                    onClick={startBestEvolutionVote}
+                    disabled={bestEvolutionStarting}
+                    style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}
+                  >
+                    {bestEvolutionStarting ? 'Opening vote…' : 'Start vote'}
+                  </button>
+                </div>
+              )
+        )}
+
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {isHost
+            ? <button style={btn('primary')} onClick={onEndSeries}>Close series →</button>
+            : <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0, textAlign: 'center' }}>
+                Waiting for host to close the series…
+              </p>
+          }
+          <button style={{ ...btn('ghost'), fontSize: 13 }} onClick={onBack}>← Home</button>
+        </div>
+      </Screen>
+    )
   }
 
   if (submitted) {
@@ -263,7 +414,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                   <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>{cancelLabel}?</p>
                   <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{cancelBody}</p>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, {isSeries ? 'end it' : 'cancel'}</button>
+                    <button onClick={isSeries ? enterSeriesAwards : onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, {isSeries ? 'end it' : 'cancel'}</button>
                     <button onClick={() => setConfirmCancel(false)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>Never mind</button>
                   </div>
                 </div>
@@ -475,7 +626,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
                 <p style={{ fontSize: 13, color: 'var(--color-text-danger)', margin: '0 0 4px', fontWeight: 500 }}>{cancelLabel}?</p>
                 <p style={{ fontSize: 12, color: 'var(--color-text-danger)', margin: '0 0 10px' }}>{cancelBody}</p>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, {isSeries ? 'end it' : 'cancel'}</button>
+                  <button onClick={isSeries ? enterSeriesAwards : onEndSeries} style={{ ...btn('ghost'), flex: 2, fontSize: 13, padding: '8px', color: 'var(--color-text-danger)', borderColor: 'var(--color-border-danger)' }}>Yes, {isSeries ? 'end it' : 'cancel'}</button>
                   <button onClick={() => setConfirmCancel(false)} style={{ ...btn('ghost'), flex: 1, fontSize: 13, padding: '8px' }}>Never mind</button>
                 </div>
               </div>
