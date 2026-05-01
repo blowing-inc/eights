@@ -63,7 +63,7 @@ const POOL_OPTIONS = [
   { value: 'weighted-liked', label: 'Fan favourites' },
 ]
 
-export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack }) {
+export default function CreateRoom({ playerId, playerName, setPlayerName, lockedName, isGuest, onLogin, onCreated, onBack, seasonId }) {
   const [name, setName] = useState(playerName)
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState({ rosterSize: 8, isPublic: false, spectatorsAllowed: true, anonymousCombatants: false, blindVoting: false, biosRequired: false, allowEvolutions: true, allowDraws: true, allowMerges: true, arenaMode: 'none', arenaConfig: null, arenaEvolutionEnabled: false })
@@ -128,6 +128,7 @@ export default function CreateRoom({ playerId, playerName, setPlayerName, locked
       players: [{ id: playerId, name: name.trim(), color: playerColor(0), ready: false, isGuest }],
       combatants: {}, rounds: [], currentRound: 0, createdAt: Date.now(),
       settings,
+      ...(seasonId ? { seasonId } : {}),
     }
     await sset('room:' + roomCode, room)
     sessionStorage.setItem('eights_pname', name.trim())

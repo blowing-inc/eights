@@ -432,7 +432,7 @@ function SeriesRow({ item, onSelect, playerId }) {
   )
 }
 
-export default function ChroniclesScreen({ onBack, setViewCombatant, playerId, onNextGame }) {
+export default function ChroniclesScreen({ onBack, setViewCombatant, playerId, onNextGame, onSeasons }) {
   const [rooms, setRooms] = useState(null)
   const [selected, setSelected] = useState(null)
 
@@ -461,6 +461,11 @@ export default function ChroniclesScreen({ onBack, setViewCombatant, playerId, o
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
         <button onClick={onBack} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 13 }}>← Back</button>
         <h2 style={{ fontSize: 22, fontWeight: 500, margin: 0, color: 'var(--color-text-primary)' }}>The Chronicles</h2>
+        {onSeasons && (
+          <button onClick={onSeasons} style={{ ...btn('ghost'), padding: '4px 10px', fontSize: 12, marginLeft: 'auto' }}>
+            Seasons ↗
+          </button>
+        )}
       </div>
 
       {rooms === null && <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>Loading…</p>}

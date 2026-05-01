@@ -1646,6 +1646,40 @@ export async function hasPlayerEncounteredArena(arenaId, playerId) {
   } catch (e) { console.error('hasPlayerEncounteredArena exception', e); return false }
 }
 
+// ─── Seasons ──────────────────────────────────────────────────────────────────
+
+export async function createSeason(season) {
+  const { data, error } = await supabase.from('seasons').insert(season).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function getSeasons(ownerId) {
+  const { data, error } = await supabase.from('seasons').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false })
+  if (error) { console.error('getSeasons error', error); return [] }
+  return data || []
+}
+
+export async function getSeason(id) {
+  const { data, error } = await supabase.from('seasons').select('*').eq('id', id).single()
+  if (error) { console.error('getSeason error', error); return null }
+  return data
+}
+
+export async function updateSeason(id, changes) {
+  const { data, error } = await supabase.from('seasons').update({ ...changes, updated_at: new Date().toISOString() }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+// Filter all rooms by seasonId — used to build season standings and series list.
+export async function getSeasonRooms(seasonId) {
+  const all = await slist()
+  return all.filter(r => r.seasonId === seasonId)
+}
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
+
 // All distinct tags across published combatants, groups, and arenas.
 // Returns [{tag, count}] sorted by frequency desc then alphabetical.
 export async function listAllDistinctTags() {
