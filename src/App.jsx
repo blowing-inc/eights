@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getRoomsByIds, getActiveRoomsForPlayer, sget, sset } from './supabase.js'
+import { getRoomsByIds, getActiveRoomsForPlayer, sget, sset, getPendingInvitationsForPlayer, updateRoomInvitationStatus } from './supabase.js'
 import { uid, makeBots, makeBotCombatants, playerColor, prepareNextGame, replacePlayerIdInRoom } from './gameLogic.js'
 
 // Screens
@@ -111,9 +111,28 @@ export default function App() {
 
   async function refreshLobbies() {
     if (currentUser) {
-      const rooms = await getActiveRoomsForPlayer(playerId)
-      setOpenLobbies(rooms)
+      const ACTIVE_PHASES = ['lobby', 'draft', 'battle', 'vote']
+      const [rooms, invitations] = await Promise.all([
+        getActiveRoomsForPlayer(playerId),
+        getPendingInvitationsForPlayer(playerId),
+      ])
       saveLobbyCodes(rooms.map(r => r.id))
+
+      let inviteEntries = []
+      if (invitations.length) {
+        const inviteRooms = await getRoomsByIds(invitations.map(inv => inv.room_id))
+        inviteEntries = invitations
+          .map(inv => {
+            const room = inviteRooms.find(r => r?.id === inv.room_id)
+            // Skip if room is gone, ended, or the player already joined
+            if (!room || !ACTIVE_PHASES.includes(room.phase)) return null
+            if ((room.players || []).some(p => p.id === playerId)) return null
+            return { ...room, isInvitation: true, invitation: inv }
+          })
+          .filter(Boolean)
+      }
+
+      setOpenLobbies([...rooms, ...inviteEntries])
     } else {
       const codes = loadLobbyCodes()
       if (!codes.length) { setOpenLobbies([]); return }
@@ -247,6 +266,30 @@ export default function App() {
     goHome()
   }
 
+  async function handleAcceptInvitation(roomEntry, invitation) {
+    const r = await sget('room:' + roomEntry.id)
+    if (!r || r.phase !== 'lobby') {
+      // Room ended or game already started — decline the stale invite and refresh
+      await updateRoomInvitationStatus(invitation.id, 'declined')
+      await refreshLobbies()
+      return
+    }
+    const count = (r.players || []).length
+    const newPlayer = { id: playerId, name: effectiveName, color: playerColor(count), ready: false, isGuest: false }
+    const updated = { ...r, players: [...(r.players || []), newPlayer] }
+    await sset('room:' + r.id, updated)
+    await updateRoomInvitationStatus(invitation.id, 'accepted')
+    addLobbyCode(r.id)
+    setRoom(updated)
+    setViewLobbies(false)
+    nav('lobby')
+  }
+
+  async function handleDeclineInvitation(invitation) {
+    await updateRoomInvitationStatus(invitation.id, 'declined')
+    await refreshLobbies()
+  }
+
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
   const isSuperHost = !!currentUser?.is_super_host
@@ -257,7 +300,7 @@ export default function App() {
   else if (viewWorkshop)
     content = <WorkshopScreen currentUser={currentUser} onBack={() => setViewWorkshop(false)} onLogin={() => goAuth('home')} />
   else if (viewLobbies)
-    content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : r.phase === 'draft' ? 'draft' : r.phase === 'vote' ? 'vote' : 'round') }} />
+    content = <MyLobbiesScreen lobbies={openLobbies} playerId={playerId} onBack={() => { setViewLobbies(false); refreshLobbies() }} onEnter={r => { setRoom(r); setViewLobbies(false); nav(r.phase === 'lobby' ? 'lobby' : r.phase === 'draft' ? 'draft' : r.phase === 'vote' ? 'vote' : 'round') }} onAcceptInvitation={handleAcceptInvitation} onDeclineInvitation={handleDeclineInvitation} />
   else if (viewPlayers && viewPlayerProfile)
     content = <PlayerProfile profileId={viewPlayerProfile} playerId={playerId} onBack={() => setViewPlayerProfile(null)} onViewCombatant={c => setViewGlobalCombatant(c)} onViewRoom={openRoomSummary} />
   else if (viewPlayers)
