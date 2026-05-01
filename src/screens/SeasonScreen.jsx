@@ -119,7 +119,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
       .then(() => updateSeason(season.id, { votes: { favoriteCombatantAwardId: favId, mostCreativeAwardId: mccId, bestEvolutionAwardId: bestId } }))
       .then(updated => setSeason(updated))
       .catch(e => console.error('createSeasonAwards', e))
-  }, [season.status, season.votes, seasonRooms])
+  }, [season.status, season.id, season.votes, seasonRooms])
 
   // Compute and store automatic season awards once (idempotent guard via autoAwardRef).
   useEffect(() => {

@@ -196,7 +196,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   useEffect(() => {
     if (!isHost) return
     getRoomInvitations(room.id).then(setPendingInvitees)
-  }, [room.players?.length, isHost])
+  }, [room.id, room.players?.length, isHost])
 
   // Debounced user search for the invite panel
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       setInviteSearching(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [inviteQuery, inviteOpen, room.players, pendingInvitees])
+  }, [inviteQuery, inviteOpen, room.players, pendingInvitees, playerId])
 
   // Focus the search input when the panel opens
   useEffect(() => {
