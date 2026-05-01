@@ -240,7 +240,7 @@ export default function App() {
     isGuest={isGuest}
     effectiveName={effectiveName}
     onLogout={logout}
-    onLogin={goAuth}
+    onLogin={() => goAuth('home')}
   />
 
   async function handleHostNextGame(completedRoom) {
