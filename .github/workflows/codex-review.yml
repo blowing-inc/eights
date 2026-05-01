@@ -1,0 +1,85 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install openai
+
+      - name: Get changed frontend files
+        id: files
+        run: |
+          git fetch origin main
+          FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(js|jsx|ts|tsx)$' || true)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build diff payload
+        id: diff
+        run: |
+          DIFF=""
+          for file in ${{ steps.files.outputs.files }}
+          do
+            FILE_DIFF=$(git diff origin/main...HEAD -- $file)
+            DIFF="${DIFF}\nFILE: $file\n$FILE_DIFF\n"
+          done
+
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # ✅ Guarded Codex execution
+      - name: Run Codex Review (with retry)
+        if: env.OPENAI_API_KEY != ''
+        id: review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DIFF: ${{ steps.diff.outputs.diff }}
+        run: |
+          for i in 1 2 3; do
+            node scripts/review.js && break
+            echo "Retry $i failed, retrying..."
+            sleep 5
+          done
+
+      # ✅ Guarded PR comment
+      - name: Post PR Comment
+        if: success() && env.OPENAI_API_KEY != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} -F review.md
+
+      # ✅ Clean skip message (visible in logs only)
+      - name: Skip notice (no API key)
+        if: env.OPENAI_API_KEY == ''
+        run: echo "Skipping Codex review — no OPENAI_API_KEY set."
+
+      # ✅ Only label failures if Codex actually ran
+      - name: Label on failure
+        if: failure() && env.OPENAI_API_KEY != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "codex-review-skipped"
