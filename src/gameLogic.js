@@ -48,6 +48,34 @@ export function resolveTone(game, season) {
 }
 
 /**
+ * Derives a display tone for a season or series by comparing the snapshotted
+ * room.tone across all games in the container.
+ *
+ * Returns:
+ *   { type: 'consistent', tags: string[], premise: string | null }
+ *     when all games with a tone share identical tag sets
+ *   { type: 'varied' }
+ *     when tone tags differ across any games
+ *   null
+ *     when no games had tone set
+ */
+export function computeSeasonToneDisplay(rooms) {
+  const toned = (rooms || []).filter(r => r.tone?.tags?.length > 0)
+  if (toned.length === 0) return null
+
+  const fingerprint = r => [...r.tone.tags].sort().join('\0')
+  const first = fingerprint(toned[0])
+  const consistent = toned.every(r => fingerprint(r) === first)
+
+  if (!consistent) return { type: 'varied' }
+
+  const sorted = [...toned].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  const premise = sorted.find(r => r.tone.premise)?.tone.premise ?? null
+
+  return { type: 'consistent', tags: toned[0].tone.tags, premise }
+}
+
+/**
  * Builds a round.arena snapshot from an arena DB record.
  * Maps arena.bio → description and arena.rules → houseRules per the schema contract.
  */

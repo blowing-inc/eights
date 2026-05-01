@@ -16,6 +16,7 @@ import {
   extractPreviousWinners,
   normalizeRoomSettings,
   resolveTone,
+  computeSeasonToneDisplay,
   simulateGameToEnd,
   getLineageStats,
   buildActiveFormMap,
@@ -3357,5 +3358,73 @@ describe('resolveTone', () => {
   it('returns season tone when game has no settings at all', () => {
     const game = {}
     expect(resolveTone(game, { tone: SEASON_TONE })).toEqual(SEASON_TONE)
+  })
+})
+
+// ─── computeSeasonToneDisplay ─────────────────────────────────────────────────
+
+describe('computeSeasonToneDisplay', () => {
+  const tone = (tags, premise = '') => ({ tone: { tags, premise } })
+
+  it('returns null when no rooms have tone', () => {
+    expect(computeSeasonToneDisplay([{ tone: null }, {}])).toBeNull()
+  })
+
+  it('returns null for empty array', () => {
+    expect(computeSeasonToneDisplay([])).toBeNull()
+  })
+
+  it('returns null when called with no argument', () => {
+    expect(computeSeasonToneDisplay()).toBeNull()
+  })
+
+  it('returns consistent when single room has tone', () => {
+    const result = computeSeasonToneDisplay([tone(['dark', 'comedic'])])
+    expect(result).toEqual({ type: 'consistent', tags: ['dark', 'comedic'], premise: null })
+  })
+
+  it('returns consistent when all rooms share identical tags', () => {
+    const rooms = [tone(['absurdist', 'horror']), tone(['absurdist', 'horror'])]
+    expect(computeSeasonToneDisplay(rooms)).toEqual({ type: 'consistent', tags: ['absurdist', 'horror'], premise: null })
+  })
+
+  it('is tag-order insensitive when comparing', () => {
+    const rooms = [tone(['b', 'a']), tone(['a', 'b'])]
+    const result = computeSeasonToneDisplay(rooms)
+    expect(result.type).toBe('consistent')
+  })
+
+  it('returns varied when tags differ across rooms', () => {
+    const rooms = [tone(['dark']), tone(['wholesome'])]
+    expect(computeSeasonToneDisplay(rooms)).toEqual({ type: 'varied' })
+  })
+
+  it('ignores rooms with no tone when checking consistency', () => {
+    const rooms = [tone(['dark', 'comedic']), { tone: null }, tone(['dark', 'comedic'])]
+    const result = computeSeasonToneDisplay(rooms)
+    expect(result).toEqual({ type: 'consistent', tags: ['dark', 'comedic'], premise: null })
+  })
+
+  it('includes premise from the most recently created room', () => {
+    const rooms = [
+      { tone: { tags: ['dark'], premise: 'older' }, createdAt: 1000 },
+      { tone: { tags: ['dark'], premise: 'newer' }, createdAt: 2000 },
+    ]
+    const result = computeSeasonToneDisplay(rooms)
+    expect(result.premise).toBe('newer')
+  })
+
+  it('premise is null when no rooms have a premise', () => {
+    const rooms = [tone(['dark']), tone(['dark'])]
+    expect(computeSeasonToneDisplay(rooms).premise).toBeNull()
+  })
+
+  it('premise falls back to room with premise even if not most recent', () => {
+    const rooms = [
+      { tone: { tags: ['dark'], premise: 'has one' }, createdAt: 1000 },
+      { tone: { tags: ['dark'], premise: '' }, createdAt: 2000 },
+    ]
+    const result = computeSeasonToneDisplay(rooms)
+    expect(result.premise).toBe('has one')
   })
 })
