@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getRoomsByIds, getActiveRoomsForPlayer, sget, sset, getPendingInvitationsForPlayer, updateRoomInvitationStatus } from './supabase.js'
+import { getRoomsByIds, getActiveRoomsForPlayer, sget, sset, getPendingInvitationsForPlayer, updateRoomInvitationStatus, updateSeason } from './supabase.js'
 import { uid, makeBots, makeBotCombatants, playerColor, prepareNextGame, replacePlayerIdInRoom } from './gameLogic.js'
 
 // Screens
@@ -24,6 +24,7 @@ import SpectateScreen from './screens/SpectateScreen.jsx'
 import GameSummaryScreen from './screens/GameSummaryScreen.jsx'
 import WorkshopScreen from './screens/WorkshopScreen.jsx'
 import SuperHostScreen from './screens/SuperHostScreen.jsx'
+import SeasonScreen from './screens/SeasonScreen.jsx'
 import HelpModal from './components/HelpModal.jsx'
 
 function UserPill({ currentUser, isGuest, effectiveName, onLogout, onLogin }) {
@@ -161,6 +162,10 @@ export default function App() {
   const [viewWorkshop, setViewWorkshop] = useState(false)
   const [viewSuperHost, setViewSuperHost] = useState(false)
   const [viewRoomSummary, setViewRoomSummary] = useState(null)
+  const [viewSeasons, setViewSeasons] = useState(false)
+  // When a season's "Start series" is tapped, store the season here so the created room
+  // can carry the seasonId and series_played can increment after the room is created.
+  const [pendingSeason, setPendingSeason] = useState(null)
 
   async function openRoomSummary(roomId) {
     const r = await sget('room:' + roomId)
@@ -292,6 +297,26 @@ export default function App() {
 
   function goHome() { setRoom(null); refreshLobbies(); nav('home') }
 
+  function handleSeasonStartSeries(season) {
+    setPendingSeason(season)
+    setViewSeasons(false)
+    nav('create')
+  }
+
+  async function handleSeasonRoomCreated(r) {
+    addLobbyCode(r.id)
+    setRoom(r)
+    if (pendingSeason) {
+      try {
+        await updateSeason(pendingSeason.id, { series_played: pendingSeason.series_played + 1 })
+      } catch (e) {
+        console.error('updateSeason series_played failed', e)
+      }
+      setPendingSeason(null)
+    }
+    nav('lobby')
+  }
+
   const isSuperHost = !!currentUser?.is_super_host
 
   let content = null
@@ -311,8 +336,10 @@ export default function App() {
     content = <ArenaDetailScreen key={viewArena?.id} arena={viewArena} playerId={playerId} isSuperHost={isSuperHost} onBack={() => setViewArena(null)} onViewArena={setViewArena} />
   else if (viewArchive)
     content = <ArchiveScreen playerId={playerId} isSuperHost={isSuperHost} onBack={() => setViewArchive(false)} onViewCombatant={c => setViewGlobalCombatant(c)} onViewArena={a => setViewArena(a)} />
+  else if (viewSeasons)
+    content = <SeasonScreen playerId={playerId} playerName={effectiveName} onBack={() => setViewSeasons(false)} onStartSeries={handleSeasonStartSeries} />
   else if (viewChronicles)
-    content = <ChroniclesScreen onBack={() => setViewChronicles(false)} setViewCombatant={c => { setViewCombatant(c); setViewChronicles(false) }} playerId={playerId} onNextGame={r => { setViewChronicles(false); handleHostNextGame(r) }} />
+    content = <ChroniclesScreen onBack={() => setViewChronicles(false)} setViewCombatant={c => { setViewCombatant(c); setViewChronicles(false) }} playerId={playerId} onNextGame={r => { setViewChronicles(false); handleHostNextGame(r) }} onSeasons={() => { setViewChronicles(false); setViewSeasons(true) }} />
   else if (viewCombatant)
     content = <CombatantScreen room={room} combatant={viewCombatant} playerId={playerId} onBack={() => setViewCombatant(null)} onViewCombatant={setViewCombatant} />
   else if (screen === 'auth')
@@ -322,7 +349,7 @@ export default function App() {
   else if (screen === 'home')
     content = <HomeScreen onCreate={() => nav('create')} onJoin={() => nav('join')} onChronicles={() => setViewChronicles(true)} onArchive={() => setViewArchive(true)} onPlayers={() => setViewPlayers(true)} onWorkshop={() => setViewWorkshop(true)} onSuperHost={() => setViewSuperHost(true)} onDev={startDevMode} currentUser={currentUser} onLogin={() => nav('auth')} onLogout={logout} onAdmin={() => nav('admin')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} onHelp={() => setViewHelp(true)} />
   else if (screen === 'create')
-    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => goAuth('create')} onCreated={r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={() => nav('home')} />
+    content = <CreateRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} onLogin={() => goAuth('create')} onCreated={pendingSeason ? handleSeasonRoomCreated : r => { addLobbyCode(r.id); setRoom(r); nav('lobby') }} onBack={pendingSeason ? () => { setPendingSeason(null); setViewSeasons(true) } : () => nav('home')} seasonId={pendingSeason?.id} />
   else if (screen === 'join')
     content = <JoinRoom playerId={playerId} playerName={effectiveName} setPlayerName={setPlayerName} lockedName={!isGuest} isGuest={isGuest} initialCode={_urlJoinCode || _urlSpectateCode || _urlCode} spectateMode={!!_urlSpectateCode} onJoined={r => { addLobbyCode(r.id); setRoom(r); nav(r.phase === 'draft' ? 'draft' : r.phase === 'battle' ? 'round' : r.phase === 'vote' ? 'vote' : 'lobby') }} onSpectated={r => { setRoom(r); nav('spectate') }} onBack={() => nav('home')} onLogin={() => goAuth('join')} openLobbies={openLobbies} onLobbies={() => setViewLobbies(true)} />
   else if (screen === 'spectate')
