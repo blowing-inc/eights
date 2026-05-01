@@ -1,14 +1,16 @@
-import fs from "fs";
 import OpenAI from "openai";
+import { execSync } from "child_process";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 const diff = process.env.DIFF;
+const prNumber = process.env.PR_NUMBER;
+const repo = process.env.REPO;
 
 if (!diff || diff.trim().length === 0) {
-  fs.writeFileSync("review.md", "No relevant frontend changes detected.");
+  console.log("No relevant changes.");
   process.exit(0);
 }
 
@@ -16,59 +18,81 @@ const prompt = `
 You are a senior React engineer reviewing a pull request.
 
 Focus on:
-- React hook correctness (dependencies, stale closures)
+- React hook correctness
 - unnecessary re-renders
-- component structure and separation of concerns
-- async safety (race conditions, stale state)
-- state management issues
-- performance pitfalls
+- async safety
+- stale closures
+- performance issues
 
-Do NOT comment on:
-- formatting
-- lint issues
-- naming style
+Return JSON in this exact format:
 
-Be concise, technical, and actionable.
+{
+  "comments": [
+    {
+      "file": "path/to/file.tsx",
+      "line": 42,
+      "body": "Explain the issue and suggest a fix"
+    }
+  ],
+  "summary": "High-level summary of issues"
+}
 
-Return output in this format:
-
-### ⚠️ Issues
-- ...
-
-### 💡 Suggestions
-- ...
-
-### 🚀 Performance Notes
-- ...
-
-Tech stack:
-- React 18
-- TypeScript
-- Vite
-- Supabase
-
-Here is the diff:
+Rules:
+- Only comment on real issues
+- No lint/style comments
+- Keep comments actionable
 `;
 
 async function run() {
   try {
     const response = await client.responses.create({
       model: "gpt-5.3",
-      input: [
-        {
-          role: "user",
-          content: `${prompt}\n${diff}`,
-        },
-      ],
-      max_output_tokens: 1200,
+      input: `${prompt}\n\nDIFF:\n${diff}`,
+      max_output_tokens: 1500,
     });
 
-    const output = response.output_text || "No feedback generated.";
+    const text = response.output_text || "{}";
 
-    fs.writeFileSync("review.md", output);
-    console.log("Review generated.");
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      console.log("Failed to parse response, skipping.");
+      process.exit(0);
+    }
+
+    const comments = parsed.comments || [];
+    const summary = parsed.summary || "Codex review completed.";
+
+    if (comments.length === 0) {
+      console.log("No actionable comments.");
+      process.exit(0);
+    }
+
+    console.log(`Posting ${comments.length} inline comments...`);
+
+    for (const c of comments) {
+      try {
+        execSync(
+          `gh api repos/${repo}/pulls/${prNumber}/comments \
+          -f body="${c.body}" \
+          -f path="${c.file}" \
+          -F line=${c.line}`,
+          { stdio: "inherit" }
+        );
+      } catch (err) {
+        console.error("Failed to post comment:", err.message);
+      }
+    }
+
+    // Post summary comment
+    execSync(
+      `gh pr comment ${prNumber} -b "${summary}"`,
+      { stdio: "inherit" }
+    );
+
   } catch (err) {
-    console.error("Codex API failed:", err.message);
+    console.error("Codex failed:", err.message);
     process.exit(1);
   }
 }

@@ -24,24 +24,25 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install openai
+        run: npm install
 
-      - name: Get changed frontend files
+      - name: Get changed frontend files (capped)
         id: files
         run: |
           git fetch origin main
-          FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(js|jsx|ts|tsx)$' || true)
+          FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(js|jsx|ts|tsx)$' | head -n 10 || true)
+
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$FILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build diff payload
+      - name: Build diff payload (size limited)
         id: diff
         run: |
           DIFF=""
           for file in ${{ steps.files.outputs.files }}
           do
-            FILE_DIFF=$(git diff origin/main...HEAD -- $file)
+            FILE_DIFF=$(git diff origin/main...HEAD -- $file | head -c 20000)
             DIFF="${DIFF}\nFILE: $file\n$FILE_DIFF\n"
           done
 
@@ -49,13 +50,13 @@ jobs:
           echo "$DIFF" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # ✅ Guarded Codex execution
       - name: Run Codex Review (with retry)
         if: env.OPENAI_API_KEY != ''
-        id: review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DIFF: ${{ steps.diff.outputs.diff }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           for i in 1 2 3; do
             node scripts/review.js && break
@@ -63,20 +64,10 @@ jobs:
             sleep 5
           done
 
-      # ✅ Guarded PR comment
-      - name: Post PR Comment
-        if: success() && env.OPENAI_API_KEY != ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} -F review.md
-
-      # ✅ Clean skip message (visible in logs only)
       - name: Skip notice (no API key)
         if: env.OPENAI_API_KEY == ''
         run: echo "Skipping Codex review — no OPENAI_API_KEY set."
 
-      # ✅ Only label failures if Codex actually ran
       - name: Label on failure
         if: failure() && env.OPENAI_API_KEY != ''
         env:
