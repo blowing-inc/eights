@@ -32,6 +32,7 @@ import {
   computeSuperlatives,
   getCombatantsToPublish,
   kickPlayerFromRoom,
+  resolveVotingPhase,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2811,5 +2812,154 @@ describe('computeSuperlatives', () => {
       expect(s.label.length).toBeGreaterThan(0)
       expect(s.tooltip.length).toBeGreaterThan(0)
     })
+  })
+})
+
+// ─── resolveVotingPhase ───────────────────────────────────────────────────────
+
+describe('resolveVotingPhase', () => {
+  function votes(...nomineeIds) {
+    return nomineeIds.map(id => ({ nomineeId: id }))
+  }
+
+  it('returns pending when not all voters have locked in and host has not closed', () => {
+    expect(resolveVotingPhase({
+      votes:          votes('c1'),
+      voterCount:     3,
+      lockedVoterIds: ['p1'],
+      phase:          'nomination',
+      hostClose:      false,
+    }).outcome).toBe('pending')
+  })
+
+  it('returns pending with zero votes if nobody has acted', () => {
+    expect(resolveVotingPhase({
+      votes:          [],
+      voterCount:     3,
+      lockedVoterIds: [],
+      phase:          'nomination',
+      hostClose:      false,
+    }).outcome).toBe('pending')
+  })
+
+  it('returns winner when there is a clear majority after all lock in', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c1', 'c2'),
+      voterCount:     3,
+      lockedVoterIds: ['p1', 'p2', 'p3'],
+      phase:          'nomination',
+      hostClose:      false,
+    })
+    expect(result.outcome).toBe('winner')
+    expect(result.winnerIds).toEqual(['c1'])
+  })
+
+  it('returns runoff on a nomination-phase tie when all have locked in', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c2'),
+      voterCount:     2,
+      lockedVoterIds: ['p1', 'p2'],
+      phase:          'nomination',
+      hostClose:      false,
+    })
+    expect(result.outcome).toBe('runoff')
+    expect(result.winnerIds).toHaveLength(2)
+    expect(result.winnerIds).toContain('c1')
+    expect(result.winnerIds).toContain('c2')
+  })
+
+  it('returns co_award on a runoff-phase tie after all lock in (deadlock)', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c2'),
+      voterCount:     2,
+      lockedVoterIds: ['p1', 'p2'],
+      phase:          'runoff',
+      hostClose:      false,
+    })
+    expect(result.outcome).toBe('co_award')
+    expect(result.winnerIds).toContain('c1')
+    expect(result.winnerIds).toContain('c2')
+  })
+
+  it('resolves early with winner on host close (nomination phase, clear leader)', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c1'),
+      voterCount:     4,
+      lockedVoterIds: ['p1', 'p2'],
+      phase:          'nomination',
+      hostClose:      true,
+    })
+    expect(result.outcome).toBe('winner')
+    expect(result.winnerIds).toEqual(['c1'])
+  })
+
+  it('returns co_award on tied host close during nomination', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c2'),
+      voterCount:     4,
+      lockedVoterIds: ['p1', 'p2'],
+      phase:          'nomination',
+      hostClose:      true,
+    })
+    expect(result.outcome).toBe('co_award')
+    expect(result.winnerIds).toContain('c1')
+    expect(result.winnerIds).toContain('c2')
+  })
+
+  it('returns co_award on host close during runoff with all runoff nominees', () => {
+    // c1 is "leading" with one vote but host closes — both runoff nominees co-award
+    const result = resolveVotingPhase({
+      votes:          votes('c1'),
+      voterCount:     3,
+      lockedVoterIds: ['p1'],
+      phase:          'runoff',
+      hostClose:      true,
+      runoffPool:     ['c1', 'c2'],
+    })
+    expect(result.outcome).toBe('co_award')
+    expect(result.winnerIds).toContain('c1')
+    expect(result.winnerIds).toContain('c2')
+  })
+
+  it('returns no_votes when host closes with no nominations at all', () => {
+    expect(resolveVotingPhase({
+      votes:          [],
+      voterCount:     2,
+      lockedVoterIds: ['p1', 'p2'],
+      phase:          'nomination',
+      hostClose:      true,
+    }).outcome).toBe('no_votes')
+  })
+
+  it('abstainers count toward allLockedIn without contributing a vote', () => {
+    // p1 voted c1, p2 and p3 abstained — c1 is the winner
+    const result = resolveVotingPhase({
+      votes:          votes('c1'),
+      voterCount:     3,
+      lockedVoterIds: ['p1', 'p2', 'p3'],
+      phase:          'nomination',
+      hostClose:      false,
+    })
+    expect(result.outcome).toBe('winner')
+    expect(result.winnerIds).toEqual(['c1'])
+  })
+
+  it('returns three-way co_award when three nominees are tied', () => {
+    const result = resolveVotingPhase({
+      votes:          votes('c1', 'c2', 'c3'),
+      voterCount:     3,
+      lockedVoterIds: ['p1', 'p2', 'p3'],
+      phase:          'runoff',
+      hostClose:      false,
+    })
+    expect(result.outcome).toBe('co_award')
+    expect(result.winnerIds).toHaveLength(3)
+  })
+
+  it('winnerIds is empty for pending and no_votes outcomes', () => {
+    const pending = resolveVotingPhase({ votes: [], voterCount: 2, lockedVoterIds: [], phase: 'nomination', hostClose: false })
+    expect(pending.winnerIds).toEqual([])
+    const noVotes = resolveVotingPhase({ votes: [], voterCount: 2, lockedVoterIds: ['p1', 'p2'], phase: 'nomination', hostClose: false })
+    expect(noVotes.winnerIds).toEqual([])
   })
 })

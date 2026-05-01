@@ -1248,6 +1248,57 @@ export function groupRoomsForHistory(rooms) {
   return items.sort((a, b) => b.latestAt - a.latestAt)
 }
 
+// ─── Voting engine ────────────────────────────────────────────────────────────
+
+/**
+ * Pure voting resolution function. Determines the outcome of a ballot phase.
+ * Called by VotingPanel on every state change and used directly in unit tests.
+ *
+ * @param {object}   params
+ * @param {{ nomineeId: string }[]} params.votes          — actual nominations cast; abstains are absent
+ * @param {number}                  params.voterCount     — total eligible voters
+ * @param {string[]}                params.lockedVoterIds — voters who locked in (voted OR abstained)
+ * @param {'nomination'|'runoff'}   params.phase
+ * @param {boolean}                 params.hostClose      — true when host forces early resolution
+ * @param {string[]|null}           [params.runoffPool]   — nominee IDs active in the runoff phase;
+ *                                                          required when phase is 'runoff' and hostClose is true
+ *
+ * @returns {{ outcome: string, winnerIds: string[] }}
+ *   pending   — not everyone has locked in and host hasn't closed; nothing to resolve yet
+ *   winner    — one clear winner; winnerIds has exactly one entry
+ *   runoff    — nomination-phase tie with no host close; winnerIds lists the tied nominees
+ *   co_award  — forced tie resolution; winnerIds lists all co-recipients
+ *   no_votes  — no nominations were cast; no award
+ */
+export function resolveVotingPhase({ votes, voterCount, lockedVoterIds, phase, hostClose, runoffPool }) {
+  const allLockedIn = lockedVoterIds.length >= voterCount
+  if (!allLockedIn && !hostClose) return { outcome: 'pending', winnerIds: [] }
+
+  // Closing the runoff early co-awards all runoff nominees regardless of current votes.
+  // (This differs from closing nomination early, which resolves with current votes.)
+  if (phase === 'runoff' && hostClose) {
+    const ids = runoffPool?.length ? runoffPool : []
+    return ids.length ? { outcome: 'co_award', winnerIds: ids } : { outcome: 'no_votes', winnerIds: [] }
+  }
+
+  const tally = {}
+  for (const v of votes) {
+    tally[v.nomineeId] = (tally[v.nomineeId] || 0) + 1
+  }
+
+  if (Object.keys(tally).length === 0) return { outcome: 'no_votes', winnerIds: [] }
+
+  const maxVotes = Math.max(...Object.values(tally))
+  const leaders  = Object.keys(tally).filter(id => tally[id] === maxVotes)
+
+  if (leaders.length === 1) return { outcome: 'winner', winnerIds: leaders }
+
+  // Tie: open runoff only during nomination without a host close.
+  // Any other tie context (runoff deadlock, nomination host close) resolves as co-award.
+  if (phase === 'nomination' && !hostClose) return { outcome: 'runoff', winnerIds: leaders }
+  return { outcome: 'co_award', winnerIds: leaders }
+}
+
 // ─── Achievement superlatives ─────────────────────────────────────────────────
 
 /**

@@ -1678,6 +1678,119 @@ export async function getSeasonRooms(seasonId) {
   return all.filter(r => r.seasonId === seasonId)
 }
 
+// ─── Awards & votes ───────────────────────────────────────────────────────────
+
+// Insert a pending award row. ballot_state should be initialized by the caller:
+//   { phase: 'nomination', lockedVoterIds: [], runoffPool: null }
+export async function createPendingAward(award) {
+  const { data, error } = await supabase.from('awards').insert(award).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function getAwardWithBallot(awardId) {
+  const { data, error } = await supabase.from('awards').select('*').eq('id', awardId).single()
+  if (error) { console.error('getAwardWithBallot error', error); return null }
+  return data
+}
+
+export async function getVotesForAward(awardId) {
+  const { data, error } = await supabase.from('votes').select('*').eq('award_id', awardId)
+  if (error) { console.error('getVotesForAward error', error); return [] }
+  return data || []
+}
+
+// Subscribe to updates on an award row (ballot_state changes, resolution).
+// Returns an unsubscribe function for useEffect cleanup.
+export function subscribeToAward(awardId, onUpdate) {
+  const channel = supabase
+    .channel('award-' + awardId)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'awards', filter: `id=eq.${awardId}` },
+      payload => { if (payload.new) onUpdate(payload.new) }
+    )
+    .subscribe()
+  return () => supabase.removeChannel(channel)
+}
+
+// Lock in a nomination. Inserts a vote record and appends voterId to ballot_state.lockedVoterIds.
+export async function lockInVote({ awardId, voterId, voterName, nomineeId, nomineeType, nomineeName, phase }) {
+  await supabase.from('votes').insert({
+    id: genId(), award_id: awardId, voter_id: voterId, voter_name: voterName,
+    nominee_id: nomineeId, nominee_type: nomineeType, nominee_name: nomineeName,
+    phase, cast_at: new Date().toISOString(),
+  })
+  const award = await getAwardWithBallot(awardId)
+  if (!award) return
+  const bs = award.ballot_state || { phase, lockedVoterIds: [], runoffPool: null }
+  const lockedVoterIds = [...new Set([...(bs.lockedVoterIds || []), voterId])]
+  await supabase.from('awards').update({
+    ballot_state: { ...bs, lockedVoterIds },
+    updated_at: new Date().toISOString(),
+  }).eq('id', awardId)
+}
+
+// Record an abstain — adds voterId to lockedVoterIds without inserting a vote record.
+export async function lockInAbstain(awardId, voterId) {
+  const award = await getAwardWithBallot(awardId)
+  if (!award) return
+  const bs = award.ballot_state || { phase: 'nomination', lockedVoterIds: [], runoffPool: null }
+  const lockedVoterIds = [...new Set([...(bs.lockedVoterIds || []), voterId])]
+  await supabase.from('awards').update({
+    ballot_state: { ...bs, lockedVoterIds },
+    updated_at: new Date().toISOString(),
+  }).eq('id', awardId)
+}
+
+// Transition a ballot from nomination to runoff.
+// runoffPool is [{ id, name, type }] — the tied nominees who advance to runoff.
+export async function advanceToRunoff(awardId, runoffPool) {
+  await supabase.from('awards').update({
+    ballot_state: { phase: 'runoff', lockedVoterIds: [], runoffPool },
+    updated_at: new Date().toISOString(),
+  }).eq('id', awardId)
+}
+
+// Resolve an award. Updates the pending row with the first winner and inserts
+// additional rows for co-winners. Clears ballot_state on all rows.
+//
+// winners is [{ id, name, type }] — the resolved recipients.
+// coAward is true when more than one recipient shares the award.
+export async function resolveAward({ awardId, winners, coAward }) {
+  const award = await getAwardWithBallot(awardId)
+  if (!award) return
+  const now = new Date().toISOString()
+  const isCoAward = coAward || winners.length > 1
+
+  await supabase.from('awards').update({
+    recipient_id:   winners[0].id,
+    recipient_name: winners[0].name,
+    co_award:       isCoAward,
+    awarded_at:     now,
+    ballot_state:   null,
+    updated_at:     now,
+  }).eq('id', awardId)
+
+  for (let i = 1; i < winners.length; i++) {
+    await supabase.from('awards').insert({
+      id:             genId(),
+      type:           award.type,
+      layer:          award.layer,
+      scope_id:       award.scope_id,
+      scope_type:     award.scope_type,
+      recipient_type: award.recipient_type,
+      recipient_id:   winners[i].id,
+      recipient_name: winners[i].name,
+      co_award:       true,
+      awarded_at:     now,
+      ballot_state:   null,
+      created_at:     now,
+      updated_at:     now,
+    })
+  }
+}
+
 // ─── Tags ─────────────────────────────────────────────────────────────────────
 
 // All distinct tags across published combatants, groups, and arenas.
