@@ -33,8 +33,18 @@ export function normalizeRoomSettings(settings) {
     arenaConfig:          null,
     arenaEvolutionEnabled: false,
     isPublic:             false,
+    tone:                 null,
     ...settings,
   }
+}
+
+/**
+ * Resolves the tone for a game at draft start.
+ * Prefers an explicitly set game-level tone over the parent season's tone.
+ * Returns null if neither has a tone set.
+ */
+export function resolveTone(game, season) {
+  return game?.settings?.tone ?? season?.tone ?? null
 }
 
 /**

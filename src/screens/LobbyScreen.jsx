@@ -4,9 +4,82 @@ import AvatarWithHover from '../components/AvatarWithHover.jsx'
 import ShareLinkButton from '../components/ShareLinkButton.jsx'
 import SpectatorList from '../components/SpectatorList.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
-import { btn } from '../styles.js'
-import { sset, subscribeToRoom, trackRoomPresence, searchUsers, createRoomInvitation, deleteRoomInvitation, getRoomInvitations } from '../supabase.js'
-import { normalizeRoomSettings, kickPlayerFromRoom } from '../gameLogic.js'
+import TagInput from '../components/TagInput.jsx'
+import { btn, inp } from '../styles.js'
+import { sset, subscribeToRoom, trackRoomPresence, searchUsers, createRoomInvitation, deleteRoomInvitation, getRoomInvitations, getSeason } from '../supabase.js'
+import { normalizeRoomSettings, resolveTone, kickPlayerFromRoom } from '../gameLogic.js'
+
+function ToneSection({ isHost, toneEnabled, toneTags, tonePremise, seasonTone, onToggle, onTagsChange, onPremiseChange }) {
+  const inheritedLabel = seasonTone && !toneEnabled
+    ? <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginLeft: 8 }}>inherited from season</span>
+    : null
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: toneEnabled ? 10 : 0 }}>
+        <h3 style={{ fontSize: 14, color: 'var(--color-text-secondary)', fontWeight: 400, margin: 0 }}>
+          Tone {inheritedLabel}
+        </h3>
+        {isHost && (
+          <button
+            onClick={onToggle}
+            style={{ flexShrink: 0, marginLeft: 16, width: 40, height: 22, borderRadius: 99, border: 'none', outline: toneEnabled ? 'none' : '0.5px solid var(--color-border-secondary)', padding: 0, background: toneEnabled ? 'var(--color-text-info)' : 'var(--color-background-tertiary)', cursor: 'pointer', position: 'relative', transition: 'background 0.15s' }}
+          >
+            <span style={{ position: 'absolute', top: 3, left: toneEnabled ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.15s', display: 'block' }} />
+          </button>
+        )}
+      </div>
+      {toneEnabled && (
+        <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {isHost ? (
+            <>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 5 }}>Tags (2–3)</div>
+                <TagInput value={toneTags} onChange={onTagsChange} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginBottom: 5 }}>Premise <span style={{ opacity: 0.6 }}>(optional)</span></div>
+                <textarea
+                  value={tonePremise}
+                  onChange={e => onPremiseChange(e.target.value)}
+                  placeholder="Set the scene in a sentence or two…"
+                  maxLength={280}
+                  rows={2}
+                  style={{ ...inp(), resize: 'vertical', margin: 0 }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {toneTags.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {toneTags.map(t => (
+                    <span key={t} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-secondary)' }}>{t}</span>
+                  ))}
+                </div>
+              )}
+              {tonePremise && (
+                <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{tonePremise}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {!toneEnabled && seasonTone && !isHost && (
+        <div style={{ background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-md)', padding: '10px 14px' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: seasonTone.premise ? 6 : 0 }}>
+            {(seasonTone.tags || []).map(t => (
+              <span key={t} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 99, background: 'var(--color-background-tertiary)', border: '0.5px solid var(--color-border-secondary)', color: 'var(--color-text-secondary)' }}>{t}</span>
+            ))}
+          </div>
+          {seasonTone.premise && (
+            <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>{seasonTone.premise}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const POOL_LABELS = {
   'standard':       'Standard',
@@ -75,6 +148,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   // playerId being confirmed for kick, or null
   const [confirmKick, setConfirmKick] = useState(null)
 
+  // Tone state — null = off (inherit from season at draft start), object = host-set
+  const [season, setSeason]           = useState(null)
+  const [toneEnabled, setToneEnabled] = useState(() => !!init.settings?.tone)
+  const [toneTags, setToneTags]       = useState(() => init.settings?.tone?.tags || [])
+  const [tonePremise, setTonePremise] = useState(() => init.settings?.tone?.premise || '')
+
   // Pending invitations (host-only view)
   const [pendingInvitees, setPendingInvitees] = useState([])
   const [cancelInviteId, setCancelInviteId] = useState(null)
@@ -107,6 +186,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
     })
   }, [room.id])
 
+  // Load season for tone inheritance (if this game belongs to a season)
+  useEffect(() => {
+    if (!room.seasonId) return
+    getSeason(room.seasonId).then(setSeason)
+  }, [room.seasonId])
+
   // Load pending invitees for host; refresh when player count changes (catches accepts)
   useEffect(() => {
     if (!isHost) return
@@ -136,7 +221,12 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   }, [inviteOpen])
 
   async function startGame() {
-    const updated = { ...room, phase: 'draft' }
+    const gameTone = toneEnabled && toneTags.length > 0
+      ? { tags: toneTags, premise: tonePremise.trim() }
+      : null
+    const gameWithTone = { settings: { ...room.settings, tone: gameTone } }
+    const resolved = resolveTone(gameWithTone, season)
+    const updated = { ...room, phase: 'draft', tone: resolved }
     await sset('room:' + room.id, updated)
     setLocal(updated); setRoom(updated); onStart()
   }
@@ -301,6 +391,23 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
           </div>
         )}
       </div>
+
+      <ToneSection
+        isHost={isHost}
+        toneEnabled={toneEnabled}
+        toneTags={toneTags}
+        tonePremise={tonePremise}
+        seasonTone={season?.tone ?? null}
+        onToggle={() => {
+          if (!toneEnabled && season?.tone && toneTags.length === 0) {
+            setToneTags(season.tone.tags || [])
+            setTonePremise(season.tone.premise || '')
+          }
+          setToneEnabled(v => !v)
+        }}
+        onTagsChange={setToneTags}
+        onPremiseChange={setTonePremise}
+      />
 
       <ArenaModeDisplay settings={room.settings} />
 
