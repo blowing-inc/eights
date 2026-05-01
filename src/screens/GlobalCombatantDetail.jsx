@@ -457,6 +457,23 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
         </div>
       )}
 
+      {/* ── MVP record ───────────────────────────────────────────────────── */}
+      {(c.mvp_record || []).length > 0 && (
+        <div style={{ marginBottom: '1.5rem', padding: '14px 16px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', border: '0.5px solid var(--color-border-tertiary)' }}>
+          <h3 style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            MVP
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(c.mvp_record || []).map((entry, i) => (
+              <div key={i} style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>
+                MVP in <span style={{ fontWeight: 500 }}>{entry.gameCode}</span>
+                <span style={{ color: 'var(--color-text-tertiary)', marginLeft: 6 }}>— {entry.voteShare}% of the vote{entry.coMvp ? ' (co-MVP)' : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Bio ──────────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

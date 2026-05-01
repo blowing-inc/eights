@@ -1791,6 +1791,18 @@ export async function resolveAward({ awardId, winners, coAward }) {
   }
 }
 
+// Append a single entry to a combatant's mvp_record.
+// entry: { gameCode, voteShare, coMvp }
+export async function appendMvpRecord(combatantId, entry) {
+  const { data, error: fetchError } = await supabase
+    .from('combatants').select('mvp_record').eq('id', combatantId).single()
+  if (fetchError) { console.error('appendMvpRecord fetch', fetchError); return }
+  const current = data?.mvp_record || []
+  const { error } = await supabase.from('combatants')
+    .update({ mvp_record: [...current, entry] }).eq('id', combatantId)
+  if (error) console.error('appendMvpRecord update', error)
+}
+
 // ─── Tags ─────────────────────────────────────────────────────────────────────
 
 // All distinct tags across published combatants, groups, and arenas.

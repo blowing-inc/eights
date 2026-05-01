@@ -3,7 +3,8 @@ import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery, createPendingAward, appendMvpRecord } from '../supabase.js'
+import VotingPanel from '../components/VotingPanel.jsx'
 import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
 
 // Inline form for evolving the current arena after a round resolves.
@@ -61,6 +62,24 @@ function ArenaEvolveForm({ currentArena, onSubmit, onCancel, error, submitting }
   )
 }
 
+function getMvpNominees(room, pool) {
+  if (pool === 'full') {
+    const seen = new Set()
+    return Object.values(room.combatants).flat()
+      .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
+      .map(c => ({ id: c.id, name: c.name, type: 'combatant' }))
+  }
+  const seen = new Set()
+  const winners = []
+  for (const rd of room.rounds) {
+    if (rd.winner && !seen.has(rd.winner.id)) {
+      seen.add(rd.winner.id)
+      winners.push({ id: rd.winner.id, name: rd.winner.name, type: 'combatant' })
+    }
+  }
+  return winners
+}
+
 export default function BattleScreen({ room: init, playerId, setRoom, onVote, onChronicles, onHome, onNextGame, onRejoinNextGame }) {
   const [room, setLocal] = useState(init)
   const [confirmUndo, setConfirmUndo] = useState(false)
@@ -73,6 +92,9 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
   const [arenaEvolveFlow, setArenaEvolveFlow] = useState(null)
   const [arenaEvolveError, setArenaEvolveError] = useState(null)
   const [arenaEvolving, setArenaEvolving] = useState(false)
+  // MVP vote: 'winners' | 'full' — pool selection before vote starts
+  const [mvpPoolMode, setMvpPoolMode] = useState('winners')
+  const [mvpStarting, setMvpStarting] = useState(false)
   const prevRoundRef = useRef(init.currentRound)
   const undoTimerRef = useRef(null)
 
@@ -157,6 +179,40 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     await sset('room:' + r.id, updated)
     setLocal(updated); setRoom(updated)
     onHome()
+  }
+
+  async function startMvpVote() {
+    setMvpStarting(true)
+    const r = await sget('room:' + room.id)
+    if (!r || r.mvpVote) { setMvpStarting(false); return }
+    const awardId = uid()
+    const now = new Date().toISOString()
+    await createPendingAward({
+      id:             awardId,
+      type:           'mvp',
+      layer:          'game',
+      scope_id:       r.id,
+      scope_type:     'game',
+      recipient_type: 'combatant',
+      ballot_state:   { phase: 'nomination', lockedVoterIds: [], runoffPool: null },
+      created_at:     now,
+      updated_at:     now,
+    })
+    const updated = { ...r, mvpVote: { awardId, pool: mvpPoolMode } }
+    await sset('room:' + r.id, updated)
+    setLocal(updated); setRoom(updated)
+    setMvpStarting(false)
+  }
+
+  async function handleMvpResolved({ outcome, winners, votesByNomineeId }) {
+    if (outcome === 'no_votes' || !winners.length) return
+    const totalVotes = Object.values(votesByNomineeId || {}).reduce((s, n) => s + n, 0)
+    const coMvp = outcome === 'co_award'
+    for (const winner of winners) {
+      const winnerVotes = votesByNomineeId?.[winner.id] || 0
+      const voteShare = totalVotes > 0 ? Math.round(winnerVotes / totalVotes * 100) : 0
+      await appendMvpRecord(winner.id, { gameCode: room.code, voteShare, coMvp })
+    }
   }
 
   async function undoLastRound() {
@@ -414,6 +470,26 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
             <h3 style={{ fontSize: 18, fontWeight: 500, margin: '0 0 8px', color: 'var(--color-text-primary)' }}>Game complete!</h3>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>All {totalRounds} rounds fought.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+
+              {/* ── MVP voting panel (all players once vote is open) ─────── */}
+              {room.mvpVote && (() => {
+                const { awardId, pool } = room.mvpVote
+                const nominees = getMvpNominees(room, pool)
+                const voters   = room.players.filter(p => !p.isBot).map(p => ({ id: p.id, name: p.name }))
+                return (
+                  <VotingPanel
+                    key={awardId}
+                    awardId={awardId}
+                    label="MVP"
+                    nominees={nominees}
+                    voters={voters}
+                    playerId={playerId}
+                    isHost={isHost}
+                    onResolved={handleMvpResolved}
+                  />
+                )
+              })()}
+
               {isHost && (
                 <>
                   {/* Arena evolution on the final round — records the variant but no future rounds benefit */}
@@ -438,6 +514,30 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                       )}
                     </>
                   )}
+                  {!arenaEvolveFlow && !room.mvpVote && (
+                    /* MVP vote setup — optional; host picks pool then starts */
+                    <div style={{ textAlign: 'left', padding: '12px 14px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>MVP vote (optional)</div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                        {[['winners', 'Round winners'], ['full', 'Full roster']].map(([val, lbl]) => (
+                          <button
+                            key={val}
+                            onClick={() => setMvpPoolMode(val)}
+                            style={{ ...btn(mvpPoolMode === val ? 'primary' : 'ghost'), flex: 1, fontSize: 12, padding: '6px' }}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={startMvpVote}
+                        disabled={mvpStarting}
+                        style={{ ...btn('ghost'), width: '100%', fontSize: 13 }}
+                      >
+                        {mvpStarting ? 'Opening vote…' : 'Start MVP vote'}
+                      </button>
+                    </div>
+                  )}
                   {!arenaEvolveFlow && (
                     <>
                       <button style={btn('primary')} onClick={completeGame}>Complete game ✓</button>
@@ -452,7 +552,7 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                   )}
                 </>
               )}
-              {!isHost && (
+              {!isHost && !room.mvpVote && (
                 <>
                   <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Waiting for host to start next game…</p>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -460,6 +560,12 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
                     <button style={btn()} onClick={onHome}>Back to home</button>
                   </div>
                 </>
+              )}
+              {!isHost && room.mvpVote && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button style={{ ...btn('ghost'), flex: 1 }} onClick={onChronicles}>The Chronicles</button>
+                  <button style={{ ...btn('ghost'), flex: 1 }} onClick={onHome}>Back to home</button>
+                </div>
               )}
             </div>
           </div>
