@@ -1224,8 +1224,6 @@ function GroupCard({ group, onEdit, onPublish, onUnpublish, onDelete }) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
-  if (!currentUser) return <GuestGate onLogin={onLogin} />
-
   const [section,    setSection]    = useState('combatants')  // 'combatants' | 'arenas' | 'playlists' | 'groups'
   const [view,       setView]       = useState('library')     // 'library' | 'create' | 'edit'
   const [editTarget, setEditTarget] = useState(null)
@@ -1257,38 +1255,44 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
   const [groupEditTarget, setGroupEditTarget] = useState(null)
 
   useEffect(() => {
+    if (!currentUser) return
     setLoading(true)
     getWorkshopCombatants(currentUser.id).then(data => {
       setItems(data); setLoading(false)
     })
-  }, [currentUser.id])
+  }, [currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load arenas on first visit to that section
   useEffect(() => {
+    if (!currentUser) return
     if (section !== 'arenas' || arenaLoaded) return
     setArenaLoading(true)
     getWorkshopArenas(currentUser.id).then(data => {
       setArenaItems(data); setArenaLoading(false); setArenaLoaded(true)
     })
-  }, [section, arenaLoaded, currentUser.id])
+  }, [section, arenaLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load playlists on first visit to that section
   useEffect(() => {
+    if (!currentUser) return
     if (section !== 'playlists' || playlistLoaded) return
     setPlaylistLoading(true)
     getWorkshopPlaylists(currentUser.id).then(data => {
       setPlaylistItems(data); setPlaylistLoading(false); setPlaylistLoaded(true)
     })
-  }, [section, playlistLoaded, currentUser.id])
+  }, [section, playlistLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load groups on first visit to that section
   useEffect(() => {
+    if (!currentUser) return
     if (section !== 'groups' || groupLoaded) return
     setGroupLoading(true)
     getWorkshopGroups(currentUser.id).then(data => {
       setGroupItems(data); setGroupLoading(false); setGroupLoaded(true)
     })
-  }, [section, groupLoaded, currentUser.id])
+  }, [section, groupLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!currentUser) return <GuestGate onLogin={onLogin} />
 
   // ── Combatant handlers ──────────────────────────────────────────────────────
 

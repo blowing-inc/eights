@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Screen from '../components/Screen.jsx'
 import { btn, inp, lbl, tab } from '../styles.js'
 import { sset, getArenaPickerOptions, getPlaylistPickerOptions } from '../supabase.js'

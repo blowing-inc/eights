@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Screen from '../components/Screen.jsx'
 import TagChips from '../components/TagChips.jsx'
 import TagInput from '../components/TagInput.jsx'
-import { btn, inp } from '../styles.js'
+import { btn } from '../styles.js'
 import { getArena, getArenaLineageTree, getArenaReaction, upsertArenaReaction, deleteArenaReaction, getArenaAppearances, hasPlayerEncounteredArena, ARENA_DISLIKE_RATIO, superHostSetEntityTags, superHostSetArenaPools } from '../supabase.js'
 import GameSummaryScreen from './GameSummaryScreen.jsx'
 

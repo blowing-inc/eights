@@ -43,7 +43,7 @@ export default function AuthScreen({ onLogin, onBack }) {
         setLoading(false); onLogin({ id: userRecord.id, username: userRecord.username })
       }
     })()
-  }, [pin])
+  }, [pin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (mode === 'lookup') {
     return (

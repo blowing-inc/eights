@@ -119,7 +119,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
       .then(() => updateSeason(season.id, { votes: { favoriteCombatantAwardId: favId, mostCreativeAwardId: mccId, bestEvolutionAwardId: bestId } }))
       .then(updated => setSeason(updated))
       .catch(e => console.error('createSeasonAwards', e))
-  }, [season.status, season.votes, seasonRooms])
+  }, [season.status, season.id, season.votes, seasonRooms])
 
   // Compute and store automatic season awards once (idempotent guard via autoAwardRef).
   useEffect(() => {
@@ -257,7 +257,6 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {seriesItems.map((item, idx) => {
               const firstGame = item.rooms[0]
-              const lastGame  = item.rooms[item.rooms.length - 1]
               const allDone   = item.rooms.every(r => r.phase === 'ended')
               const dateStr   = new Date(firstGame.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
               const totalRounds = item.rooms.reduce((n, r) => n + (r.rounds || []).filter(rd => rd.winner || rd.draw).length, 0)
@@ -276,7 +275,7 @@ function SeasonDetail({ season: initialSeason, playerId, onBack, onStartSeries }
                 </div>
               )
             })}
-            {standaloneItems.map((item, idx) => {
+            {standaloneItems.map((item, _idx) => {
               const r = item.room
               const dateStr = new Date(r.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
               const rounds = (r.rounds || []).filter(rd => rd.winner || rd.draw).length

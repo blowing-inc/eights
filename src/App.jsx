@@ -147,7 +147,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { refreshLobbies() }, [currentUser?.id])
+  useEffect(() => { refreshLobbies() }, [currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [afterAuth, setAfterAuth] = useState(null)
   const [room, setRoom] = useState(null)
@@ -202,7 +202,7 @@ export default function App() {
       await sset('room:' + r.id, updated)
       setRoom(updated)
     })()
-  }, [currentUser?.id])
+  }, [currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const nav = s => setScreen(s)
 

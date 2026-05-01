@@ -420,7 +420,7 @@ function SeriesRow({ item, onSelect, playerId }) {
         }
       }
     })
-  }, [expanded, seriesId])
+  }, [expanded, seriesId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function exportSeries() {
     const sorted = [...rooms].sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))

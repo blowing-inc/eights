@@ -80,7 +80,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       setSaveStatus('saved')
     }, 2000)
     return () => clearTimeout(saveTimer.current)
-  }, [names, bios, globalIds, traps, stashSourceIds, submitted])
+  }, [names, bios, globalIds, traps, stashSourceIds, submitted]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => {
@@ -91,7 +91,7 @@ export default function DraftScreen({ room: init, playerId, setRoom, onDone, isG
       setLocal(r); setRoom(r)
       if (r.phase === 'battle') onDone()
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Heritage game: load the ancestry chain and build active-form substitutions
   // so the autocomplete shows evolved forms instead of their superseded originals.

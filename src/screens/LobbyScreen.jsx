@@ -178,13 +178,13 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       if (r.phase === 'draft') onStart()
       if (r.phase === 'ended') onBack()
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
       onPresenceChange: setPresentIds,
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load season for tone inheritance (if this game belongs to a season)
   useEffect(() => {
@@ -196,7 +196,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
   useEffect(() => {
     if (!isHost) return
     getRoomInvitations(room.id).then(setPendingInvitees)
-  }, [room.players?.length, isHost])
+  }, [room.id, room.players?.length, isHost])
 
   // Debounced user search for the invite panel
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       setInviteSearching(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [inviteQuery, inviteOpen, room.players, pendingInvitees])
+  }, [inviteQuery, inviteOpen, room.players, pendingInvitees, playerId])
 
   // Focus the search input when the panel opens
   useEffect(() => {

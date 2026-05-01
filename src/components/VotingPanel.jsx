@@ -89,7 +89,7 @@ export default function VotingPanel({ awardId, label, nominees, voters, playerId
     }
 
     handleResolution(resolution)
-  }, [votes, award, phase, lockedVoterIds, resolved, isHost])
+  }, [votes, award, phase, lockedVoterIds, resolved, isHost]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -268,7 +268,7 @@ export default function VotingPanel({ awardId, label, nominees, voters, playerId
 }
 
 // Read-only result display shown after the award is resolved.
-function VotingResult({ award, label, nominees }) {
+function VotingResult({ award, label, _nominees }) {
   const recipientName = award.recipient_name || '?'
   const isCoAward = award.co_award
 

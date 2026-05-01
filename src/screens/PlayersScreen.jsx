@@ -25,7 +25,7 @@ export default function PlayersScreen({ playerId, onBack, onViewPlayer }) {
       .then(({ items, total }) => { setItems(items); setTotal(total); setLoading(false) })
   }
 
-  useEffect(() => { load(query, sort, page) }, [sort, page])
+  useEffect(() => { load(query, sort, page) }, [sort, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleQuery(v) {
     setQuery(v); setPage(0)

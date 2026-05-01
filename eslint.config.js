@@ -6,16 +6,17 @@ import tsPlugin from "@typescript-eslint/eslint-plugin";
 
 export default [
   {
-    files: ["**/*.{js,jsx,ts,tsx}"],
-
     ignores: [
       "dist/**",
       "build/**",
       "node_modules/**",
       "coverage/**",
       ".claude/**",
-      "supabase/functions/**" // 👈 optional if you want to skip edge funcs for now
+      "supabase/functions/**",
     ],
+  },
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
 
     languageOptions: {
       parser: tsParser, // 🔥 THIS IS THE BIG FIX
@@ -55,9 +56,9 @@ export default [
 
       // TS-aware unused vars (turn OFF base rule)
       "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
 
-      "no-console": "warn",
+      "no-console": ["warn", { allow: ["error"] }],
     },
   },
 ];
