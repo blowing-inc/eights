@@ -37,6 +37,9 @@ import {
   getSeriesEvolutionNominees,
   getSeasonCombatantNominees,
   getSeasonEvolutionNominees,
+  computeGameAutoAwards,
+  computeSeriesAutoAwards,
+  computeSeasonAutoAwards,
 } from './gameLogic.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -3097,5 +3100,215 @@ describe('getSeasonEvolutionNominees', () => {
 
   it('returns empty for no rooms', () => {
     expect(getSeasonEvolutionNominees([])).toEqual([])
+  })
+})
+
+// ─── computeGameAutoAwards ─────────────────────────────────────────────────────
+
+describe('computeGameAutoAwards', () => {
+  function makeCompletedRoom(overrides = {}) {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Rival',   ownerId: 'p2' }
+    return {
+      id: 'room1', code: 'ROOM1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [
+        { id: 'r1', winner: { id: 'c1', name: 'Fighter', ownerId: 'p1' }, combatants: [c1, c2] },
+      ],
+      ...overrides,
+    }
+  }
+
+  it('returns empty for dev mode room', () => {
+    expect(computeGameAutoAwards(makeCompletedRoom({ devMode: true }))).toEqual([])
+  })
+
+  it('returns empty for room with no resolved rounds', () => {
+    expect(computeGameAutoAwards(makeCompletedRoom({ rounds: [] }))).toEqual([])
+  })
+
+  it('returns most_wins for player with most round wins', () => {
+    const room = makeCompletedRoom()
+    const awards = computeGameAutoAwards(room)
+    const mw = awards.find(a => a.type === 'most_wins')
+    expect(mw).toBeDefined()
+    expect(mw.recipient_id).toBe('p1')
+    expect(mw.recipient_name).toBe('Alice')
+    expect(mw.recipient_type).toBe('player')
+    expect(mw.value).toBe(1)
+    expect(mw.co_award).toBe(false)
+    expect(mw.layer).toBe('game')
+    expect(mw.scope_id).toBe('room1')
+  })
+
+  it('returns co_award most_wins when tied', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Rival',   ownerId: 'p2' }
+    const room = {
+      id: 'room1', code: 'ROOM1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1, c2], p2: [c2, c1] },
+      rounds: [
+        { winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1, c2] },
+        { winner: { id: 'c2', ownerId: 'p2' }, combatants: [c1, c2] },
+      ],
+    }
+    const awards = computeGameAutoAwards(room)
+    const mw = awards.filter(a => a.type === 'most_wins')
+    expect(mw).toHaveLength(2)
+    expect(mw.every(a => a.co_award)).toBe(true)
+  })
+
+  it('returns undefeated for player with wins and no losses', () => {
+    const room = makeCompletedRoom()
+    const awards = computeGameAutoAwards(room)
+    const ud = awards.find(a => a.type === 'undefeated')
+    expect(ud).toBeDefined()
+    expect(ud.recipient_id).toBe('p1')
+  })
+
+  it('returns shutout for player with losses and no wins', () => {
+    const room = makeCompletedRoom()
+    const awards = computeGameAutoAwards(room)
+    const sh = awards.find(a => a.type === 'shutout')
+    expect(sh).toBeDefined()
+    expect(sh.recipient_id).toBe('p2')
+  })
+
+  it('does not return shutout for a player who only drew', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', ownerId: 'p1' }
+    const c2 = { id: 'c2', ownerId: 'p2' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [{ draw: true, combatants: [c1, c2] }],
+    }
+    const awards = computeGameAutoAwards(room)
+    expect(awards.find(a => a.type === 'shutout')).toBeUndefined()
+  })
+
+  it('returns most_reactions for combatant with most reactions', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', name: 'Popular', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Quiet',   ownerId: 'p2' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [{
+        winner: { id: 'c1', ownerId: 'p1' },
+        combatants: [c1, c2],
+        playerReactions: { p1: { c1: 'heart' }, p2: { c1: 'heart' } },
+      }],
+    }
+    const awards = computeGameAutoAwards(room)
+    const mr = awards.find(a => a.type === 'most_reactions')
+    expect(mr).toBeDefined()
+    expect(mr.recipient_id).toBe('c1')
+    expect(mr.value).toBe(2)
+  })
+
+  it('skips most_reactions when no reactions exist', () => {
+    const room = makeCompletedRoom()
+    const awards = computeGameAutoAwards(room)
+    expect(awards.find(a => a.type === 'most_reactions')).toBeUndefined()
+  })
+})
+
+// ─── computeSeriesAutoAwards ───────────────────────────────────────────────────
+
+describe('computeSeriesAutoAwards', () => {
+  const p1 = { id: 'p1', name: 'Alice', isBot: false }
+  const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+  const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+  const c2 = { id: 'c2', name: 'Rival',   ownerId: 'p2' }
+
+  function makeSeriesRoom(rounds, overrides = {}) {
+    return {
+      id: 'room1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds,
+      ...overrides,
+    }
+  }
+
+  it('returns empty for rooms not fully ended', () => {
+    const room = makeSeriesRoom([], { phase: 'battle' })
+    expect(computeSeriesAutoAwards([room], 'series1')).toEqual([])
+  })
+
+  it('returns most_wins for player with most round wins across rooms', () => {
+    const room1 = makeSeriesRoom([{ winner: { id: 'c1', ownerId: 'p1', name: 'Fighter' }, combatants: [c1, c2] }])
+    const room2 = makeSeriesRoom([{ winner: { id: 'c1', ownerId: 'p1', name: 'Fighter' }, combatants: [c1, c2] }], { id: 'room2' })
+    const awards = computeSeriesAutoAwards([room1, room2], 'series1')
+    const mw = awards.find(a => a.type === 'most_wins')
+    expect(mw).toBeDefined()
+    expect(mw.recipient_id).toBe('p1')
+    expect(mw.value).toBe(2)
+    expect(mw.layer).toBe('series')
+    expect(mw.scope_id).toBe('series1')
+  })
+
+  it('returns most_evolutions for player with most evolutions triggered', () => {
+    const room = makeSeriesRoom([{
+      winner: { id: 'c1', name: 'Fighter', ownerId: 'p1' },
+      combatants: [c1, c2],
+      evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'SuperFighter' },
+    }])
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    const me = awards.find(a => a.type === 'most_evolutions')
+    expect(me).toBeDefined()
+    expect(me.recipient_id).toBe('p1')
+    expect(me.value).toBe(1)
+  })
+
+  it('skips most_evolutions when no evolutions occurred', () => {
+    const room = makeSeriesRoom([{ winner: c1, combatants: [c1, c2] }])
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    expect(awards.find(a => a.type === 'most_evolutions')).toBeUndefined()
+  })
+
+  it('excludes endedEarly and devMode rooms', () => {
+    const earlyRoom = makeSeriesRoom([{ winner: c1, combatants: [c1, c2] }], { endedEarly: true })
+    const devRoom   = makeSeriesRoom([{ winner: c1, combatants: [c1, c2] }], { devMode: true })
+    expect(computeSeriesAutoAwards([earlyRoom, devRoom], 'series1')).toEqual([])
+  })
+})
+
+// ─── computeSeasonAutoAwards ───────────────────────────────────────────────────
+
+describe('computeSeasonAutoAwards', () => {
+  it('uses same logic as computeSeriesAutoAwards but with season scope', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Rival',   ownerId: 'p2' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1, c2] }],
+    }
+    const awards = computeSeasonAutoAwards([room], 'season1')
+    const mw = awards.find(a => a.type === 'most_wins')
+    expect(mw).toBeDefined()
+    expect(mw.layer).toBe('season')
+    expect(mw.scope_id).toBe('season1')
+    expect(mw.scope_type).toBe('season')
+  })
+
+  it('returns empty for rooms with no completed games', () => {
+    const room = { id: 'room1', phase: 'battle', players: [], combatants: {}, rounds: [] }
+    expect(computeSeasonAutoAwards([room], 'season1')).toEqual([])
   })
 })

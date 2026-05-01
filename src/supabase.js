@@ -1803,6 +1803,68 @@ export async function appendMvpRecord(combatantId, entry) {
   if (error) console.error('appendMvpRecord update', error)
 }
 
+// Fetch all awards for a given scope (game / series / season / league).
+// Returns resolved + pending awards, ordered by awarded_at ASC (nulls last).
+export async function getAwardsForScope(scopeId) {
+  const { data, error } = await supabase
+    .from('awards')
+    .select('*')
+    .eq('scope_id', scopeId)
+    .order('awarded_at', { ascending: true, nullsFirst: false })
+  if (error) { console.error('getAwardsForScope error', error); return [] }
+  return data || []
+}
+
+// Fetch all resolved awards received by a combatant, newest-last.
+export async function getAwardsForCombatant(combatantId) {
+  const { data, error } = await supabase
+    .from('awards')
+    .select('*')
+    .eq('recipient_id', combatantId)
+    .eq('recipient_type', 'combatant')
+    .not('awarded_at', 'is', null)
+    .order('awarded_at', { ascending: true })
+  if (error) { console.error('getAwardsForCombatant error', error); return [] }
+  return data || []
+}
+
+// Fetch all resolved awards received by a player, newest-last.
+export async function getAwardsForPlayer(playerId) {
+  const { data, error } = await supabase
+    .from('awards')
+    .select('*')
+    .eq('recipient_id', playerId)
+    .eq('recipient_type', 'player')
+    .not('awarded_at', 'is', null)
+    .order('awarded_at', { ascending: true })
+  if (error) { console.error('getAwardsForPlayer error', error); return [] }
+  return data || []
+}
+
+// Bulk-insert auto-resolved award rows. Sets awarded_at to now for each row.
+export async function createAutoAwards(awards) {
+  if (!awards || awards.length === 0) return
+  const now = new Date().toISOString()
+  const rows = awards.map(a => ({
+    id:             genId(),
+    type:           a.type,
+    layer:          a.layer,
+    scope_id:       a.scope_id,
+    scope_type:     a.scope_type,
+    recipient_id:   a.recipient_id,
+    recipient_name: a.recipient_name,
+    recipient_type: a.recipient_type,
+    value:          a.value ?? null,
+    co_award:       a.co_award ?? false,
+    awarded_at:     now,
+    ballot_state:   null,
+    created_at:     now,
+    updated_at:     now,
+  }))
+  const { error } = await supabase.from('awards').insert(rows)
+  if (error) throw error
+}
+
 // ─── Tags ─────────────────────────────────────────────────────────────────────
 
 // All distinct tags across published combatants, groups, and arenas.

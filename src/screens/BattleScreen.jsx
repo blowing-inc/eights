@@ -3,9 +3,9 @@ import DevBanner from '../components/DevBanner.jsx'
 import CombatantSheet from '../components/CombatantSheet.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import { btn, inp } from '../styles.js'
-import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery, createPendingAward, appendMvpRecord } from '../supabase.js'
+import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery, createPendingAward, appendMvpRecord, createAutoAwards } from '../supabase.js'
 import VotingPanel from '../components/VotingPanel.jsx'
-import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
+import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings, computeGameAutoAwards } from '../gameLogic.js'
 
 // Inline form for evolving the current arena after a round resolves.
 // Pre-fills house rules from the parent arena; name and description start blank.
@@ -177,6 +177,8 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
     if (!r) return
     const updated = { ...r, phase: 'ended' }
     await sset('room:' + r.id, updated)
+    const autoAwards = computeGameAutoAwards(updated)
+    if (autoAwards.length > 0) createAutoAwards(autoAwards).catch(e => console.error('createAutoAwards game', e))
     setLocal(updated); setRoom(updated)
     onHome()
   }
