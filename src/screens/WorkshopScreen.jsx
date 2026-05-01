@@ -1260,7 +1260,7 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
     getWorkshopCombatants(currentUser.id).then(data => {
       setItems(data); setLoading(false)
     })
-  }, [currentUser?.id])
+  }, [currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load arenas on first visit to that section
   useEffect(() => {
@@ -1270,7 +1270,7 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
     getWorkshopArenas(currentUser.id).then(data => {
       setArenaItems(data); setArenaLoading(false); setArenaLoaded(true)
     })
-  }, [section, arenaLoaded, currentUser?.id])
+  }, [section, arenaLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load playlists on first visit to that section
   useEffect(() => {
@@ -1280,7 +1280,7 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
     getWorkshopPlaylists(currentUser.id).then(data => {
       setPlaylistItems(data); setPlaylistLoading(false); setPlaylistLoaded(true)
     })
-  }, [section, playlistLoaded, currentUser?.id])
+  }, [section, playlistLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy-load groups on first visit to that section
   useEffect(() => {
@@ -1290,7 +1290,7 @@ export default function WorkshopScreen({ currentUser, onBack, onLogin }) {
     getWorkshopGroups(currentUser.id).then(data => {
       setGroupItems(data); setGroupLoading(false); setGroupLoaded(true)
     })
-  }, [section, groupLoaded, currentUser?.id])
+  }, [section, groupLoaded, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!currentUser) return <GuestGate onLogin={onLogin} />
 

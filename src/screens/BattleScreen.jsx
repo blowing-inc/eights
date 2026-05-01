@@ -116,14 +116,14 @@ export default function BattleScreen({ room: init, playerId, setRoom, onVote, on
       setLocal(r); setRoom(r)
       if (r.phase === 'voting') onVote()
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
       onHostStatusChange: setHostOnline,
       onPresenceChange:   setPresentIds,
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isHost = room.host === playerId
   const round = room.rounds[room.currentRound - 1]

@@ -159,14 +159,14 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
       }
       setLocal(r); setRoom(r)
     })
-  }, [room.id, room.currentRound])
+  }, [room.id, room.currentRound]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
       onHostStatusChange: setHostOnline,
       onPresenceChange:   setPresentIds,
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const arenaId = round?.arena?.id
 
@@ -179,7 +179,7 @@ export default function VoteScreen({ room: init, playerId, setRoom, onResult, on
     if (!round?.combatants?.length) return
     const ids = round.combatants.map(c => c.id)
     getGroupsForCombatants(ids).then(setCombatantGroupsState)
-  }, [round?.id])
+  }, [round?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleArenaReaction(value) {
     if (!arenaId || !playerId || arenaReacting) return

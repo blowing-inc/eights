@@ -42,7 +42,7 @@ export default function PlayerProfile({ profileId, playerId, onBack, onViewComba
       .then(({ items, total }) => { setCombatants(items); setCombTotal(total); setCombLoading(false); setLoading(false) })
   }
 
-  useEffect(() => { loadCombatants(query, sort, page) }, [profileId, sort, page])
+  useEffect(() => { loadCombatants(query, sort, page) }, [profileId, sort, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleQuery(v) {
     setQuery(v); setPage(0)

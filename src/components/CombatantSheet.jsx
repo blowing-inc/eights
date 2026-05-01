@@ -36,7 +36,7 @@ export default function CombatantSheet({ combatantId, combatant: inRoom, playerI
       }
       setLoading(false)
     })
-  }, [combatantId])
+  }, [combatantId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function pushCombatant(record) {
     setStack(s => [...s, { type: 'global', data: record }])
@@ -210,7 +210,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
     setC(init); setEditMode(false); setEditName(init.name); setEditBio(init.bio || '')
     setLineageStory([]); setLineageTree([]); setOwnChainStory([]); setOwnChainTree([])
     setH2hOpen(false); setH2hRows(null); setGroups([])
-  }, [init.id])
+  }, [init.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     getGroupsForCombatants([init.id]).then(map => setGroups(map[init.id] || []))
@@ -235,7 +235,7 @@ function GlobalView({ combatant: init, playerId, playerName, onViewCombatant }) 
         if (story.length > 1) setOwnChainStory(story)
       })
     }
-  }, [rootId, c.id])
+  }, [rootId, c.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleH2h() {
     if (!h2hOpen && h2hRows === null) getCombatantRoundHistory(c.id).then(setH2hRows)

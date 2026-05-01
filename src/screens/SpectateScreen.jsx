@@ -10,7 +10,7 @@ export default function SpectateScreen({ room: init, playerId, setRoom, onHome }
 
   useEffect(() => {
     return subscribeToRoom(room.id, r => { setLocal(r); setRoom(r) })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const spectators   = room.spectators || []
   const round        = room.currentRound > 0 ? room.rounds[room.currentRound - 1] : null

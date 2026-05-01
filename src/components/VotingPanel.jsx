@@ -89,7 +89,7 @@ export default function VotingPanel({ awardId, label, nominees, voters, playerId
     }
 
     handleResolution(resolution)
-  }, [votes, award, phase, lockedVoterIds, resolved, isHost])
+  }, [votes, award, phase, lockedVoterIds, resolved, isHost]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

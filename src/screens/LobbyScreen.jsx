@@ -178,13 +178,13 @@ export default function LobbyScreen({ room: init, playerId, setRoom, isGuest, on
       if (r.phase === 'draft') onStart()
       if (r.phase === 'ended') onBack()
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return trackRoomPresence(room.id, playerId, isHost ? 'host' : 'player', {
       onPresenceChange: setPresentIds,
     })
-  }, [room.id])
+  }, [room.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load season for tone inheritance (if this game belongs to a season)
   useEffect(() => {

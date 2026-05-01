@@ -45,7 +45,7 @@ export default [
     rules: {
       // React
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/exhaustive-deps": "warn",
       "react/jsx-key": "error",
       "react/no-unknown-property": "error",
       "react/react-in-jsx-scope": "off",

@@ -279,7 +279,7 @@ export default function GlobalCombatantDetail({ combatant: init, playerId, playe
     getAwardsForCombatant(c.id).then(awards => {
       setCombatantAwards(awards.filter(a => a.type !== 'mvp'))
     })
-  }, [rootId, c.id])
+  }, [rootId, c.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function nameSlug() {
     return c.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
