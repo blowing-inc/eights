@@ -14,8 +14,8 @@ import {
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
   normalizeRoomSettings, kickPlayerFromRoom,
-  getSeriesCombatantNominees, getSeriesEvolutionNominees,
 } from '../gameLogic.js'
+import { getSeriesCombatantNominees, getSeriesEvolutionNominees } from '../awards.js'
 import { buildActiveFormMap } from '../lineage.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {

@@ -26,10 +26,12 @@ import {
   replacePlayerIdInRoom,
   buildEvolutionRound,
   getEphemeralBadges,
-  computeSuperlatives,
   getCombatantsToPublish,
   kickPlayerFromRoom,
   resolveVotingPhase,
+} from './gameLogic.js'
+import {
+  computeSuperlatives,
   getSeriesCombatantNominees,
   getSeriesEvolutionNominees,
   getSeasonCombatantNominees,
@@ -37,7 +39,7 @@ import {
   computeGameAutoAwards,
   computeSeriesAutoAwards,
   computeSeasonAutoAwards,
-} from './gameLogic.js'
+} from './awards.js'
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

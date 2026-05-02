@@ -3,7 +3,7 @@ import Screen from '../components/Screen.jsx'
 import PlayerStatsBlurb from '../components/PlayerStatsBlurb.jsx'
 import { btn, inp, tab } from '../styles.js'
 import { getUserProfile, getPlayerRoomStats, getPlayerCombatants, getPlayerRooms, setFavoriteCombatant, getAwardsForPlayer } from '../supabase.js'
-import { AWARD_TYPE_LABELS } from '../gameLogic.js'
+import { AWARD_TYPE_LABELS } from '../awards.js'
 
 const PROFILE_SORTS = [
   { key: 'wins',   label: 'Wins',   asc: false },

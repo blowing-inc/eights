@@ -6,7 +6,8 @@ import { btn, inp } from '../styles.js'
 import { sget, sset, incrementCombatantStats, subscribeToRoom, trackRoomPresence, getRandomArenaFromPool, getHeritageChain, getArena, createArenaVariant, getPlaylistForDelivery, createPendingAward, appendMvpRecord, createAutoAwards } from '../supabase.js'
 import VotingPanel from '../components/VotingPanel.jsx'
 import ContextStrip from '../components/ContextStrip.jsx'
-import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings, computeGameAutoAwards } from '../gameLogic.js'
+import { uid, canUndoLastRound, undoRound, tallyReactions, normalizeRoomSettings } from '../gameLogic.js'
+import { computeGameAutoAwards } from '../awards.js'
 
 // Inline form for evolving the current arena after a round resolves.
 // Pre-fills house rules from the parent arena; name and description start blank.
