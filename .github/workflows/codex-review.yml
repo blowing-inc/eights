@@ -1,0 +1,76 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Get changed frontend files (capped)
+        id: files
+        run: |
+          git fetch origin main
+          FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(js|jsx|ts|tsx)$' | head -n 10 || true)
+
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build diff payload (size limited)
+        id: diff
+        run: |
+          DIFF=""
+          for file in ${{ steps.files.outputs.files }}
+          do
+            FILE_DIFF=$(git diff origin/main...HEAD -- $file | head -c 20000)
+            DIFF="${DIFF}\nFILE: $file\n$FILE_DIFF\n"
+          done
+
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run Codex Review (with retry)
+        if: env.OPENAI_API_KEY != ''
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DIFF: ${{ steps.diff.outputs.diff }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          for i in 1 2 3; do
+            node scripts/review.js && break
+            echo "Retry $i failed, retrying..."
+            sleep 5
+          done
+
+      - name: Skip notice (no API key)
+        if: env.OPENAI_API_KEY == ''
+        run: echo "Skipping Codex review — no OPENAI_API_KEY set."
+
+      - name: Label on failure
+        if: failure() && env.OPENAI_API_KEY != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "codex-review-skipped"
