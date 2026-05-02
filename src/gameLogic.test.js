@@ -1,4 +1,5 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest'
+import { buildTickerMessages } from './narrative.js'
 import {
   initials, playerColor, COLORS,
   BOT_COMBATANTS, BOT_BIOS, makeBotCombatants, makeBots,
@@ -8,7 +9,6 @@ import {
   isFinalRound,
   authFlowFor,
   ownerLabel,
-  buildTickerMessages,
   slotMatchesPrevWinner, areAllPrevWinnersPlaced, getUnplacedWinners,
   buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart,
