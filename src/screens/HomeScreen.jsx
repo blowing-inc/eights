@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { btn } from '../styles.js'
 import { slist } from '../supabase.js'
-import { buildTickerMessages } from '../gameLogic.js'
+import { buildTickerMessages } from '../narrative.js'
 
 const TICKER_SPEED = 40  // px/s — raise to go faster
 const TICKER_CHAR_PX = 6.5 // estimated px per char at 11px font
