@@ -52,7 +52,7 @@ function extractValidLines(diffText) {
 }
 
 /**
- * Escape shell input to prevent command breakage
+ * Escape shell input
  */
 function shellEscape(str) {
   return str
@@ -63,11 +63,47 @@ function shellEscape(str) {
     .replace(/\n/g, "\\n");
 }
 
-const validLinesByFile = extractValidLines(diff);
+/**
+ * Normalize comment body for dedupe comparison
+ */
+function normalizeBody(str) {
+  return str.trim().replace(/\s+/g, " ");
+}
 
 /**
- * Build file → valid lines hint for prompt
+ * Fetch existing PR comments
  */
+function getExistingComments() {
+  try {
+    const output = execSync(
+      `gh api repos/${repo}/pulls/${prNumber}/comments`,
+      { encoding: "utf-8" }
+    );
+    return JSON.parse(output);
+  } catch (err) {
+    console.error("Failed to fetch existing comments:", err.message);
+    return [];
+  }
+}
+
+/**
+ * Build lookup set for deduplication
+ */
+function buildExistingSet(comments) {
+  const set = new Set();
+
+  for (const c of comments) {
+    if (!c.path || !c.line || !c.body) continue;
+
+    const key = `${c.path}:${c.line}:${normalizeBody(c.body)}`;
+    set.add(key);
+  }
+
+  return set;
+}
+
+const validLinesByFile = extractValidLines(diff);
+
 const fileLineHints = Object.entries(validLinesByFile)
   .map(([file, lines]) => {
     const sample = lines.slice(0, 20).join(", ");
@@ -75,9 +111,6 @@ const fileLineHints = Object.entries(validLinesByFile)
   })
   .join("\n");
 
-/**
- * 🔥 FINAL LOCKED PROMPT
- */
 const prompt = `You are a senior React engineer reviewing a pull request.
 
 Your job is to identify meaningful, real-world issues—not stylistic or trivial ones.
@@ -158,6 +191,10 @@ async function run() {
       process.exit(0);
     }
 
+    // 🔥 DEDUPE SETUP
+    const existingComments = getExistingComments();
+    const existingSet = buildExistingSet(existingComments);
+
     let posted = 0;
 
     const grouped = {
@@ -176,6 +213,14 @@ async function run() {
 
       if (!validLines.includes(c.line)) {
         console.log(`Skipping invalid line ${c.line} in ${c.file}`);
+        continue;
+      }
+
+      const normalized = normalizeBody(c.body);
+      const key = `${c.file}:${c.line}:${normalized}`;
+
+      if (existingSet.has(key)) {
+        console.log(`Skipping duplicate comment on ${c.file}:${c.line}`);
         continue;
       }
 
@@ -198,9 +243,6 @@ async function run() {
       }
     }
 
-    /**
-     * Build grouped summary
-     */
     const buildSection = (title, items) => {
       if (!items.length) return "";
       return `### ${title}\n` + items.map(i => `- ${i.body}`).join("\n");
@@ -219,13 +261,7 @@ ${summary}
 `;
 
     if (posted === 0) {
-      execSync(
-        `gh pr comment ${prNumber} -b "${shellEscape(
-          "Codex found issues but could not safely map inline comments.\n\n" +
-            groupedSummary
-        )}"`,
-        { stdio: "inherit" }
-      );
+      console.log("No new comments to post.");
       return;
     }
 
