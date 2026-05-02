@@ -143,6 +143,15 @@ Keep it small. Keep it whole.
 
 These conventions apply when working issues from the GitHub tracker.
 
+### Shell environment
+
+**Always use Git Bash syntax for all shell commands.** Do not use PowerShell syntax, cmdlets, or PowerShell-style path separators. This applies to every command in every context — terminal invocations, scripts, and inline examples in responses.
+
+- Use forward slashes in paths: `docs/glossary.md` not `docs\glossary.md`
+- Use `&&` to chain commands, not `;` or PowerShell pipeline syntax
+- Use Unix-style environment variable syntax: `$VAR` not `$env:VAR`
+- If a command fails with a shell error, check for PowerShell syntax before anything else and rewrite it in Bash
+
 ### GitHub vs. backlog.md
 
 GitHub issues are the source of truth for task status and priority. `docs/backlog.md` holds design context for complex features — read the relevant section when picking up an issue, not as a task list.
@@ -160,7 +169,13 @@ git branch          # confirm you're on main (or know which branch you're on)
 gh pr list --repo blowing-inc/eights --state open  # check for open PRs
 ```
 
-If there's an open PR for a feature branch, don't start new work until the user confirms whether to merge, continue, or abandon it.
+If there's an open PR for a feature branch, check whether it has unresolved Codex review comments before starting new work:
+
+```bash
+gh pr view --repo blowing-inc/eights  # review status and any open comments
+```
+
+If unresolved Codex comments exist, address those before picking up a new issue. Don't start new work until the user confirms whether to merge, continue, or abandon an open PR.
 
 ### Picking up an issue
 
@@ -226,6 +241,20 @@ gh pr create \
 
 Open as **draft** by default. Remove draft status when ready for review.
 
+### Automated checks
+
+Two checks run automatically on every push to an open PR:
+
+**Lint** — runs `npm run lint` on all changed `.js/.jsx/.ts/.tsx` files. Must pass before marking the PR ready. Run locally before pushing to catch issues early:
+
+```bash
+npm run lint
+```
+
+**Codex PR review** — posts inline comments on changed files, grouped by severity (high / medium / low). Read every comment before removing draft status. Address what applies; dismiss what doesn't with a brief note in the PR thread explaining why. If the check fails or the `codex-review-skipped` label appears, it's safe to proceed — the review may have been skipped due to a missing API key or transient error.
+
+Both checks trigger on `pull_request` events (opened and synchronize). They do not run on pushes to `main`.
+
 ### Definition of done
 
 Before marking a PR ready:
@@ -234,4 +263,6 @@ Before marking a PR ready:
 - [ ] If game logic changed: unit tests added or updated in the relevant `.test.js` file
 - [ ] If UI copy changed: verified against `docs/glossary.md`
 - [ ] If schema changed: migration SQL is present and backfill approach is documented
+- [ ] `npm run lint` passes with no new errors on changed files
+- [ ] Codex PR review comments addressed or dismissed with a note in the PR thread
 - [ ] Stay on the feature branch after the PR is open — only switch back to `main` when the PR is merged and main is pulled
