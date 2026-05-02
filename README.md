@@ -165,7 +165,10 @@ Tap **🧪 Dev mode** on the home screen to run a solo game with two bot players
 eights/
 ├── src/
 │   ├── App.jsx           # Router, session management, top-level state
-│   ├── gameLogic.js      # Pure game logic (no side effects, fully unit-tested)
+│   ├── gameLogic.js      # Core game logic: rounds, draft, bots, series standings
+│   ├── lineage.js        # Combatant ancestry, active-form resolution, evolution story
+│   ├── awards.js         # Superlatives and computed achievements (read-only)
+│   ├── narrative.js      # Ticker messages and player-facing flavor copy
 │   ├── adminLogic.js     # Admin operations (unit-tested)
 │   ├── supabase.js       # Supabase client + storage helpers
 │   ├── export.js         # Data export utilities
@@ -183,7 +186,7 @@ eights/
 └── package.json
 ```
 
-The game logic lives in `gameLogic.js` and `adminLogic.js` — pure functions with no Supabase imports, no React, no side effects. Everything there is unit-testable in isolation. React components in `screens/` handle display and interaction only; they call these functions and the Supabase helpers, they don't contain business logic inline.
+Game logic is split across pure modules with no Supabase imports, no React, no side effects — all unit-testable in isolation. `gameLogic.js` owns core state transitions; `lineage.js` owns evolution and ancestry; `awards.js` computes achievements without mutating; `narrative.js` generates all player-facing copy. React components in `screens/` handle display and interaction only.
 
 ---
 

@@ -1,5 +1,8 @@
 // Narrative copy: ticker messages and future flavor text (match intros, evolution
 // announcements, series recaps). Pure module — no Supabase, no React.
+// Owns: buildTickerMessages and all player-facing copy generation.
+// Does not resolve game state — reads completed round and room data and formats
+//   it as text strings.
 
 // ─── Ticker messages ──────────────────────────────────────────────────────────
 

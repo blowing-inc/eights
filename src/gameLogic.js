@@ -1,5 +1,11 @@
-// Pure game logic extracted from App.jsx for testability.
+// Pure game logic — core state transitions, draft mechanics, player utilities,
+// room settings, bot generation, and series standings.
 // No React, no Supabase imports — all functions are deterministic given their inputs.
+//
+// Extracted modules (not owned here):
+//   lineage.js   — combatant ancestry, active-form resolution, evolution story
+//   awards.js    — superlatives and computed achievements
+//   narrative.js — ticker messages and flavor copy
 import { buildActiveFormMap, applyActiveFormMap } from './lineage.js'
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
