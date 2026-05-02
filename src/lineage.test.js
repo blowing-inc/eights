@@ -467,3 +467,82 @@ describe('buildChainEvolutionStory and buildStoryFromLineageTree output shape pa
     expect(chainNode.bornFrom.parentName).toBe(treeNode.bornFrom.parentName)
   })
 })
+
+// ─── getLineageStats – edge branches ─────────────────────────────────────────
+
+describe('getLineageStats – edge branches', () => {
+  it('skips a co-parent id that is already in the primary family (no double-count)', () => {
+    // Breakfast (bk) lists Egg (c1) as a co-parent, but Egg is already in the
+    // primary family (rootId === 'c1'). seen.has(cpId) should fire and skip it.
+    const egg      = { id: 'c1', wins: 3, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
+    const breakfast = {
+      id: 'bk', wins: 1, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
+      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['c1'], generation: 1 },
+    }
+    const result = getLineageStats('c1', [egg, breakfast])
+    expect(result.wins).toBe(4)   // egg(3) + breakfast(1) — c1 not added twice
+    expect(result.forms).toBe(2)
+  })
+})
+
+// ─── buildActiveFormMap – edge branches ──────────────────────────────────────
+
+describe('buildActiveFormMap – edge branches', () => {
+  it('handles a room with no rounds property', () => {
+    const room = { code: 'A' }
+    expect(() => buildActiveFormMap([room])).not.toThrow()
+    expect(buildActiveFormMap([room])).toEqual({})
+  })
+})
+
+// ─── buildChainEvolutionStory – edge branches ─────────────────────────────────
+
+describe('buildChainEvolutionStory – edge branches', () => {
+  it('handles a room with no rounds property', () => {
+    expect(buildChainEvolutionStory([{ code: 'A' }], 'c1')).toEqual([])
+  })
+
+  it('handles an evolution round with no combatants property (opponentName becomes null)', () => {
+    const room = {
+      code: 'XKQT',
+      rounds: [{
+        number: 1,
+        evolution: { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', authorId: 'p1' },
+      }],
+    }
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story).toHaveLength(2)
+    expect(story[1].bornFrom.opponentName).toBeNull()
+  })
+
+  it('merge round with no fromIds property does not throw', () => {
+    const room = {
+      code: 'XKQT',
+      rounds: [{
+        number: 1,
+        combatants: [{ id: 'c1', name: 'Egg' }, { id: 'b1', name: 'Bacon' }],
+        draw: { combatantIds: ['c1', 'b1'] },
+        merge: { fromIds: undefined, fromNames: undefined, toId: 'bk', toName: 'Breakfast',
+          primaryOwnerId: 'p1', primaryOwnerName: 'Alice', coOwnerIds: [], coOwnerNames: [], mergeNote: null },
+      }],
+    }
+    expect(() => buildChainEvolutionStory([room], 'c1')).not.toThrow()
+  })
+
+  it('merge round with null fromNames falls back to empty array and empty string for root name', () => {
+    const room = {
+      code: 'XKQT',
+      rounds: [{
+        number: 1,
+        combatants: [{ id: 'c1', name: 'Egg' }, { id: 'b1', name: 'Bacon' }],
+        draw: { combatantIds: ['c1', 'b1'] },
+        merge: { fromIds: ['c1', 'b1'], fromNames: null, toId: 'bk', toName: 'Breakfast',
+          primaryOwnerId: 'p1', primaryOwnerName: 'Alice', coOwnerIds: [], coOwnerNames: [], mergeNote: null },
+      }],
+    }
+    const story = buildChainEvolutionStory([room], 'c1')
+    expect(story).toHaveLength(2)
+    expect(story[0].name).toBe('')
+    expect(story[1].bornFrom.parentNames).toEqual([])
+  })
+})

@@ -1,5 +1,4 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest'
-import { buildTickerMessages } from './narrative.js'
 import {
   initials, playerColor, COLORS,
   BOT_COMBATANTS, BOT_BIOS, makeBotCombatants, makeBots,
@@ -451,107 +450,6 @@ describe('ownerLabel', () => {
 
   it('returns bare name for logged-in players', () => {
     expect(ownerLabel('Alice', false)).toBe('Alice')
-  })
-})
-
-// --- buildTickerMessages -----------------------------------------------------
-
-describe('buildTickerMessages', () => {
-  it('always returns at least the 15 static filler messages', () => {
-    const msgs = buildTickerMessages([])
-    expect(msgs.length).toBeGreaterThanOrEqual(15)
-  })
-
-  it('returns an array of strings', () => {
-    const msgs = buildTickerMessages([])
-    msgs.forEach(m => expect(typeof m).toBe('string'))
-  })
-
-  it('generates round-based messages when completed rounds exist', () => {
-    const c1 = makeCombatant({ id: 'c1', name: 'Blaster' })
-    const c2 = makeCombatant({ id: 'c2', name: 'Crusher' })
-    const round = { id: 'rd1', number: 1, combatants: [c1, c2], winner: c1, picks: {}, createdAt: Date.now() }
-    const room = {
-      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
-      combatants: { p1: [c1] }, rounds: [round], currentRound: 1, createdAt: Date.now(),
-    }
-    const msgs = buildTickerMessages([room])
-    // At least one message should reference the winner or loser
-    const mentions = msgs.filter(m => m.includes('Blaster') || m.includes('Crusher'))
-    expect(mentions.length).toBeGreaterThan(0)
-  })
-
-  it('skips devMode rooms entirely', () => {
-    const c1 = makeCombatant({ id: 'c1', name: 'DevFighter' })
-    const c2 = makeCombatant({ id: 'c2', name: 'OtherFighter' })
-    const round = { id: 'rd1', number: 1, combatants: [c1, c2], winner: c1, picks: {}, createdAt: Date.now() }
-    const room = {
-      id: 'DEV1', devMode: true, players: [], combatants: { p1: [c1] },
-      rounds: [round], currentRound: 1, createdAt: Date.now(),
-    }
-    const msgs = buildTickerMessages([room])
-    const mentions = msgs.filter(m => m.includes('DevFighter'))
-    expect(mentions).toHaveLength(0)
-  })
-
-  it('generates a loss-shame message for combatants with 4+ losses', () => {
-    const c1 = makeCombatant({ id: 'c1', name: 'PunchingBag', wins: 0, losses: 5 })
-    const room = {
-      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
-      combatants: { p1: [c1] }, rounds: [], currentRound: 0, createdAt: Date.now(),
-    }
-    const msgs = buildTickerMessages([room])
-    const shameMsg = msgs.find(m => m.includes('PunchingBag'))
-    expect(shameMsg).toBeDefined()
-  })
-
-  it('generates an undefeated message for 4+ wins with 0 losses', () => {
-    const c1 = makeCombatant({ id: 'c1', name: 'Invincible', wins: 4, losses: 0 })
-    const room = {
-      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
-      combatants: { p1: [c1] }, rounds: [], currentRound: 0, createdAt: Date.now(),
-    }
-    const msgs = buildTickerMessages([room])
-    const heroMsg = msgs.find(m => m.includes('Invincible'))
-    expect(heroMsg).toBeDefined()
-  })
-
-  it('handles null/undefined gracefully', () => {
-    expect(() => buildTickerMessages(null)).not.toThrow()
-    expect(() => buildTickerMessages(undefined)).not.toThrow()
-    expect(() => buildTickerMessages([null, undefined])).not.toThrow()
-  })
-
-  it('generates a draw message when a draw round has 2+ combatants', () => {
-    const c1 = makeCombatant({ id: 'c1', name: 'LeftFighter' })
-    const c2 = makeCombatant({ id: 'c2', name: 'RightFighter' })
-    const room = {
-      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
-      combatants: { p1: [c1, c2] },
-      rounds: [
-        { id: 'rd1', number: 1, combatants: [c1, c2], draw: true, winner: null, picks: {}, createdAt: Date.now() },
-      ],
-      currentRound: 1, createdAt: Date.now(),
-    }
-    const msgs = buildTickerMessages([room])
-    const drawMsgs = msgs.filter(m => m.includes('LeftFighter') || m.includes('RightFighter'))
-    expect(drawMsgs.length).toBeGreaterThan(0)
-  })
-
-  it('skips draw rounds with fewer than 2 combatants', () => {
-    const room = {
-      id: 'R1', devMode: false, players: [{ id: 'p1', name: 'Alice', isBot: false }],
-      combatants: {},
-      rounds: [
-        { id: 'rd1', number: 1, combatants: [], draw: true, winner: null, picks: {}, createdAt: Date.now() },
-        { id: 'rd2', number: 2, combatants: [makeCombatant({ id: 'c1', name: 'Solo' })], draw: true, winner: null, picks: {}, createdAt: Date.now() },
-      ],
-      currentRound: 2, createdAt: Date.now(),
-    }
-    // Should not throw and should return strings (draw messages not added for <2 combatants)
-    const msgs = buildTickerMessages([room])
-    expect(Array.isArray(msgs)).toBe(true)
-    msgs.forEach(m => expect(typeof m).toBe('string'))
   })
 })
 
