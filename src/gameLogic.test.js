@@ -28,6 +28,7 @@ import {
   getCombatantsToPublish,
   kickPlayerFromRoom,
   resolveVotingPhase,
+  resolveAllAdvanceSelection,
 } from './gameLogic.js'
 
 // --- Helpers ------------------------------------------------------------------
@@ -2432,5 +2433,24 @@ describe('computeSeasonToneDisplay', () => {
     ]
     const result = computeSeasonToneDisplay(rooms)
     expect(result.premise).toBe('has one')
+  })
+})
+
+// --- resolveAllAdvanceSelection -----------------------------------------------
+
+describe('resolveAllAdvanceSelection', () => {
+  it('routes to the merge prompt when merges are enabled', () => {
+    expect(resolveAllAdvanceSelection(['c1', 'c2'], true)).toEqual({
+      type: 'prompt_merge',
+      drawFlow: { step: 3, selectedIds: ['c1', 'c2'] },
+    })
+  })
+
+  it('skips the merge prompt when merges are disabled', () => {
+    expect(resolveAllAdvanceSelection(['c1', 'c2'], false)).toEqual({
+      type: 'confirm_draw',
+      combatantIds: ['c1', 'c2'],
+      drawOutcome: 'all_advance',
+    })
   })
 })
