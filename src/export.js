@@ -1,5 +1,5 @@
 // File download helpers used by AdminScreen and HistoryRoomDetail.
-import { buildChainEvolutionStory } from './gameLogic.js'
+import { buildChainEvolutionStory } from './lineage.js'
 
 export function downloadFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mimeType })

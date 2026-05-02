@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { btn, inp, lbl } from '../styles.js'
 import { getCombatant, updateGlobalCombatant, getLineageTree, getCombatantRoundHistory, getGroupsForCombatants } from '../supabase.js'
-import { buildStoryFromLineageTree } from '../gameLogic.js'
+import { buildStoryFromLineageTree } from '../lineage.js'
 
 /**
  * Slide-up sheet showing a combatant's global Cast record.
