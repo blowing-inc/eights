@@ -171,7 +171,7 @@ Here is the diff:
 async function run() {
   try {
     const response = await client.responses.create({
-      model: "gpt-5.3",
+      model: "gpt-4o",
       input: prompt,
       max_output_tokens: 1500,
     });
