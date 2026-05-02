@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import OpenAI from "openai";
 import { execSync } from "child_process";
 
