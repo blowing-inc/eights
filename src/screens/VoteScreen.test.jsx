@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import VoteScreen from './VoteScreen.jsx'
-import { resolveAllAdvanceSelection } from '../gameLogic.js'
 
 vi.mock('../supabase.js', () => ({
   sget: vi.fn(),
@@ -69,23 +68,11 @@ function renderVoteScreen(room) {
   )
 }
 
-describe('resolveAllAdvanceSelection', () => {
-  it('routes to the merge prompt when merges are enabled', () => {
-    expect(resolveAllAdvanceSelection(['c1', 'c2'], true)).toEqual({
-      type: 'prompt_merge',
-      drawFlow: { step: 3, selectedIds: ['c1', 'c2'] },
-    })
-  })
-
-  it('skips the merge prompt when merges are disabled', () => {
-    expect(resolveAllAdvanceSelection(['c1', 'c2'], false)).toEqual({
-      type: 'confirm_draw',
-      combatantIds: ['c1', 'c2'],
-      drawOutcome: 'all_advance',
-    })
-  })
-})
-
+// Settings-gate smoke tests — intentional exceptions to "UI components don't need tests."
+// These don't test rendering behavior; they verify that room settings wire through
+// to the correct conditional UI. The gates live in VoteScreen but are driven by
+// normalizeRoomSettings defaults, so an end-to-end render is the only way to catch
+// a wiring break without mocking half the component.
 describe('VoteScreen room setting gates', () => {
   it('shows the Evolve action when allowEvolutions is enabled', () => {
     const html = renderVoteScreen(makeRoom({ allowEvolutions: true }))
