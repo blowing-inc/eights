@@ -14,6 +14,9 @@ if (!diff || diff.trim().length === 0) {
   process.exit(0);
 }
 
+/**
+ * Extract valid added line numbers from diff
+ */
 function extractValidLines(diffText) {
   const fileMap = {};
   const lines = diffText.split("\n");
@@ -48,8 +51,23 @@ function extractValidLines(diffText) {
   return fileMap;
 }
 
+/**
+ * Escape shell input to prevent command breakage
+ */
+function shellEscape(str) {
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`")
+    .replace(/\n/g, "\\n");
+}
+
 const validLinesByFile = extractValidLines(diff);
 
+/**
+ * Build file → valid lines hint for prompt
+ */
 const fileLineHints = Object.entries(validLinesByFile)
   .map(([file, lines]) => {
     const sample = lines.slice(0, 20).join(", ");
@@ -57,6 +75,9 @@ const fileLineHints = Object.entries(validLinesByFile)
   })
   .join("\n");
 
+/**
+ * 🔥 FINAL LOCKED PROMPT
+ */
 const prompt = `You are a senior React engineer reviewing a pull request.
 
 Your job is to identify meaningful, real-world issues—not stylistic or trivial ones.
@@ -109,8 +130,9 @@ Valid file/line targets:
 
 Here is the diff:
 {{DIFF}}
-`.replace("{{FILE_LINE_HINTS}}", fileLineHints)
- .replace("{{DIFF}}", diff);
+`
+  .replaceAll("{{FILE_LINE_HINTS}}", fileLineHints)
+  .replaceAll("{{DIFF}}", diff);
 
 async function run() {
   try {
@@ -147,17 +169,25 @@ async function run() {
     for (const c of comments) {
       const validLines = validLinesByFile[c.file] || [];
 
+      if (!validLines.length) {
+        console.log(`Skipping unknown file: ${c.file}`);
+        continue;
+      }
+
       if (!validLines.includes(c.line)) {
         console.log(`Skipping invalid line ${c.line} in ${c.file}`);
         continue;
       }
 
-      grouped[c.severity]?.push(c);
+      const severity = (c.severity || "").toLowerCase();
+      if (grouped[severity]) {
+        grouped[severity].push(c);
+      }
 
       try {
         execSync(
           `gh api repos/${repo}/pulls/${prNumber}/comments \
-          -f body="${c.body}" \
+          -f body="${shellEscape(c.body)}" \
           -f path="${c.file}" \
           -F line=${c.line}`,
           { stdio: "inherit" }
@@ -168,7 +198,9 @@ async function run() {
       }
     }
 
-    // Build grouped summary
+    /**
+     * Build grouped summary
+     */
     const buildSection = (title, items) => {
       if (!items.length) return "";
       return `### ${title}\n` + items.map(i => `- ${i.body}`).join("\n");
@@ -188,14 +220,17 @@ ${summary}
 
     if (posted === 0) {
       execSync(
-        `gh pr comment ${prNumber} -b "Codex found issues but could not safely map inline comments.\n\n${groupedSummary}"`,
+        `gh pr comment ${prNumber} -b "${shellEscape(
+          "Codex found issues but could not safely map inline comments.\n\n" +
+            groupedSummary
+        )}"`,
         { stdio: "inherit" }
       );
       return;
     }
 
     execSync(
-      `gh pr comment ${prNumber} -b "${groupedSummary}"`,
+      `gh pr comment ${prNumber} -b "${shellEscape(groupedSummary)}"`,
       { stdio: "inherit" }
     );
 
