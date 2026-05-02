@@ -9,6 +9,7 @@ const client = new OpenAI({
 const diff = process.env.DIFF;
 const prNumber = process.env.PR_NUMBER;
 const repo = process.env.REPO;
+const commitSha = process.env.COMMIT_SHA;
 
 if (!diff || diff.trim().length === 0) {
   console.log("No relevant changes.");
@@ -236,7 +237,9 @@ async function run() {
         execSync(
           `gh api repos/${repo}/pulls/${prNumber}/comments \
           -f body="${shellEscape(c.body)}" \
+          -f commit_id="${commitSha}" \
           -f path="${c.file}" \
+          -f side=RIGHT \
           -F line=${c.line}`,
           { stdio: "inherit" }
         );
