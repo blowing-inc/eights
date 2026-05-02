@@ -479,3 +479,264 @@ describe('computeSeasonAutoAwards', () => {
     expect(computeSeasonAutoAwards([room], 'season1')).toEqual([])
   })
 })
+
+// ─── computeSuperlatives – edge branches ─────────────────────────────────────
+
+describe('computeSuperlatives – edge branches', () => {
+  it('handles null mvp_record (|| [] fallback)', () => {
+    const c = { wins: 1, losses: 0, draws: 0, mvp_record: null }
+    expect(() => computeSuperlatives(c, null)).not.toThrow()
+    expect(computeSuperlatives(c, null).find(s => s.label.startsWith('MVP'))).toBeUndefined()
+  })
+})
+
+// ─── getSeriesCombatantNominees – edge branches ───────────────────────────────
+
+describe('getSeriesCombatantNominees – edge branches', () => {
+  it('handles room with no combatants property', () => {
+    expect(() => getSeriesCombatantNominees([{ }])).not.toThrow()
+    expect(getSeriesCombatantNominees([{ }])).toEqual([])
+  })
+})
+
+// ─── getSeriesEvolutionNominees – edge branches ───────────────────────────────
+
+describe('getSeriesEvolutionNominees – edge branches', () => {
+  it('handles room with no rounds property', () => {
+    expect(() => getSeriesEvolutionNominees([{ }])).not.toThrow()
+    expect(getSeriesEvolutionNominees([{ }])).toEqual([])
+  })
+
+  it('handles evolution round with no combatants property', () => {
+    const round = {
+      evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'SuperFighter' },
+    }
+    const nominees = getSeriesEvolutionNominees([{ rounds: [round] }])
+    expect(nominees).toHaveLength(1)
+    expect(nominees[0].name).toContain('?')
+  })
+})
+
+// ─── computeGameAutoAwards – edge branches ────────────────────────────────────
+
+describe('computeGameAutoAwards – edge branches', () => {
+  it('handles room with no rounds property', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const room = { id: 'room1', devMode: false, players: [p1], combatants: { p1: [] } }
+    expect(computeGameAutoAwards(room)).toEqual([])
+  })
+
+  it('handles room with no players property', () => {
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const room = {
+      id: 'room1', devMode: false,
+      combatants: { p1: [c1] },
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1] }],
+    }
+    expect(computeGameAutoAwards(room)).toEqual([])
+  })
+
+  it('handles winner round with no combatants property in the round', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const room = {
+      id: 'room1', devMode: false,
+      players: [p1, p2],
+      combatants: {},
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' } }],
+    }
+    expect(() => computeGameAutoAwards(room)).not.toThrow()
+  })
+
+  it('draw round in tally loop does not add wins or losses to any player', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', ownerId: 'p1' }
+    const c2 = { id: 'c2', ownerId: 'p2' }
+    const room = {
+      id: 'room1', devMode: false,
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [{ draw: true, combatants: [c1, c2] }],
+    }
+    const awards = computeGameAutoAwards(room)
+    expect(awards.find(a => a.type === 'most_wins')).toBeUndefined()
+    expect(awards.find(a => a.type === 'shutout')).toBeUndefined()
+    expect(awards.find(a => a.type === 'undefeated')).toBeUndefined()
+  })
+
+  it('returns empty when all players are bots', () => {
+    const bot = { id: 'bot1', name: 'Bot', isBot: true }
+    const c1  = { id: 'c1', name: 'Fighter', ownerId: 'bot1' }
+    const room = {
+      id: 'room1', phase: 'ended', devMode: false,
+      players: [bot],
+      combatants: { bot1: [c1] },
+      rounds: [{ winner: { id: 'c1', ownerId: 'bot1' }, combatants: [c1] }],
+    }
+    expect(computeGameAutoAwards(room)).toEqual([])
+  })
+
+  it('skips wins increment when winner ownerId is not in the player list', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Rival',   ownerId: 'unknown' }
+    const room = {
+      id: 'room1', phase: 'ended', devMode: false,
+      players: [p1],
+      combatants: { p1: [c1] },
+      rounds: [{ winner: { id: 'c2', ownerId: 'unknown' }, combatants: [c1, c2] }],
+    }
+    const awards = computeGameAutoAwards(room)
+    expect(awards.find(a => a.type === 'most_wins')).toBeUndefined()
+  })
+
+  it('skips losses increment for losing combatant whose owner is not in the player list', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Ghost',   ownerId: 'unknown' }
+    const room = {
+      id: 'room1', phase: 'ended', devMode: false,
+      players: [p1],
+      combatants: { p1: [c1] },
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1, c2] }],
+    }
+    expect(() => computeGameAutoAwards(room)).not.toThrow()
+  })
+
+  it('skips bot combatants in the most_reactions tally', () => {
+    const p1  = { id: 'p1', name: 'Alice', isBot: false }
+    const c1  = { id: 'c1', name: 'Fighter', ownerId: 'p1', isBot: false }
+    const bot = { id: 'b1', name: 'BotCombatant', ownerId: 'p1', isBot: true }
+    const room = {
+      id: 'room1', phase: 'ended', devMode: false,
+      players: [p1],
+      combatants: { p1: [c1, bot] },
+      rounds: [{
+        winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1],
+        playerReactions: { p1: { b1: 'heart' } },
+      }],
+    }
+    const awards = computeGameAutoAwards(room)
+    const mr = awards.find(a => a.type === 'most_reactions')
+    expect(mr).toBeUndefined()
+  })
+
+  it('handles room with no combatants property for reactions', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const room = {
+      id: 'room1', phase: 'ended', devMode: false,
+      players: [p1],
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1] }],
+    }
+    expect(() => computeGameAutoAwards(room)).not.toThrow()
+  })
+})
+
+// ─── computeSeriesAutoAwards – edge branches ──────────────────────────────────
+
+describe('computeSeriesAutoAwards – edge branches', () => {
+  it('handles null rooms argument', () => {
+    expect(computeSeriesAutoAwards(null, 'series1')).toEqual([])
+  })
+
+  it('handles room with no rounds property in scope calculation', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1],
+      combatants: { p1: [] },
+    }
+    expect(() => computeSeriesAutoAwards([room], 'series1')).not.toThrow()
+  })
+
+  it('handles room with no players property in scope calculation', () => {
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      combatants: { p1: [c1] },
+      rounds: [{ winner: { id: 'c1', ownerId: 'p1' }, combatants: [c1] }],
+    }
+    expect(() => computeSeriesAutoAwards([room], 'series1')).not.toThrow()
+  })
+
+  it('returns no most_wins when all rounds were draws (maxWins === 0)', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const p2 = { id: 'p2', name: 'Bob',   isBot: false }
+    const c1 = { id: 'c1', name: 'F1', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'F2', ownerId: 'p2' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1, p2],
+      combatants: { p1: [c1], p2: [c2] },
+      rounds: [{ draw: true, combatants: [c1, c2] }],
+    }
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    expect(awards.find(a => a.type === 'most_wins')).toBeUndefined()
+  })
+
+  it('uses winner.ownerName fallback when owner is not in playerMap', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Rival',   ownerId: 'unknown' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1],
+      combatants: { p1: [c1], unknown: [c2] },
+      rounds: [{
+        winner: { id: 'c2', ownerId: 'unknown', ownerName: 'Ghost' },
+        combatants: [c1, c2],
+        evolution: { fromId: 'c2', fromName: 'Rival', toId: 'v1', toName: 'GhostPlus' },
+      }],
+    }
+    expect(() => computeSeriesAutoAwards([room], 'series1')).not.toThrow()
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    const me = awards.find(a => a.type === 'most_evolutions')
+    expect(me).toBeDefined()
+    expect(me.recipient_name).toBe('Ghost')
+  })
+
+  it('skips evolution when ownerId is missing entirely', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter', ownerId: 'p1' }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1],
+      combatants: { p1: [c1] },
+      rounds: [{
+        winner: { id: 'c1' },
+        combatants: [c1],
+        evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'Fighter+' },
+      }],
+    }
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    expect(awards.find(a => a.type === 'most_evolutions')).toBeUndefined()
+  })
+
+  it('counts multiple evolutions by the same player correctly', () => {
+    const p1 = { id: 'p1', name: 'Alice', isBot: false }
+    const c1 = { id: 'c1', name: 'Fighter',  ownerId: 'p1' }
+    const c2 = { id: 'c2', name: 'Sidekick', ownerId: 'p1' }
+    const round1 = {
+      winner: { id: 'c1', ownerId: 'p1', name: 'Fighter' },
+      combatants: [c1],
+      evolution: { fromId: 'c1', fromName: 'Fighter', toId: 'v1', toName: 'Fighter+' },
+    }
+    const round2 = {
+      winner: { id: 'c2', ownerId: 'p1', name: 'Sidekick' },
+      combatants: [c2],
+      evolution: { fromId: 'c2', fromName: 'Sidekick', toId: 'v2', toName: 'Sidekick+' },
+    }
+    const room = {
+      id: 'room1', phase: 'ended',
+      players: [p1],
+      combatants: { p1: [c1, c2] },
+      rounds: [round1, round2],
+    }
+    const awards = computeSeriesAutoAwards([room], 'series1')
+    const me = awards.find(a => a.type === 'most_evolutions')
+    expect(me).toBeDefined()
+    expect(me.value).toBe(2)
+  })
+})
