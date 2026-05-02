@@ -3,7 +3,8 @@ import Screen from '../components/Screen.jsx'
 import TagInput from '../components/TagInput.jsx'
 import { btn, inp, lbl } from '../styles.js'
 import { createSeason, getSeasons, updateSeason, getSeasonRooms, createPendingAward, getAwardsForScope, createAutoAwards } from '../supabase.js'
-import { uid, computeSeriesStandings, groupRoomsForHistory, getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, computeSeasonToneDisplay, AWARD_TYPE_LABELS } from '../gameLogic.js'
+import { uid, computeSeriesStandings, groupRoomsForHistory, computeSeasonToneDisplay } from '../gameLogic.js'
+import { getSeasonCombatantNominees, getSeasonEvolutionNominees, computeSeasonAutoAwards, AWARD_TYPE_LABELS } from '../awards.js'
 import VotingPanel from '../components/VotingPanel.jsx'
 
 function ToggleRow({ label, description, value, onToggle }) {

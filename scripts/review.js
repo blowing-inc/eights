@@ -1,6 +1,9 @@
 /* eslint-disable no-console */
 import OpenAI from "openai";
 import { execSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -9,6 +12,7 @@ const client = new OpenAI({
 const diff = process.env.DIFF;
 const prNumber = process.env.PR_NUMBER;
 const repo = process.env.REPO;
+const commitSha = process.env.COMMIT_SHA;
 
 if (!diff || diff.trim().length === 0) {
   console.log("No relevant changes.");
@@ -50,18 +54,6 @@ function extractValidLines(diffText) {
   }
 
   return fileMap;
-}
-
-/**
- * Escape shell input
- */
-function shellEscape(str) {
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, "\\$")
-    .replace(/`/g, "\\`")
-    .replace(/\n/g, "\\n");
 }
 
 /**
@@ -171,14 +163,16 @@ Here is the diff:
 async function run() {
   try {
     const response = await client.responses.create({
-      model: "gpt-5.3",
+      model: "gpt-4o",
       input: prompt,
       max_output_tokens: 1500,
+      text: { format: { type: "json_object" } },
     });
 
     let parsed;
     try {
-      parsed = JSON.parse(response.output_text || "{}");
+      const raw = (response.output_text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      parsed = JSON.parse(raw || "{}");
     } catch {
       console.log("Failed to parse response.");
       process.exit(0);
@@ -197,6 +191,7 @@ async function run() {
     const existingSet = buildExistingSet(existingComments);
 
     let posted = 0;
+    let failed = 0;
 
     const grouped = {
       high: [],
@@ -230,18 +225,31 @@ async function run() {
         grouped[severity].push(c);
       }
 
+      const tmpFile = join(tmpdir(), `review-comment-${Date.now()}.json`);
       try {
+        writeFileSync(tmpFile, JSON.stringify({
+          body: c.body,
+          commit_id: commitSha,
+          path: c.file,
+          side: "RIGHT",
+          line: c.line,
+        }));
         execSync(
-          `gh api repos/${repo}/pulls/${prNumber}/comments \
-          -f body="${shellEscape(c.body)}" \
-          -f path="${c.file}" \
-          -F line=${c.line}`,
+          `gh api repos/${repo}/pulls/${prNumber}/comments --input ${tmpFile}`,
           { stdio: "inherit" }
         );
         posted++;
       } catch (err) {
         console.error("Failed to post comment:", err.message);
+        failed++;
+      } finally {
+        try { unlinkSync(tmpFile); } catch {}
       }
+    }
+
+    if (failed > 0) {
+      console.error(`${failed} comment(s) failed to post.`);
+      process.exit(1);
     }
 
     const buildSection = (title, items) => {
@@ -266,10 +274,13 @@ ${summary}
       return;
     }
 
-    execSync(
-      `gh pr comment ${prNumber} -b "${shellEscape(groupedSummary)}"`,
-      { stdio: "inherit" }
-    );
+    const summaryFile = join(tmpdir(), `review-summary-${Date.now()}.md`);
+    try {
+      writeFileSync(summaryFile, groupedSummary);
+      execSync(`gh pr comment ${prNumber} --body-file ${summaryFile}`, { stdio: "inherit" });
+    } finally {
+      try { unlinkSync(summaryFile); } catch {}
+    }
 
   } catch (err) {
     console.error("Codex failed:", err.message);

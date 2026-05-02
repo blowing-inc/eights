@@ -8,6 +8,9 @@ jobs:
   codex-review:
     runs-on: ubuntu-latest
 
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
     permissions:
       contents: read
       pull-requests: write
@@ -53,10 +56,11 @@ jobs:
       - name: Run Codex Review (with retry)
         if: env.OPENAI_API_KEY != ''
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DIFF: ${{ steps.diff.outputs.diff }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           for i in 1 2 3; do
             node scripts/review.js && break
