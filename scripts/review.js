@@ -174,11 +174,13 @@ async function run() {
       model: "gpt-4o",
       input: prompt,
       max_output_tokens: 1500,
+      text: { format: { type: "json_object" } },
     });
 
     let parsed;
     try {
-      parsed = JSON.parse(response.output_text || "{}");
+      const raw = (response.output_text || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      parsed = JSON.parse(raw || "{}");
     } catch {
       console.log("Failed to parse response.");
       process.exit(0);
