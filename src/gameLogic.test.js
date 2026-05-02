@@ -31,7 +31,7 @@ import {
   resolveVotingPhase,
 } from './gameLogic.js'
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Helpers ------------------------------------------------------------------
 
 function makeCombatant(overrides = {}) {
   return { id: 'c1', name: 'Fighter', bio: '', ownerId: 'p1', ownerName: 'Alice', wins: 0, losses: 0, battles: [], ...overrides }
@@ -62,7 +62,7 @@ function makeRound(winnerId, combatants, overrides = {}) {
   }
 }
 
-// â”€â”€â”€ initials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- initials -----------------------------------------------------------------
 
 describe('initials', () => {
   it('takes first letter of each word, uppercased, max 2', () => {
@@ -76,7 +76,7 @@ describe('initials', () => {
   })
 })
 
-// â”€â”€â”€ playerColor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- playerColor --------------------------------------------------------------
 
 describe('playerColor', () => {
   it('returns the correct color for indices 0-7', () => {
@@ -89,7 +89,7 @@ describe('playerColor', () => {
   })
 })
 
-// â”€â”€â”€ totalRoundsFor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- totalRoundsFor -----------------------------------------------------------
 
 describe('totalRoundsFor', () => {
   it('returns minimum combatant count across players', () => {
@@ -112,12 +112,12 @@ describe('totalRoundsFor', () => {
   it('handles a missing player combatant key gracefully', () => {
     const room = makeRoom()
     delete room.combatants.p2
-    // p2 treated as 0 length â†’ min is 0
+    // p2 treated as 0 length -> min is 0
     expect(totalRoundsFor(room)).toBe(0)
   })
 })
 
-// â”€â”€â”€ matchupForRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- matchupForRound ----------------------------------------------------------
 
 describe('matchupForRound', () => {
   it('picks slot [roundNum-1] from each player', () => {
@@ -144,7 +144,7 @@ describe('matchupForRound', () => {
   })
 })
 
-// â”€â”€â”€ applyWinner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- applyWinner --------------------------------------------------------------
 
 describe('applyWinner', () => {
   it('increments winner wins and loser losses', () => {
@@ -217,7 +217,7 @@ describe('applyWinner', () => {
   })
 })
 
-// â”€â”€â”€ undoRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- undoRound ----------------------------------------------------------------
 
 describe('undoRound', () => {
   it('decrements winner wins and loser losses', () => {
@@ -289,7 +289,7 @@ describe('undoRound', () => {
   })
 })
 
-// â”€â”€â”€ tallyReactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- tallyReactions -----------------------------------------------------------
 
 describe('tallyReactions', () => {
   it('counts each reaction type correctly', () => {
@@ -316,7 +316,7 @@ describe('tallyReactions', () => {
   })
 })
 
-// â”€â”€â”€ toggleReaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- toggleReaction -----------------------------------------------------------
 
 describe('toggleReaction', () => {
   it('adds a reaction when none exists', () => {
@@ -350,7 +350,7 @@ describe('toggleReaction', () => {
   })
 })
 
-// â”€â”€â”€ isFinalRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- isFinalRound -------------------------------------------------------------
 
 describe('isFinalRound', () => {
   it('returns true when currentRound equals the total number of rounds', () => {
@@ -375,7 +375,7 @@ describe('isFinalRound', () => {
   })
 })
 
-// â”€â”€â”€ getCombatantsToPublish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- getCombatantsToPublish ---------------------------------------------------
 
 describe('getCombatantsToPublish', () => {
   const roster = (ids) => ids.map(id => ({ id }))
@@ -425,7 +425,7 @@ describe('getCombatantsToPublish', () => {
   })
 })
 
-// â”€â”€â”€ authFlowFor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- authFlowFor --------------------------------------------------------------
 
 describe('authFlowFor', () => {
   it('returns register when no user found', () => {
@@ -442,7 +442,7 @@ describe('authFlowFor', () => {
   })
 })
 
-// â”€â”€â”€ ownerLabel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- ownerLabel ---------------------------------------------------------------
 
 describe('ownerLabel', () => {
   it('appends (guest) for guest players', () => {
@@ -454,7 +454,7 @@ describe('ownerLabel', () => {
   })
 })
 
-// â”€â”€â”€ buildTickerMessages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- buildTickerMessages -----------------------------------------------------
 
 describe('buildTickerMessages', () => {
   it('always returns at least the 15 static filler messages', () => {
@@ -555,7 +555,7 @@ describe('buildTickerMessages', () => {
   })
 })
 
-// â”€â”€â”€ makeBotCombatants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- makeBotCombatants --------------------------------------------------------
 
 describe('makeBotCombatants', () => {
   let n = 0
@@ -582,7 +582,7 @@ describe('makeBotCombatants', () => {
     expect(result[0].name).toBe(BOT_COMBATANTS[1][0])
   })
 
-  it('wraps template list selection (botIdx 2 â†’ list 0)', () => {
+  it('wraps template list selection (botIdx 2 -> list 0)', () => {
     const r0 = makeBotCombatants(0, 'b', 'B', { idFn: seqId })
     n = 0
     const r2 = makeBotCombatants(2, 'b', 'B', { idFn: seqId })
@@ -619,7 +619,7 @@ describe('makeBotCombatants', () => {
   })
 })
 
-// â”€â”€â”€ makeBots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- makeBots -----------------------------------------------------------------
 
 describe('makeBots', () => {
   it('returns the requested number of bots', () => {
@@ -652,7 +652,7 @@ describe('makeBots', () => {
   })
 })
 
-// â”€â”€â”€ slotMatchesPrevWinner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- slotMatchesPrevWinner ----------------------------------------------------
 
 describe('slotMatchesPrevWinner', () => {
   const winner = { id: 'gid1', name: 'Thunder Fist' }
@@ -687,7 +687,7 @@ describe('slotMatchesPrevWinner', () => {
   })
 })
 
-// â”€â”€â”€ areAllPrevWinnersPlaced â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- areAllPrevWinnersPlaced --------------------------------------------------
 
 describe('areAllPrevWinnersPlaced', () => {
   it('returns true when every winner appears in at least one slot', () => {
@@ -716,7 +716,7 @@ describe('areAllPrevWinnersPlaced', () => {
   })
 })
 
-// â”€â”€â”€ getUnplacedWinners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- getUnplacedWinners -------------------------------------------------------
 
 describe('getUnplacedWinners', () => {
   it('returns winners not found in any slot', () => {
@@ -748,7 +748,7 @@ describe('getUnplacedWinners', () => {
   })
 })
 
-// â”€â”€â”€ buildCombatantFromDraft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- buildCombatantFromDraft --------------------------------------------------
 
 describe('buildCombatantFromDraft', () => {
   it('trims name and bio', () => {
@@ -781,7 +781,7 @@ describe('buildCombatantFromDraft', () => {
   })
 })
 
-// â”€â”€â”€ isDraftComplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- isDraftComplete ----------------------------------------------------------
 
 describe('isDraftComplete', () => {
   const p1 = { id: 'p1', isBot: false }
@@ -816,7 +816,7 @@ describe('isDraftComplete', () => {
   })
 })
 
-// â”€â”€â”€ getReadyPlayerCount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- getReadyPlayerCount ------------------------------------------------------
 
 describe('getReadyPlayerCount', () => {
   const p1 = { id: 'p1', isBot: false }
@@ -847,7 +847,7 @@ describe('getReadyPlayerCount', () => {
   })
 })
 
-// â”€â”€â”€ groupRoomsForHistory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- groupRoomsForHistory -----------------------------------------------------
 
 describe('groupRoomsForHistory', () => {
   function room(id, overrides = {}) {
@@ -909,10 +909,10 @@ describe('groupRoomsForHistory', () => {
   })
 
   it('stops chain walk when prevRoomId points outside the room set', () => {
-    // r2 has a prevRoomId that isn't in the list â€” chainRoot should stop at r2 itself
+    // r2 has a prevRoomId that isn't in the list - chainRoot should stop at r2 itself
     const r2 = room('r2', { prevRoomId: 'missing-room' })
     const result = groupRoomsForHistory([r2])
-    // Still grouped as a series (solo chain) since prevRoomId is set â€” does not throw
+    // Still grouped as a series (solo chain) since prevRoomId is set - does not throw
     expect(result).toHaveLength(1)
     expect(result[0].type).toBe('series')
     expect(result[0].rooms).toHaveLength(1)
@@ -933,7 +933,7 @@ describe('groupRoomsForHistory', () => {
   })
 })
 
-// â”€â”€â”€ prepareNextGame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- prepareNextGame ----------------------------------------------------------
 
 describe('prepareNextGame', () => {
   const baseRoom = {
@@ -1010,7 +1010,7 @@ describe('prepareNextGame', () => {
   })
 })
 
-// â”€â”€â”€ canForceStart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- canForceStart ------------------------------------------------------------
 
 describe('canForceStart', () => {
   it('returns true when host, 2+ ready, and at least 1 not ready', () => {
@@ -1034,7 +1034,7 @@ describe('canForceStart', () => {
   })
 })
 
-// â”€â”€â”€ canUndoLastRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- canUndoLastRound ---------------------------------------------------------
 
 describe('canUndoLastRound', () => {
   const roundWithWinner    = { winner: { id: 'c1', name: 'F' } }
@@ -1061,7 +1061,7 @@ describe('canUndoLastRound', () => {
   })
 })
 
-// â”€â”€â”€ canEditCombatant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- canEditCombatant ---------------------------------------------------------
 
 describe('canEditCombatant', () => {
   it('returns true for the combatant owner', () => {
@@ -1081,7 +1081,7 @@ describe('canEditCombatant', () => {
   })
 })
 
-// â”€â”€â”€ extractPreviousWinners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- extractPreviousWinners ---------------------------------------------------
 
 describe('extractPreviousWinners', () => {
   function makeRound(winner) {
@@ -1132,7 +1132,7 @@ describe('extractPreviousWinners', () => {
   })
 })
 
-// â”€â”€â”€ normalizeRoomSettings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- normalizeRoomSettings ----------------------------------------------------
 
 describe('normalizeRoomSettings', () => {
   it('fills all defaults when passed undefined', () => {
@@ -1188,7 +1188,7 @@ describe('normalizeRoomSettings', () => {
     expect(normalizeRoomSettings({ isPublic: true }).isPublic).toBe(true)
   })
 
-  it('is non-destructive â€” does not mutate the input', () => {
+  it('is non-destructive - does not mutate the input', () => {
     const input = { rosterSize: 6 }
     const result = normalizeRoomSettings(input)
     expect(result).not.toBe(input)
@@ -1196,7 +1196,7 @@ describe('normalizeRoomSettings', () => {
   })
 })
 
-// â”€â”€â”€ applyWinner â€” trap detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- applyWinner - trap detection --------------------------------------------
 
 describe('applyWinner trap detection', () => {
   function makeRoomWithCombatants(c1, c2) {
@@ -1242,7 +1242,7 @@ describe('applyWinner trap detection', () => {
   })
 })
 
-// â”€â”€â”€ simulateGameToEnd â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- simulateGameToEnd --------------------------------------------------------
 
 describe('simulateGameToEnd', () => {
   it('simulates all 8 rounds from a fresh game (currentRound 0)', () => {
@@ -1277,7 +1277,7 @@ describe('simulateGameToEnd', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
     const c1 = room.combatants.p1[0]
     const c2 = room.combatants.p2[0]
-    // Simulate round 1 open â€” round exists, no winner
+    // Simulate round 1 open - round exists, no winner
     const openRound = { id: 'rd_open', number: 1, combatants: [c1, c2], picks: {}, winner: null, createdAt: Date.now() }
     const midRoom = { ...room, currentRound: 1, rounds: [openRound] }
     const result = simulateGameToEnd(midRoom)
@@ -1306,7 +1306,7 @@ describe('simulateGameToEnd', () => {
 
   it('breaks early if a matchup slot is empty', () => {
     const room = makeRoom()
-    // Give p2 only 3 combatants â€” totalRounds will be 3
+    // Give p2 only 3 combatants - totalRounds will be 3
     room.combatants.p2 = room.combatants.p2.slice(0, 3)
     const result = simulateGameToEnd({ ...room, currentRound: 0, rounds: [] })
     expect(result.rounds).toHaveLength(3)
@@ -1337,7 +1337,7 @@ describe('simulateGameToEnd', () => {
   })
 })
 
-// â”€â”€â”€ computeSeriesStandings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- computeSeriesStandings ---------------------------------------------------
 
 describe('computeSeriesStandings', () => {
   const p1 = { id: 'p1', name: 'Alice', isBot: false }
@@ -1440,7 +1440,7 @@ describe('computeSeriesStandings', () => {
   })
 })
 
-// â”€â”€â”€ applyDraw / undoRound (draw) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- applyDraw / undoRound (draw) ---------------------------------------------
 
 describe('applyDraw', () => {
   const room = {
@@ -1523,7 +1523,7 @@ describe('canUndoLastRound (draw)', () => {
   })
 })
 
-// â”€â”€â”€ applyDraw partial draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- applyDraw partial draw ---------------------------------------------------
 
 describe('applyDraw (partial draw)', () => {
   const room = {
@@ -1649,7 +1649,7 @@ describe('undoRound (partial draw)', () => {
   })
 })
 
-// â”€â”€â”€ drawOutcome: all_advance / no_advance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- drawOutcome: all_advance / no_advance ------------------------------------
 
 describe('applyDraw (all_advance)', () => {
   const room = {
@@ -1790,7 +1790,7 @@ describe('undoRound (all_advance draw)', () => {
   })
 })
 
-// â”€â”€â”€ applyMerge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- applyMerge ---------------------------------------------------------------
 
 describe('applyMerge', () => {
   const room = {
@@ -1918,7 +1918,7 @@ describe('undoRound (merge)', () => {
   })
 })
 
-// â”€â”€â”€ replacePlayerIdInRoom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- replacePlayerIdInRoom ----------------------------------------------------
 
 describe('replacePlayerIdInRoom', () => {
   const OLD = 'guest-1'
@@ -2022,7 +2022,7 @@ describe('replacePlayerIdInRoom', () => {
   })
 })
 
-// â”€â”€â”€ kickPlayerFromRoom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- kickPlayerFromRoom -------------------------------------------------------
 
 describe('kickPlayerFromRoom', () => {
   function makeKickRoom() {
@@ -2096,7 +2096,7 @@ describe('kickPlayerFromRoom', () => {
   })
 })
 
-// â”€â”€â”€ buildEvolutionRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- buildEvolutionRound ------------------------------------------------------
 
 describe('buildEvolutionRound', () => {
   const winner   = { id: 'c1', name: 'Titan',   bio: 'Big.', ownerId: 'p1', ownerName: 'Alice' }
@@ -2223,12 +2223,12 @@ describe('getEphemeralBadges', () => {
     expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 5 }])
   })
 
-  it('streak is broken by a non-win â€” 2 wins after a loss gives no badge', () => {
+  it('streak is broken by a non-win - 2 wins after a loss gives no badge', () => {
     const c = { battles: makeBattles(['win', 'loss', 'win', 'win']) }
     expect(getEphemeralBadges(c)).toEqual([])
   })
 
-  it('streak counts only tail run â€” 1 loss then 3 wins gives on_fire 3', () => {
+  it('streak counts only tail run - 1 loss then 3 wins gives on_fire 3', () => {
     const c = { battles: makeBattles(['win', 'win', 'loss', 'win', 'win', 'win']) }
     expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }])
   })
@@ -2274,7 +2274,7 @@ describe('getEphemeralBadges', () => {
   })
 })
 
-// â”€â”€â”€ resolveVotingPhase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- resolveVotingPhase -------------------------------------------------------
 
 describe('resolveVotingPhase', () => {
   function votes(...nomineeIds) {
@@ -2366,7 +2366,7 @@ describe('resolveVotingPhase', () => {
   })
 
   it('returns co_award on host close during runoff with all runoff nominees', () => {
-    // c1 is "leading" with one vote but host closes â€” both runoff nominees co-award
+    // c1 is "leading" with one vote but host closes - both runoff nominees co-award
     const result = resolveVotingPhase({
       votes:          votes('c1'),
       voterCount:     3,
@@ -2391,7 +2391,7 @@ describe('resolveVotingPhase', () => {
   })
 
   it('abstainers count toward allLockedIn without contributing a vote', () => {
-    // p1 voted c1, p2 and p3 abstained â€” c1 is the winner
+    // p1 voted c1, p2 and p3 abstained - c1 is the winner
     const result = resolveVotingPhase({
       votes:          votes('c1'),
       voterCount:     3,
@@ -2423,7 +2423,7 @@ describe('resolveVotingPhase', () => {
   })
 })
 
-// â”€â”€â”€ resolveTone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- resolveTone --------------------------------------------------------------
 
 describe('resolveTone', () => {
   const TONE = { tags: ['absurdist', 'horror'], premise: 'Everyone is a food item.' }
@@ -2469,7 +2469,7 @@ describe('resolveTone', () => {
   })
 })
 
-// â”€â”€â”€ computeSeasonToneDisplay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- computeSeasonToneDisplay -------------------------------------------------
 
 describe('computeSeasonToneDisplay', () => {
   const tone = (tags, premise = '') => ({ tone: { tags, premise } })

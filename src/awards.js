@@ -1,3 +1,7 @@
+// Pure awards / achievement logic — no React, no Supabase.
+// Owns: superlative computation (computeSuperlatives) for the combatant detail page.
+// Does not mutate any data — consumes tallyReactions and computeSeriesStandings
+//   from gameLogic.js but only reads their output.
 import { tallyReactions, computeSeriesStandings } from './gameLogic.js'
 
 // ─── Achievement superlatives ─────────────────────────────────────────────────

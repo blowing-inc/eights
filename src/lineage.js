@@ -1,5 +1,8 @@
 // Pure lineage / evolution logic — no React, no Supabase.
-// Handles combatant ancestry, active-form resolution, and evolution story building.
+// Owns: combatant ancestry, active-form resolution (buildActiveFormMap /
+//   applyActiveFormMap), and evolution story building (buildChainEvolutionStory).
+// Does not own: round resolution, draft mechanics, or room settings — those live
+//   in gameLogic.js.
 
 // ─── Lineage / evolution ──────────────────────────────────────────────────────
 

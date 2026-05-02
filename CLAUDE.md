@@ -266,3 +266,9 @@ Before marking a PR ready:
 - [ ] `npm run lint` passes with no new errors on changed files
 - [ ] Codex PR review comments addressed or dismissed with a note in the PR thread
 - [ ] Stay on the feature branch after the PR is open — only switch back to `main` when the PR is merged and main is pulled
+
+Once all checklist items above are complete, mark the PR ready for review:
+
+```bash
+gh pr ready --repo blowing-inc/eights
+```
