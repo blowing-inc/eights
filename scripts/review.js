@@ -200,6 +200,7 @@ async function run() {
     const existingSet = buildExistingSet(existingComments);
 
     let posted = 0;
+    let failed = 0;
 
     const grouped = {
       high: [],
@@ -246,7 +247,13 @@ async function run() {
         posted++;
       } catch (err) {
         console.error("Failed to post comment:", err.message);
+        failed++;
       }
+    }
+
+    if (failed > 0) {
+      console.error(`${failed} comment(s) failed to post.`);
+      process.exit(1);
     }
 
     const buildSection = (title, items) => {
