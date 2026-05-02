@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+﻿import { describe, it, expect, beforeEach } from 'vitest'
 import {
   initials, playerColor, COLORS,
   BOT_COMBATANTS, BOT_BIOS, makeBotCombatants, makeBots,
@@ -38,15 +38,8 @@ import {
   computeSeriesAutoAwards,
   computeSeasonAutoAwards,
 } from './gameLogic.js'
-import {
-  getLineageStats,
-  buildActiveFormMap,
-  buildChainEvolutionStory,
-  buildStoryFromLineageTree,
-  applyActiveFormMap,
-} from './lineage.js'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function makeCombatant(overrides = {}) {
   return { id: 'c1', name: 'Fighter', bio: '', ownerId: 'p1', ownerName: 'Alice', wins: 0, losses: 0, battles: [], ...overrides }
@@ -77,7 +70,7 @@ function makeRound(winnerId, combatants, overrides = {}) {
   }
 }
 
-// ─── initials ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ initials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('initials', () => {
   it('takes first letter of each word, uppercased, max 2', () => {
@@ -91,7 +84,7 @@ describe('initials', () => {
   })
 })
 
-// ─── playerColor ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ playerColor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('playerColor', () => {
   it('returns the correct color for indices 0-7', () => {
@@ -104,7 +97,7 @@ describe('playerColor', () => {
   })
 })
 
-// ─── totalRoundsFor ───────────────────────────────────────────────────────────
+// â”€â”€â”€ totalRoundsFor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('totalRoundsFor', () => {
   it('returns minimum combatant count across players', () => {
@@ -127,12 +120,12 @@ describe('totalRoundsFor', () => {
   it('handles a missing player combatant key gracefully', () => {
     const room = makeRoom()
     delete room.combatants.p2
-    // p2 treated as 0 length → min is 0
+    // p2 treated as 0 length â†’ min is 0
     expect(totalRoundsFor(room)).toBe(0)
   })
 })
 
-// ─── matchupForRound ──────────────────────────────────────────────────────────
+// â”€â”€â”€ matchupForRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('matchupForRound', () => {
   it('picks slot [roundNum-1] from each player', () => {
@@ -159,7 +152,7 @@ describe('matchupForRound', () => {
   })
 })
 
-// ─── applyWinner ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ applyWinner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyWinner', () => {
   it('increments winner wins and loser losses', () => {
@@ -232,7 +225,7 @@ describe('applyWinner', () => {
   })
 })
 
-// ─── undoRound ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ undoRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('undoRound', () => {
   it('decrements winner wins and loser losses', () => {
@@ -304,7 +297,7 @@ describe('undoRound', () => {
   })
 })
 
-// ─── tallyReactions ───────────────────────────────────────────────────────────
+// â”€â”€â”€ tallyReactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('tallyReactions', () => {
   it('counts each reaction type correctly', () => {
@@ -331,7 +324,7 @@ describe('tallyReactions', () => {
   })
 })
 
-// ─── toggleReaction ───────────────────────────────────────────────────────────
+// â”€â”€â”€ toggleReaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('toggleReaction', () => {
   it('adds a reaction when none exists', () => {
@@ -365,7 +358,7 @@ describe('toggleReaction', () => {
   })
 })
 
-// ─── isFinalRound ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ isFinalRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('isFinalRound', () => {
   it('returns true when currentRound equals the total number of rounds', () => {
@@ -390,7 +383,7 @@ describe('isFinalRound', () => {
   })
 })
 
-// ─── getCombatantsToPublish ───────────────────────────────────────────────────
+// â”€â”€â”€ getCombatantsToPublish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getCombatantsToPublish', () => {
   const roster = (ids) => ids.map(id => ({ id }))
@@ -440,7 +433,7 @@ describe('getCombatantsToPublish', () => {
   })
 })
 
-// ─── authFlowFor ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ authFlowFor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('authFlowFor', () => {
   it('returns register when no user found', () => {
@@ -457,7 +450,7 @@ describe('authFlowFor', () => {
   })
 })
 
-// ─── ownerLabel ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ ownerLabel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('ownerLabel', () => {
   it('appends (guest) for guest players', () => {
@@ -469,7 +462,7 @@ describe('ownerLabel', () => {
   })
 })
 
-// ─── buildTickerMessages ─────────────────────────────────────────────────────
+// â”€â”€â”€ buildTickerMessages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('buildTickerMessages', () => {
   it('always returns at least the 15 static filler messages', () => {
@@ -570,7 +563,7 @@ describe('buildTickerMessages', () => {
   })
 })
 
-// ─── makeBotCombatants ────────────────────────────────────────────────────────
+// â”€â”€â”€ makeBotCombatants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('makeBotCombatants', () => {
   let n = 0
@@ -597,7 +590,7 @@ describe('makeBotCombatants', () => {
     expect(result[0].name).toBe(BOT_COMBATANTS[1][0])
   })
 
-  it('wraps template list selection (botIdx 2 → list 0)', () => {
+  it('wraps template list selection (botIdx 2 â†’ list 0)', () => {
     const r0 = makeBotCombatants(0, 'b', 'B', { idFn: seqId })
     n = 0
     const r2 = makeBotCombatants(2, 'b', 'B', { idFn: seqId })
@@ -634,7 +627,7 @@ describe('makeBotCombatants', () => {
   })
 })
 
-// ─── makeBots ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ makeBots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('makeBots', () => {
   it('returns the requested number of bots', () => {
@@ -667,7 +660,7 @@ describe('makeBots', () => {
   })
 })
 
-// ─── slotMatchesPrevWinner ────────────────────────────────────────────────────
+// â”€â”€â”€ slotMatchesPrevWinner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('slotMatchesPrevWinner', () => {
   const winner = { id: 'gid1', name: 'Thunder Fist' }
@@ -702,7 +695,7 @@ describe('slotMatchesPrevWinner', () => {
   })
 })
 
-// ─── areAllPrevWinnersPlaced ──────────────────────────────────────────────────
+// â”€â”€â”€ areAllPrevWinnersPlaced â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('areAllPrevWinnersPlaced', () => {
   it('returns true when every winner appears in at least one slot', () => {
@@ -731,7 +724,7 @@ describe('areAllPrevWinnersPlaced', () => {
   })
 })
 
-// ─── getUnplacedWinners ───────────────────────────────────────────────────────
+// â”€â”€â”€ getUnplacedWinners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getUnplacedWinners', () => {
   it('returns winners not found in any slot', () => {
@@ -763,7 +756,7 @@ describe('getUnplacedWinners', () => {
   })
 })
 
-// ─── buildCombatantFromDraft ──────────────────────────────────────────────────
+// â”€â”€â”€ buildCombatantFromDraft â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('buildCombatantFromDraft', () => {
   it('trims name and bio', () => {
@@ -796,7 +789,7 @@ describe('buildCombatantFromDraft', () => {
   })
 })
 
-// ─── isDraftComplete ──────────────────────────────────────────────────────────
+// â”€â”€â”€ isDraftComplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('isDraftComplete', () => {
   const p1 = { id: 'p1', isBot: false }
@@ -831,7 +824,7 @@ describe('isDraftComplete', () => {
   })
 })
 
-// ─── getReadyPlayerCount ──────────────────────────────────────────────────────
+// â”€â”€â”€ getReadyPlayerCount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getReadyPlayerCount', () => {
   const p1 = { id: 'p1', isBot: false }
@@ -862,7 +855,7 @@ describe('getReadyPlayerCount', () => {
   })
 })
 
-// ─── groupRoomsForHistory ─────────────────────────────────────────────────────
+// â”€â”€â”€ groupRoomsForHistory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('groupRoomsForHistory', () => {
   function room(id, overrides = {}) {
@@ -924,10 +917,10 @@ describe('groupRoomsForHistory', () => {
   })
 
   it('stops chain walk when prevRoomId points outside the room set', () => {
-    // r2 has a prevRoomId that isn't in the list — chainRoot should stop at r2 itself
+    // r2 has a prevRoomId that isn't in the list â€” chainRoot should stop at r2 itself
     const r2 = room('r2', { prevRoomId: 'missing-room' })
     const result = groupRoomsForHistory([r2])
-    // Still grouped as a series (solo chain) since prevRoomId is set — does not throw
+    // Still grouped as a series (solo chain) since prevRoomId is set â€” does not throw
     expect(result).toHaveLength(1)
     expect(result[0].type).toBe('series')
     expect(result[0].rooms).toHaveLength(1)
@@ -948,7 +941,7 @@ describe('groupRoomsForHistory', () => {
   })
 })
 
-// ─── prepareNextGame ──────────────────────────────────────────────────────────
+// â”€â”€â”€ prepareNextGame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('prepareNextGame', () => {
   const baseRoom = {
@@ -1025,7 +1018,7 @@ describe('prepareNextGame', () => {
   })
 })
 
-// ─── canForceStart ────────────────────────────────────────────────────────────
+// â”€â”€â”€ canForceStart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('canForceStart', () => {
   it('returns true when host, 2+ ready, and at least 1 not ready', () => {
@@ -1049,7 +1042,7 @@ describe('canForceStart', () => {
   })
 })
 
-// ─── canUndoLastRound ─────────────────────────────────────────────────────────
+// â”€â”€â”€ canUndoLastRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('canUndoLastRound', () => {
   const roundWithWinner    = { winner: { id: 'c1', name: 'F' } }
@@ -1076,7 +1069,7 @@ describe('canUndoLastRound', () => {
   })
 })
 
-// ─── canEditCombatant ─────────────────────────────────────────────────────────
+// â”€â”€â”€ canEditCombatant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('canEditCombatant', () => {
   it('returns true for the combatant owner', () => {
@@ -1096,7 +1089,7 @@ describe('canEditCombatant', () => {
   })
 })
 
-// ─── extractPreviousWinners ───────────────────────────────────────────────────
+// â”€â”€â”€ extractPreviousWinners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('extractPreviousWinners', () => {
   function makeRound(winner) {
@@ -1147,7 +1140,7 @@ describe('extractPreviousWinners', () => {
   })
 })
 
-// ─── normalizeRoomSettings ────────────────────────────────────────────────────
+// â”€â”€â”€ normalizeRoomSettings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('normalizeRoomSettings', () => {
   it('fills all defaults when passed undefined', () => {
@@ -1203,7 +1196,7 @@ describe('normalizeRoomSettings', () => {
     expect(normalizeRoomSettings({ isPublic: true }).isPublic).toBe(true)
   })
 
-  it('is non-destructive — does not mutate the input', () => {
+  it('is non-destructive â€” does not mutate the input', () => {
     const input = { rosterSize: 6 }
     const result = normalizeRoomSettings(input)
     expect(result).not.toBe(input)
@@ -1211,7 +1204,7 @@ describe('normalizeRoomSettings', () => {
   })
 })
 
-// ─── applyWinner — trap detection ────────────────────────────────────────────
+// â”€â”€â”€ applyWinner â€” trap detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyWinner trap detection', () => {
   function makeRoomWithCombatants(c1, c2) {
@@ -1257,7 +1250,7 @@ describe('applyWinner trap detection', () => {
   })
 })
 
-// ─── simulateGameToEnd ────────────────────────────────────────────────────────
+// â”€â”€â”€ simulateGameToEnd â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('simulateGameToEnd', () => {
   it('simulates all 8 rounds from a fresh game (currentRound 0)', () => {
@@ -1292,7 +1285,7 @@ describe('simulateGameToEnd', () => {
     const room = makeRoom({ currentRound: 0, rounds: [] })
     const c1 = room.combatants.p1[0]
     const c2 = room.combatants.p2[0]
-    // Simulate round 1 open — round exists, no winner
+    // Simulate round 1 open â€” round exists, no winner
     const openRound = { id: 'rd_open', number: 1, combatants: [c1, c2], picks: {}, winner: null, createdAt: Date.now() }
     const midRoom = { ...room, currentRound: 1, rounds: [openRound] }
     const result = simulateGameToEnd(midRoom)
@@ -1321,7 +1314,7 @@ describe('simulateGameToEnd', () => {
 
   it('breaks early if a matchup slot is empty', () => {
     const room = makeRoom()
-    // Give p2 only 3 combatants — totalRounds will be 3
+    // Give p2 only 3 combatants â€” totalRounds will be 3
     room.combatants.p2 = room.combatants.p2.slice(0, 3)
     const result = simulateGameToEnd({ ...room, currentRound: 0, rounds: [] })
     expect(result.rounds).toHaveLength(3)
@@ -1352,418 +1345,7 @@ describe('simulateGameToEnd', () => {
   })
 })
 
-// ─── getLineageStats ──────────────────────────────────────────────────────────
-
-describe('getLineageStats', () => {
-  const root    = { id: 'c1', wins: 3, losses: 1, reactions_heart: 2, reactions_angry: 0, reactions_cry: 1 }
-  const variant = { id: 'c2', wins: 2, losses: 0, reactions_heart: 1, reactions_angry: 1, reactions_cry: 0, lineage: { rootId: 'c1', parentId: 'c1', generation: 1 } }
-  const other   = { id: 'c3', wins: 10, losses: 5, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-
-  it('returns zeros with no matching combatants', () => {
-    expect(getLineageStats('c1', [])).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
-  })
-
-  it('counts root own stats when it is the only form', () => {
-    const result = getLineageStats('c1', [root])
-    expect(result).toEqual({ wins: 3, losses: 1, heart: 2, angry: 0, cry: 1, forms: 1 })
-  })
-
-  it('sums root and all variants', () => {
-    const result = getLineageStats('c1', [root, variant, other])
-    expect(result.wins).toBe(5)
-    expect(result.losses).toBe(1)
-    expect(result.heart).toBe(3)
-    expect(result.angry).toBe(1)
-    expect(result.cry).toBe(1)
-    expect(result.forms).toBe(2)
-  })
-
-  it('ignores combatants from a different lineage', () => {
-    const result = getLineageStats('c1', [root, other])
-    expect(result.wins).toBe(3)
-    expect(result.forms).toBe(1)
-  })
-
-  it('handles null/undefined allCombatants', () => {
-    expect(getLineageStats('c1', null)).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
-    expect(getLineageStats('c1', undefined)).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 0 })
-  })
-
-  it('handles missing stat fields on combatant', () => {
-    const sparse = { id: 'c1' }
-    const result = getLineageStats('c1', [sparse])
-    expect(result).toEqual({ wins: 0, losses: 0, heart: 0, angry: 0, cry: 0, forms: 1 })
-  })
-
-  it('includes co-parent branch stats for merged combatants', () => {
-    // Egg (c1) + Bacon (b1) + Toast (t1) merge into Breakfast (bk)
-    // bk lineage: rootId=c1, coParentIds=[b1,t1]
-    const egg      = { id: 'c1', wins: 3, losses: 1, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const bacon    = { id: 'b1', wins: 2, losses: 0, reactions_heart: 1, reactions_angry: 0, reactions_cry: 0 }
-    const toast    = { id: 't1', wins: 1, losses: 1, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const breakfast = { id: 'bk', wins: 1, losses: 0, reactions_heart: 2, reactions_angry: 0, reactions_cry: 0,
-      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b1', 't1'], generation: 1 } }
-    const result = getLineageStats('c1', [egg, bacon, toast, breakfast])
-    // Should include Egg + Breakfast (primary) + Bacon + Toast (co-parents)
-    expect(result.wins).toBe(7)    // 3+2+1+1
-    expect(result.losses).toBe(2)  // 1+0+1+0
-    expect(result.heart).toBe(3)   // 0+1+0+2
-    expect(result.forms).toBe(4)
-  })
-
-  it('does not double-count combatants in co-parent branches', () => {
-    const egg      = { id: 'c1', wins: 3, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const bacon    = { id: 'b1', wins: 2, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const breakfast = { id: 'bk', wins: 1, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
-      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b1'], generation: 1 } }
-    const result = getLineageStats('c1', [egg, bacon, breakfast])
-    expect(result.wins).toBe(6)   // 3+2+1
-    expect(result.forms).toBe(3)  // egg, bacon, breakfast — no duplicates
-  })
-
-  it('co-parent lineage variants are also included', () => {
-    // Bacon (b1) evolved to Bacon+ (b2), then Bacon+ merged with Egg (c1)
-    const egg     = { id: 'c1', wins: 3, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const bacon   = { id: 'b1', wins: 2, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0 }
-    const baconPlus = { id: 'b2', wins: 1, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
-      lineage: { rootId: 'b1', parentId: 'b1', generation: 1 } }
-    const breakfast = { id: 'bk', wins: 0, losses: 0, reactions_heart: 0, reactions_angry: 0, reactions_cry: 0,
-      lineage: { rootId: 'c1', parentId: 'c1', coParentIds: ['b2'], generation: 1 } }
-    const result = getLineageStats('c1', [egg, bacon, baconPlus, breakfast])
-    // Primary: egg + breakfast. Co-parent: b2, which has rootId b1 → also include bacon.
-    expect(result.forms).toBe(4)
-    expect(result.wins).toBe(6)   // 3+0+2+1
-  })
-})
-
-// ─── buildActiveFormMap ───────────────────────────────────────────────────────
-
-describe('buildActiveFormMap', () => {
-  function makeEvolvedRoom(code, fromId, fromName, toId, toName, roundNumber = 1) {
-    return {
-      code,
-      rounds: [{
-        id: 'rd1', number: roundNumber,
-        combatants: [{ id: fromId, name: fromName }, { id: 'opp', name: 'Opponent' }],
-        winner: { id: fromId },
-        evolution: { fromId, fromName, toId, toName, authorId: 'p1' },
-      }],
-    }
-  }
-
-  it('returns empty map for rooms with no evolutions', () => {
-    const room = { code: 'A', rounds: [{ id: 'r1', number: 1, combatants: [], winner: null }] }
-    expect(buildActiveFormMap([room])).toEqual({})
-  })
-
-  it('maps a single evolution', () => {
-    const room = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ scuffed')
-    expect(buildActiveFormMap([room])).toEqual({ c1: 'c2' })
-  })
-
-  it('chains: A→B then B→C collapses to A→C', () => {
-    const room1 = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ scuffed')
-    const room2 = makeEvolvedRoom('B', 'c2', 'MJ scuffed', 'c3', 'MJ magic carpet')
-    expect(buildActiveFormMap([room1, room2])).toEqual({ c1: 'c3' })
-  })
-
-  it('handles multiple independent lineages in the same chain', () => {
-    const room = {
-      code: 'A',
-      rounds: [
-        { id: 'r1', number: 1, combatants: [], winner: null, evolution: { fromId: 'c1', fromName: 'A', toId: 'c2', toName: 'A2', authorId: 'p1' } },
-        { id: 'r2', number: 2, combatants: [], winner: null, evolution: { fromId: 'd1', fromName: 'B', toId: 'd2', toName: 'B2', authorId: 'p1' } },
-      ],
-    }
-    const result = buildActiveFormMap([room])
-    expect(result).toEqual({ c1: 'c2', d1: 'd2' })
-  })
-
-  it('handles null/empty rooms', () => {
-    expect(buildActiveFormMap([])).toEqual({})
-    expect(buildActiveFormMap(null)).toEqual({})
-  })
-
-  it('does not mutate inputs', () => {
-    const room = makeEvolvedRoom('A', 'c1', 'MJ', 'c2', 'MJ2')
-    const original = JSON.parse(JSON.stringify(room))
-    buildActiveFormMap([room])
-    expect(room).toEqual(original)
-  })
-})
-
-// ─── buildChainEvolutionStory ─────────────────────────────────────────────────
-
-describe('buildChainEvolutionStory', () => {
-  function makeEvolvedRoom(code, evolutions) {
-    // evolutions: [{ fromId, fromName, toId, toName, roundNumber, opponentId, opponentName }]
-    return {
-      code,
-      rounds: evolutions.map(e => ({
-        id:         'rd' + e.roundNumber,
-        number:     e.roundNumber,
-        combatants: [
-          { id: e.fromId, name: e.fromName },
-          { id: e.opponentId || 'opp', name: e.opponentName || 'Opponent' },
-        ],
-        winner:    { id: e.fromId },
-        evolution: { fromId: e.fromId, fromName: e.fromName, toId: e.toId, toName: e.toName, authorId: 'p1' },
-      })),
-    }
-  }
-
-  it('returns empty array when rootId was never evolved', () => {
-    const room = { code: 'A', rounds: [{ id: 'r1', number: 1, combatants: [], winner: null }] }
-    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
-  })
-
-  it('returns empty array for null/empty rooms', () => {
-    expect(buildChainEvolutionStory([], 'c1')).toEqual([])
-    expect(buildChainEvolutionStory(null, 'c1')).toEqual([])
-  })
-
-  it('single evolution produces two entries: original + variant', () => {
-    const room = makeEvolvedRoom('XKQT', [
-      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2, opponentName: 'Stick in Road' },
-    ])
-    const story = buildChainEvolutionStory([room], 'c1')
-    expect(story).toHaveLength(2)
-    expect(story[0]).toEqual({ combatantId: 'c1', name: 'MJ', generation: 0, bornFrom: null })
-    expect(story[1].combatantId).toBe('c2')
-    expect(story[1].name).toBe('MJ scuffed')
-    expect(story[1].generation).toBe(1)
-  })
-
-  it('captures bornFrom context: roundNumber, gameCode, opponentName, parentId, parentName', () => {
-    const room = makeEvolvedRoom('XKQT', [
-      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2, opponentName: 'Stick in Road' },
-    ])
-    const story = buildChainEvolutionStory([room], 'c1')
-    expect(story[1].bornFrom).toEqual({
-      roundNumber:  2,
-      gameCode:     'XKQT',
-      opponentName: 'Stick in Road',
-      parentId:     'c1',
-      parentName:   'MJ',
-    })
-  })
-
-  it('chains across multiple rooms: A→B (room1), B→C (room2)', () => {
-    const room1 = makeEvolvedRoom('XKQT', [
-      { fromId: 'c1', fromName: 'MJ', toId: 'c2', toName: 'MJ scuffed', roundNumber: 2 },
-    ])
-    const room2 = makeEvolvedRoom('BPMZ', [
-      { fromId: 'c2', fromName: 'MJ scuffed', toId: 'c3', toName: 'MJ magic carpet', roundNumber: 4 },
-    ])
-    const story = buildChainEvolutionStory([room1, room2], 'c1')
-    expect(story).toHaveLength(3)
-    expect(story[2].name).toBe('MJ magic carpet')
-    expect(story[2].generation).toBe(2)
-    expect(story[2].bornFrom.gameCode).toBe('BPMZ')
-  })
-
-  it('ignores evolutions belonging to a different lineage', () => {
-    const room = {
-      code: 'A',
-      rounds: [
-        { id: 'r1', number: 1, combatants: [{ id: 'z1', name: 'Z' }, { id: 'opp', name: 'O' }], winner: null,
-          evolution: { fromId: 'z1', fromName: 'Z', toId: 'z2', toName: 'Z2', authorId: 'p1' } },
-      ],
-    }
-    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
-  })
-
-  it('generations are sequential integers starting at 0', () => {
-    const room1 = makeEvolvedRoom('A', [{ fromId: 'c1', fromName: 'A', toId: 'c2', toName: 'B', roundNumber: 1 }])
-    const room2 = makeEvolvedRoom('B', [{ fromId: 'c2', fromName: 'B', toId: 'c3', toName: 'C', roundNumber: 1 }])
-    const room3 = makeEvolvedRoom('C', [{ fromId: 'c3', fromName: 'C', toId: 'c4', toName: 'D', roundNumber: 1 }])
-    const story = buildChainEvolutionStory([room1, room2, room3], 'c1')
-    expect(story.map(s => s.generation)).toEqual([0, 1, 2, 3])
-  })
-
-  function makeMergeRoom(code, { fromIds, fromNames, toId, toName, roundNumber = 1 }) {
-    return {
-      code,
-      rounds: [{
-        id: 'rd' + roundNumber, number: roundNumber,
-        combatants: fromIds.map((id, i) => ({ id, name: fromNames[i] })),
-        draw: { combatantIds: fromIds },
-        merge: { fromIds, fromNames, toId, toName, primaryOwnerId: 'p1', primaryOwnerName: 'Alice', coOwnerIds: [], coOwnerNames: [], mergeNote: null },
-      }],
-    }
-  }
-
-  it('direct merge: rootId is one of the merge parents', () => {
-    const room = makeMergeRoom('XKQT', {
-      fromIds: ['c1', 'b1', 't1'], fromNames: ['Egg', 'Bacon', 'Toast'],
-      toId: 'bk', toName: 'Breakfast', roundNumber: 3,
-    })
-    const story = buildChainEvolutionStory([room], 'c1')
-    expect(story).toHaveLength(2)
-    expect(story[0]).toEqual({ combatantId: 'c1', name: 'Egg', generation: 0, bornFrom: null })
-    expect(story[1].combatantId).toBe('bk')
-    expect(story[1].name).toBe('Breakfast')
-    expect(story[1].generation).toBe(1)
-  })
-
-  it('merge bornFrom has type merge, parentNames, parentIds, roundNumber, gameCode', () => {
-    const room = makeMergeRoom('XKQT', {
-      fromIds: ['c1', 'b1', 't1'], fromNames: ['Egg', 'Bacon', 'Toast'],
-      toId: 'bk', toName: 'Breakfast', roundNumber: 3,
-    })
-    const story = buildChainEvolutionStory([room], 'c1')
-    expect(story[1].bornFrom).toEqual({
-      type:        'merge',
-      parentNames: ['Egg', 'Bacon', 'Toast'],
-      parentIds:   ['c1', 'b1', 't1'],
-      roundNumber: 3,
-      gameCode:    'XKQT',
-    })
-  })
-
-  it('evolution then merge: root evolves, evolved form merges', () => {
-    const room1 = makeEvolvedRoom('GAME1', [
-      { fromId: 'c1', fromName: 'Egg', toId: 'c2', toName: 'Egg+', roundNumber: 1 },
-    ])
-    const room2 = makeMergeRoom('GAME2', {
-      fromIds: ['c2', 'b1'], fromNames: ['Egg+', 'Bacon'],
-      toId: 'bk', toName: 'Breakfast', roundNumber: 2,
-    })
-    const story = buildChainEvolutionStory([room1, room2], 'c1')
-    expect(story).toHaveLength(3)
-    expect(story.map(s => s.name)).toEqual(['Egg', 'Egg+', 'Breakfast'])
-    expect(story[1].bornFrom.opponentName).toBeDefined()  // evolution bornFrom
-    expect(story[2].bornFrom.type).toBe('merge')
-    expect(story[2].bornFrom.parentNames).toEqual(['Egg+', 'Bacon'])
-  })
-
-  it('ignores merge where no parent is in known IDs', () => {
-    const room = makeMergeRoom('XKQT', {
-      fromIds: ['z1', 'z2'], fromNames: ['Z1', 'Z2'],
-      toId: 'zm', toName: 'ZMerged', roundNumber: 1,
-    })
-    expect(buildChainEvolutionStory([room], 'c1')).toEqual([])
-  })
-
-  it('merge using secondary parent: story still follows known ancestor', () => {
-    const room = makeMergeRoom('XKQT', {
-      fromIds: ['b1', 'c1', 't1'], fromNames: ['Bacon', 'Egg', 'Toast'],
-      toId: 'bk', toName: 'Breakfast', roundNumber: 1,
-    })
-    const story = buildChainEvolutionStory([room], 'c1')
-    expect(story).toHaveLength(2)
-    expect(story[0].name).toBe('Egg')  // rootId=c1's name from fromNames
-    expect(story[1].name).toBe('Breakfast')
-  })
-})
-
-// ─── buildStoryFromLineageTree ────────────────────────────────────────────────
-
-describe('buildStoryFromLineageTree', () => {
-  const root = { id: 'c1', name: 'MJ', lineage: null }
-  const v1   = { id: 'c2', name: 'MJ scuffed', lineage: { generation: 1, rootId: 'c1', parentId: 'c1', bornFrom: { opponentName: 'Stick', roundNumber: 2, gameCode: 'XKQT', parentName: 'MJ' } } }
-  const v2   = { id: 'c3', name: 'MJ magic carpet', lineage: { generation: 2, rootId: 'c1', parentId: 'c2', bornFrom: { opponentName: 'Goat', roundNumber: 5, gameCode: 'BPMZ', parentName: 'MJ scuffed' } } }
-
-  it('returns empty array for null/empty input', () => {
-    expect(buildStoryFromLineageTree(null)).toEqual([])
-    expect(buildStoryFromLineageTree([])).toEqual([])
-  })
-
-  it('returns a single entry for a root with no variants', () => {
-    const story = buildStoryFromLineageTree([root])
-    expect(story).toHaveLength(1)
-    expect(story[0]).toEqual({ combatantId: 'c1', name: 'MJ', generation: 0, bornFrom: null })
-  })
-
-  it('returns root then variants ordered by generation', () => {
-    const story = buildStoryFromLineageTree([v1, root, v2]) // intentionally shuffled
-    expect(story.map(s => s.generation)).toEqual([0, 1, 2])
-    expect(story.map(s => s.name)).toEqual(['MJ', 'MJ scuffed', 'MJ magic carpet'])
-  })
-
-  it('includes bornFrom context on variants', () => {
-    const story = buildStoryFromLineageTree([root, v1])
-    expect(story[1].bornFrom).toEqual({ opponentName: 'Stick', roundNumber: 2, gameCode: 'XKQT', parentName: 'MJ' })
-  })
-
-  it('root always has bornFrom null', () => {
-    const story = buildStoryFromLineageTree([root, v1])
-    expect(story[0].bornFrom).toBeNull()
-  })
-
-  it('produces same shape as buildChainEvolutionStory', () => {
-    const story = buildStoryFromLineageTree([root, v1])
-    story.forEach(node => {
-      expect(node).toHaveProperty('combatantId')
-      expect(node).toHaveProperty('name')
-      expect(node).toHaveProperty('generation')
-      expect(node).toHaveProperty('bornFrom')
-    })
-  })
-
-  it('does not mutate input array', () => {
-    const input = [v2, root, v1]
-    const copy  = [...input]
-    buildStoryFromLineageTree(input)
-    expect(input).toEqual(copy)
-  })
-})
-
-// ─── applyActiveFormMap ───────────────────────────────────────────────────────
-
-describe('applyActiveFormMap', () => {
-  const variant = { id: 'c2', name: 'MJ scuffed', bio: 'took a tumble' }
-  const byId = { c2: variant }
-
-  it('returns empty object for null/missing prevWinners', () => {
-    expect(applyActiveFormMap(null, {}, {})).toEqual({})
-    expect(applyActiveFormMap(undefined, {}, {})).toEqual({})
-  })
-
-  it('returns prevWinners unchanged when activeFormMap is empty', () => {
-    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
-    expect(applyActiveFormMap(pw, {}, byId)).toEqual(pw)
-  })
-
-  it('substitutes an evolved winner with their variant', () => {
-    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
-    const result = applyActiveFormMap(pw, { c1: 'c2' }, byId)
-    expect(result.p1[0]).toEqual({ id: 'c2', name: 'MJ scuffed', bio: 'took a tumble' })
-  })
-
-  it('leaves winner unchanged when variant is not found in combatantsById', () => {
-    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
-    const result = applyActiveFormMap(pw, { c1: 'c2' }, {})
-    expect(result.p1[0]).toEqual({ id: 'c1', name: 'MJ', bio: '' })
-  })
-
-  it('handles multiple owners with partial substitutions', () => {
-    const pw = {
-      p1: [{ id: 'c1', name: 'MJ', bio: '' }],
-      p2: [{ id: 'd1', name: 'Goat', bio: 'baa' }],
-    }
-    const result = applyActiveFormMap(pw, { c1: 'c2' }, byId)
-    expect(result.p1[0].id).toBe('c2')
-    expect(result.p2[0].id).toBe('d1') // unchanged
-  })
-
-  it('defaults bio to empty string when variant bio is absent', () => {
-    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
-    const nobio = { c2: { id: 'c2', name: 'MJ scuffed' } }
-    const result = applyActiveFormMap(pw, { c1: 'c2' }, nobio)
-    expect(result.p1[0].bio).toBe('')
-  })
-
-  it('does not mutate inputs', () => {
-    const pw = { p1: [{ id: 'c1', name: 'MJ', bio: '' }] }
-    const map = { c1: 'c2' }
-    const original = JSON.parse(JSON.stringify(pw))
-    applyActiveFormMap(pw, map, byId)
-    expect(pw).toEqual(original)
-  })
-})
-
-// ─── computeSeriesStandings ───────────────────────────────────────────────────
+// â”€â”€â”€ computeSeriesStandings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('computeSeriesStandings', () => {
   const p1 = { id: 'p1', name: 'Alice', isBot: false }
@@ -1866,7 +1448,7 @@ describe('computeSeriesStandings', () => {
   })
 })
 
-// ─── applyDraw / undoRound (draw) ─────────────────────────────────────────────
+// â”€â”€â”€ applyDraw / undoRound (draw) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyDraw', () => {
   const room = {
@@ -1949,7 +1531,7 @@ describe('canUndoLastRound (draw)', () => {
   })
 })
 
-// ─── applyDraw partial draw ───────────────────────────────────────────────────
+// â”€â”€â”€ applyDraw partial draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyDraw (partial draw)', () => {
   const room = {
@@ -2075,7 +1657,7 @@ describe('undoRound (partial draw)', () => {
   })
 })
 
-// ─── drawOutcome: all_advance / no_advance ────────────────────────────────────
+// â”€â”€â”€ drawOutcome: all_advance / no_advance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyDraw (all_advance)', () => {
   const room = {
@@ -2216,7 +1798,7 @@ describe('undoRound (all_advance draw)', () => {
   })
 })
 
-// ─── applyMerge ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ applyMerge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('applyMerge', () => {
   const room = {
@@ -2344,7 +1926,7 @@ describe('undoRound (merge)', () => {
   })
 })
 
-// ─── replacePlayerIdInRoom ────────────────────────────────────────────────────
+// â”€â”€â”€ replacePlayerIdInRoom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('replacePlayerIdInRoom', () => {
   const OLD = 'guest-1'
@@ -2448,7 +2030,7 @@ describe('replacePlayerIdInRoom', () => {
   })
 })
 
-// ─── kickPlayerFromRoom ───────────────────────────────────────────────────────
+// â”€â”€â”€ kickPlayerFromRoom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('kickPlayerFromRoom', () => {
   function makeKickRoom() {
@@ -2522,7 +2104,7 @@ describe('kickPlayerFromRoom', () => {
   })
 })
 
-// ─── buildEvolutionRound ──────────────────────────────────────────────────────
+// â”€â”€â”€ buildEvolutionRound â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('buildEvolutionRound', () => {
   const winner   = { id: 'c1', name: 'Titan',   bio: 'Big.', ownerId: 'p1', ownerName: 'Alice' }
@@ -2649,12 +2231,12 @@ describe('getEphemeralBadges', () => {
     expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 5 }])
   })
 
-  it('streak is broken by a non-win — 2 wins after a loss gives no badge', () => {
+  it('streak is broken by a non-win â€” 2 wins after a loss gives no badge', () => {
     const c = { battles: makeBattles(['win', 'loss', 'win', 'win']) }
     expect(getEphemeralBadges(c)).toEqual([])
   })
 
-  it('streak counts only tail run — 1 loss then 3 wins gives on_fire 3', () => {
+  it('streak counts only tail run â€” 1 loss then 3 wins gives on_fire 3', () => {
     const c = { battles: makeBattles(['win', 'win', 'loss', 'win', 'win', 'win']) }
     expect(getEphemeralBadges(c)).toEqual([{ type: 'on_fire', count: 3 }])
   })
@@ -2826,7 +2408,7 @@ describe('computeSuperlatives', () => {
   })
 })
 
-// ─── resolveVotingPhase ───────────────────────────────────────────────────────
+// â”€â”€â”€ resolveVotingPhase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('resolveVotingPhase', () => {
   function votes(...nomineeIds) {
@@ -2918,7 +2500,7 @@ describe('resolveVotingPhase', () => {
   })
 
   it('returns co_award on host close during runoff with all runoff nominees', () => {
-    // c1 is "leading" with one vote but host closes — both runoff nominees co-award
+    // c1 is "leading" with one vote but host closes â€” both runoff nominees co-award
     const result = resolveVotingPhase({
       votes:          votes('c1'),
       voterCount:     3,
@@ -2943,7 +2525,7 @@ describe('resolveVotingPhase', () => {
   })
 
   it('abstainers count toward allLockedIn without contributing a vote', () => {
-    // p1 voted c1, p2 and p3 abstained — c1 is the winner
+    // p1 voted c1, p2 and p3 abstained â€” c1 is the winner
     const result = resolveVotingPhase({
       votes:          votes('c1'),
       voterCount:     3,
@@ -2975,7 +2557,7 @@ describe('resolveVotingPhase', () => {
   })
 })
 
-// ─── getSeriesCombatantNominees ───────────────────────────────────────────────
+// â”€â”€â”€ getSeriesCombatantNominees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getSeriesCombatantNominees', () => {
   it('returns all distinct combatants across all rooms', () => {
@@ -3007,7 +2589,7 @@ describe('getSeriesCombatantNominees', () => {
   })
 })
 
-// ─── getSeriesEvolutionNominees ───────────────────────────────────────────────
+// â”€â”€â”€ getSeriesEvolutionNominees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getSeriesEvolutionNominees', () => {
   const evolRound = {
@@ -3049,7 +2631,7 @@ describe('getSeriesEvolutionNominees', () => {
   })
 })
 
-// ─── getSeasonCombatantNominees ───────────────────────────────────────────────
+// â”€â”€â”€ getSeasonCombatantNominees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getSeasonCombatantNominees', () => {
   it('returns all distinct combatants across all season rooms', () => {
@@ -3074,7 +2656,7 @@ describe('getSeasonCombatantNominees', () => {
   })
 })
 
-// ─── getSeasonEvolutionNominees ───────────────────────────────────────────────
+// â”€â”€â”€ getSeasonEvolutionNominees â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('getSeasonEvolutionNominees', () => {
   const evolRound = {
@@ -3107,7 +2689,7 @@ describe('getSeasonEvolutionNominees', () => {
   })
 })
 
-// ─── computeGameAutoAwards ─────────────────────────────────────────────────────
+// â”€â”€â”€ computeGameAutoAwards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('computeGameAutoAwards', () => {
   function makeCompletedRoom(overrides = {}) {
@@ -3228,7 +2810,7 @@ describe('computeGameAutoAwards', () => {
   })
 })
 
-// ─── computeSeriesAutoAwards ───────────────────────────────────────────────────
+// â”€â”€â”€ computeSeriesAutoAwards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('computeSeriesAutoAwards', () => {
   const p1 = { id: 'p1', name: 'Alice', isBot: false }
@@ -3289,7 +2871,7 @@ describe('computeSeriesAutoAwards', () => {
   })
 })
 
-// ─── computeSeasonAutoAwards ───────────────────────────────────────────────────
+// â”€â”€â”€ computeSeasonAutoAwards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('computeSeasonAutoAwards', () => {
   it('uses same logic as computeSeriesAutoAwards but with season scope', () => {
@@ -3317,7 +2899,7 @@ describe('computeSeasonAutoAwards', () => {
   })
 })
 
-// ─── resolveTone ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ resolveTone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('resolveTone', () => {
   const TONE = { tags: ['absurdist', 'horror'], premise: 'Everyone is a food item.' }
@@ -3363,7 +2945,7 @@ describe('resolveTone', () => {
   })
 })
 
-// ─── computeSeasonToneDisplay ─────────────────────────────────────────────────
+// â”€â”€â”€ computeSeasonToneDisplay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('computeSeasonToneDisplay', () => {
   const tone = (tags, premise = '') => ({ tone: { tags, premise } })
