@@ -87,6 +87,16 @@ The codebase should be readable by someone who didn't write it — including fut
 - **Thin screens.** React components handle display and user interaction. They call pure functions and Supabase helpers — they don't contain business logic inline.
 - **Test what matters.** Every pure function should have tests. UI components don't need tests. If logic drifts into a component, move it to `gameLogic.js` first, then test it.
   - *Exception — settings-gate smoke tests:* A small number of screen-level tests are intentional. These don't test rendering behavior; they verify that a room setting (e.g. `allowEvolutions`, `allowDraws`) wires through to the expected conditional UI. The gate logic lives in the component and can't be tested in isolation without mocking away the point. Keep these tests scoped to one `describe` per screen, clearly labeled, and limited to `renderToStaticMarkup` + `toContain` assertions — no interaction, no state transitions.
+- **Smoke tests for components with conditional render paths.** A component
+  warrants a smoke test file when it has a `return null` guard or meaningfully
+  different render paths driven by props alone — i.e. where a silent regression
+  would not be caught by playing the game. Use `renderToStaticMarkup` and
+  assert on string presence/absence. Do not mock internal logic; mock only
+  Supabase imports and child components irrelevant to the path being tested.
+  Current smoke-tested components: `VoteScreen` (room settings gates),
+  `ContextStrip` (context visibility paths). Add to this list when a new
+  component qualifies — do not add tests simply because a component is complex.
+  Smoke test files are excluded from coverage metrics by convention.
 - **One source of truth per concept.** `normalizeRoomSettings` is the canonical place for setting defaults. `applyWinner` is the canonical place for resolving a round. Don't re-implement these inline.
 - **Name things for what they do.** A future reader should be able to understand a function from its name and signature without reading its body first.
 - **Comments for why, not what.** The code says what it does. Comments explain decisions that aren't obvious from the code alone.
