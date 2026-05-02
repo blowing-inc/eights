@@ -243,7 +243,7 @@ async function run() {
         console.error("Failed to post comment:", err.message);
         failed++;
       } finally {
-        unlinkSync(tmpFile);
+        try { unlinkSync(tmpFile); } catch {}
       }
     }
 
@@ -275,11 +275,11 @@ ${summary}
     }
 
     const summaryFile = join(tmpdir(), `review-summary-${Date.now()}.md`);
-    writeFileSync(summaryFile, groupedSummary);
     try {
+      writeFileSync(summaryFile, groupedSummary);
       execSync(`gh pr comment ${prNumber} --body-file ${summaryFile}`, { stdio: "inherit" });
     } finally {
-      unlinkSync(summaryFile);
+      try { unlinkSync(summaryFile); } catch {}
     }
 
   } catch (err) {
