@@ -1304,17 +1304,10 @@ export function computeGameAutoAwards(room) {
   return awards
 }
 
-/**
- * Computes automatic series-level awards from all rooms in a series.
- * Only considers rooms with phase 'ended' (not endedEarly, not dev).
- *
- * Awards: most_wins (player), most_evolutions (player)
- */
-export function computeSeriesAutoAwards(rooms, seriesId) {
+function _computeAutoAwardsForScope(rooms, scope) {
   const valid = (rooms || []).filter(r => r.phase === 'ended' && !r.endedEarly && !r.devMode)
   if (valid.length === 0) return []
 
-  const scope = { layer: 'series', scopeId: seriesId, scopeType: 'series' }
   const awards = []
 
   // most_wins: reuse standings logic
@@ -1350,46 +1343,23 @@ export function computeSeriesAutoAwards(rooms, seriesId) {
 }
 
 /**
+ * Computes automatic series-level awards from all rooms in a series.
+ * Only considers rooms with phase 'ended' (not endedEarly, not dev).
+ *
+ * Awards: most_wins (player), most_evolutions (player)
+ */
+export function computeSeriesAutoAwards(rooms, seriesId) {
+  return _computeAutoAwardsForScope(rooms, { layer: 'series', scopeId: seriesId, scopeType: 'series' })
+}
+
+/**
  * Computes automatic season-level awards from all rooms in a season.
  * Same logic as series but scoped to the season container.
  *
  * Awards: most_wins (player), most_evolutions (player)
  */
 export function computeSeasonAutoAwards(rooms, seasonId) {
-  const valid = (rooms || []).filter(r => r.phase === 'ended' && !r.endedEarly && !r.devMode)
-  if (valid.length === 0) return []
-
-  const scope = { layer: 'season', scopeId: seasonId, scopeType: 'season' }
-  const awards = []
-
-  const standings = computeSeriesStandings(valid)
-  if (standings.length > 0) {
-    const maxWins = standings[0].wins
-    if (maxWins > 0) {
-      const tops = standings.filter(s => s.wins === maxWins).map(s => [s.playerId, s.playerName])
-      awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxWins, type: 'most_wins' }))
-    }
-  }
-
-  const evoCount = {}
-  for (const room of valid) {
-    const playerMap = Object.fromEntries((room.players || []).filter(p => !p.isBot).map(p => [p.id, p.name]))
-    for (const round of (room.rounds || [])) {
-      if (!round.evolution || !round.winner) continue
-      const ownerId = round.winner.ownerId
-      const ownerName = playerMap[ownerId] || round.winner.ownerName
-      if (!ownerId || !ownerName) continue
-      if (!evoCount[ownerId]) evoCount[ownerId] = { count: 0, name: ownerName }
-      evoCount[ownerId].count++
-    }
-  }
-  const maxEvos = Math.max(...Object.values(evoCount).map(e => e.count), 0)
-  if (maxEvos > 0) {
-    const tops = Object.entries(evoCount).filter(([, e]) => e.count === maxEvos).map(([id, e]) => [id, e.name])
-    awards.push(...coAwardRows(tops, { ...scope, recipientType: 'player', value: maxEvos, type: 'most_evolutions' }))
-  }
-
-  return awards
+  return _computeAutoAwardsForScope(rooms, { layer: 'season', scopeId: seasonId, scopeType: 'season' })
 }
 
 // Human-readable labels for every award type used in display components.
