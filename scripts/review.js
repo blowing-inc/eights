@@ -1,6 +1,9 @@
 /* eslint-disable no-console */
 import OpenAI from "openai";
 import { execSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -51,18 +54,6 @@ function extractValidLines(diffText) {
   }
 
   return fileMap;
-}
-
-/**
- * Escape shell input
- */
-function shellEscape(str) {
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, "\\$")
-    .replace(/`/g, "\\`")
-    .replace(/\n/g, "\\n");
 }
 
 /**
@@ -234,20 +225,25 @@ async function run() {
         grouped[severity].push(c);
       }
 
+      const tmpFile = join(tmpdir(), `review-comment-${Date.now()}.json`);
       try {
+        writeFileSync(tmpFile, JSON.stringify({
+          body: c.body,
+          commit_id: commitSha,
+          path: c.file,
+          side: "RIGHT",
+          line: c.line,
+        }));
         execSync(
-          `gh api repos/${repo}/pulls/${prNumber}/comments \
-          -f body="${shellEscape(c.body)}" \
-          -f commit_id="${commitSha}" \
-          -f path="${c.file}" \
-          -f side=RIGHT \
-          -F line=${c.line}`,
+          `gh api repos/${repo}/pulls/${prNumber}/comments --input ${tmpFile}`,
           { stdio: "inherit" }
         );
         posted++;
       } catch (err) {
         console.error("Failed to post comment:", err.message);
         failed++;
+      } finally {
+        unlinkSync(tmpFile);
       }
     }
 
@@ -278,10 +274,13 @@ ${summary}
       return;
     }
 
-    execSync(
-      `gh pr comment ${prNumber} -b "${shellEscape(groupedSummary)}"`,
-      { stdio: "inherit" }
-    );
+    const summaryFile = join(tmpdir(), `review-summary-${Date.now()}.md`);
+    writeFileSync(summaryFile, groupedSummary);
+    try {
+      execSync(`gh pr comment ${prNumber} --body-file ${summaryFile}`, { stdio: "inherit" });
+    } finally {
+      unlinkSync(summaryFile);
+    }
 
   } catch (err) {
     console.error("Codex failed:", err.message);
