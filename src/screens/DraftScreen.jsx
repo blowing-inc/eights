@@ -13,9 +13,10 @@ import {
   uid, ownerLabel, slotMatchesPrevWinner, areAllPrevWinnersPlaced,
   getUnplacedWinners, buildCombatantFromDraft, isDraftComplete,
   getReadyPlayerCount, canForceStart, DEV_ROSTER_NAMES, DEV_ROSTER_BIOS,
-  normalizeRoomSettings, buildActiveFormMap, kickPlayerFromRoom,
+  normalizeRoomSettings, kickPlayerFromRoom,
   getSeriesCombatantNominees, getSeriesEvolutionNominees,
 } from '../gameLogic.js'
+import { buildActiveFormMap } from '../lineage.js'
 
 export default function DraftScreen({ room: init, playerId, setRoom, onDone, isGuest, onLogin, onBack, onEndSeries }) {
   const [room, setLocal] = useState(init)

@@ -18,11 +18,6 @@ import {
   resolveTone,
   computeSeasonToneDisplay,
   simulateGameToEnd,
-  getLineageStats,
-  buildActiveFormMap,
-  buildChainEvolutionStory,
-  buildStoryFromLineageTree,
-  applyActiveFormMap,
   groupRoomsForHistory,
   prepareNextGame,
   computeSeriesStandings,
@@ -43,6 +38,13 @@ import {
   computeSeriesAutoAwards,
   computeSeasonAutoAwards,
 } from './gameLogic.js'
+import {
+  getLineageStats,
+  buildActiveFormMap,
+  buildChainEvolutionStory,
+  buildStoryFromLineageTree,
+  applyActiveFormMap,
+} from './lineage.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
