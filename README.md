@@ -57,9 +57,8 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ## Deploy to Cloudflare Pages
 
-Production deployment for `https://eights.team-play.city` is managed from the shared infrastructure repository:
+Production deployment for `https://eights.team-play.city` uses Cloudflare Pages:
 
-- Infra repo: `blowing-inc/team-play-city-infra`
 - Cloudflare Pages project: `eights`
 - Custom domain: `eights.team-play.city`
 
@@ -70,7 +69,7 @@ Cloudflare Pages builds from `blowing-inc/eights` on pushes to `main`.
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-These values are managed by the shared infra repo's Terraform workflow, not in Cloudflare by hand.
+These values must be configured in the deployment system that manages the Cloudflare Pages project.
 
 ### GitHub Actions secrets for this repo
 
@@ -79,11 +78,10 @@ This repository's `CI` workflow builds the production app during pull requests a
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-### GitHub Actions secrets for the shared infra repo
+### Deployment secrets
 
-The shared infra repo also needs the same values so it can configure the Cloudflare Pages project:
+The deployment system for the production Cloudflare Pages project also needs these values:
 
-- Repo: `blowing-inc/team-play-city-infra`
 - Secrets:
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
