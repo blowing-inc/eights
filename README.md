@@ -85,8 +85,8 @@ The shared infra repo also needs the same values so it can configure the Cloudfl
 
 - Repo: `blowing-inc/team-play-city-infra`
 - Secrets:
-  - `EIGHTS_VITE_SUPABASE_URL`
-  - `EIGHTS_VITE_SUPABASE_ANON_KEY`
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
 
 ## Deploy to Vercel
 
